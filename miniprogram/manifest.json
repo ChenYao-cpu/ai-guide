@@ -1,0 +1,67 @@
+{
+  "name": "智游灵境",
+  "appid": "__UNI__57BB466",
+  "description": "AI数字人景区导览小程序",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "splashscreen": {
+      "alwaysShowBeforeRender": true,
+      "waiting": true,
+      "autoclose": true,
+      "delay": 0
+    },
+    "modules": {
+      "Geolocation": {},
+      "Speech": {},
+      "Recorder": {}
+    },
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\"/>",
+          "<uses-permission android:name=\"android.permission.ACCESS_BACKGROUND_LOCATION\"/>",
+          "<uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>",
+          "<uses-permission android:name=\"android.permission.INTERNET\"/>"
+        ]
+      },
+      "ios": {
+        "dSYMs": false,
+        "privacyDescription": {
+          "NSLocationWhenInUseUsageDescription": "景区导览需要获取您的位置，在接近景点时自动触发讲解",
+          "NSMicrophoneUsageDescription": "需要使用麦克风进行语音交互"
+        }
+      }
+    }
+  },
+  "mp-weixin": {
+    "appid": "wx3107e956d288b25a",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": {
+        "desc": "景区导览需要获取您的位置，在接近景点时自动触发语音讲解"
+      },
+      "scope.record": {
+        "desc": "需要使用麦克风进行语音输入，与AI导游对话"
+      }
+    },
+    "requiredPrivateInfos": [
+      "getLocation",
+      "startLocationUpdateBackground",
+      "chooseLocation"
+    ],
+    "__usePrivacyCheck__": true,
+    "lazyCodeLoading": "requiredComponents"
+  },
+  "vueVersion": "3"
+}

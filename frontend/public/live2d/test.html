@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Live2D Test</title></head>
+<body>
+<h3>Live2D Test</h3>
+<div id="debug"></div>
+<script>
+var d = document.getElementById('debug');
+d.innerHTML += 'Step 1: scripts loaded<br>';
+</script>
+<script src="/live2d/live2dcubismcore.min.js"></script>
+<script>
+d.innerHTML += 'Step 2: Live2DCubismCore=' + (typeof Live2DCubismCore) + '<br>';
+d.innerHTML += '  version=' + Live2DCubismCore.csmGetVersion() + '<br>';
+if (typeof Live2DCubismCore !== 'undefined') {
+  Live2DCubismCore.Logging.csmSetLogFunction(function(msg) {
+    d.innerHTML += '[LOG] ' + msg + '<br>';
+  });
+}
+</script>
+<script src="/live2d/pixi.min.js"></script>
+<script>
+d.innerHTML += 'Step 3: PIXI=' + (typeof PIXI) + ' v' + PIXI.VERSION + '<br>';
+</script>
+<script src="/live2d/cubism4.min.js"></script>
+<script>
+d.innerHTML += 'Step 4: PIXI.live2d=' + (typeof PIXI.live2d) + '<br>';
+if (PIXI.live2d) {
+  d.innerHTML += 'Step 5: Live2DModel=' + (typeof PIXI.live2d.Live2DModel) + '<br>';
+  d.innerHTML += 'Step 6: Loading model...<br>';
+  var app = new PIXI.Application({width:400,height:500,backgroundAlpha:0});
+  document.body.appendChild(app.view);
+  PIXI.live2d.Live2DModel.from('/live2d/haru_official/Haru.model3.json').then(function(model){
+    d.innerHTML += 'Step 7: MODEL LOADED OK!<br>';
+    d.innerHTML += 'Motions: ' + Object.keys(model.internalModel.motionManager.definitions).join(',') + '<br>';
+    app.stage.addChild(model);
+    model.scale.set(0.15);
+    model.position.set(200, 240);
+    app.ticker.add(function(){ model.update(app.ticker.deltaMS/1000); });
+    d.innerHTML += 'Step 8: RENDERING<br>';
+  }).catch(function(e){
+    d.innerHTML += 'ERROR: ' + e.message + '<br>';
+    d.innerHTML += 'Stack: ' + (e.stack||'') + '<br>';
+  });
+} else {
+  d.innerHTML += 'ERROR: PIXI.live2d is undefined!<br>';
+}
+</script>
+</body>
+</html>

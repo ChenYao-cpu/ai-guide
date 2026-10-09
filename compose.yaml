@@ -1,0 +1,72 @@
+services:
+  database:
+    container_name: streamer-sales-database
+    image: postgres:16.4
+    ports:
+      - "15432:5432"
+    networks:
+      - streamer-sales-network
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB:-streamer_sales_db}"
+    volumes:
+      - ./work_dirs/database:/var/lib/postgresql/data
+    restart: always
+
+  base:
+    container_name: streamer-sales-base-server
+    build:
+      context: ./
+      dockerfile: ./docker/Dockerfile.web
+    image: streamer-sales:v0.9.0
+    volumes:
+      - ./weights:/workspace/Streamer-Sales/weights
+      - ./work_dirs:/workspace/Streamer-Sales/work_dirs
+      - ./static:/workspace/Streamer-Sales/static
+      # === 代码热更新：改Python代码自动生效 ===
+      - ./server:/workspace/Streamer-Sales/server
+      - ./configs:/workspace/Streamer-Sales/configs
+    ports:
+      - "8000:8000"
+    networks:
+      - streamer-sales-network
+    depends_on:
+      - database
+    environment:
+      USING_DOCKER_COMPOSE: "true"
+      HF_ENDPOINT: "https://hf-mirror.com"
+
+      # 数据库
+      POSTGRES_SERVER: "database"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB:-streamer_sales_db}"
+
+      # 云端 LLM API（无需本地GPU）
+      LLM_API_BASE: "${LLM_API_BASE:-https://api.siliconflow.cn/v1}"
+      LLM_API_KEY: "${LLM_API_KEY:?请在 .env 中设置 LLM_API_KEY}"
+      LLM_MODEL_NAME: "${LLM_MODEL_NAME:-deepseek-ai/DeepSeek-V3}"
+      TOKEN_JWT_SECURITY_KEY: "${TOKEN_JWT_SECURITY_KEY:?请在 .env 中设置 TOKEN_JWT_SECURITY_KEY}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@example.com}"
+      XINGYUN_WEB_ORIGIN: "${XINGYUN_WEB_ORIGIN:-}"
+
+      # 开启 RAG 知识库
+      ENABLE_RAG: "${ENABLE_RAG:-true}"
+
+      # 关闭GPU服务（开发阶段用云端替代）
+      ENABLE_TTS: "${ENABLE_TTS:-false}"
+      ENABLE_DIGITAL_HUMAN: "${ENABLE_DIGITAL_HUMAN:-false}"
+      ENABLE_ASR: "${ENABLE_ASR:-false}"
+      ENABLE_AGENT: "${ENABLE_AGENT:-false}"
+
+    command:
+      - /bin/bash
+      - -c
+      - |
+        sleep 5
+        uvicorn server.base.base_server:app --host 0.0.0.0 --port 8000
+    restart: always
+
+networks:
+  streamer-sales-network:

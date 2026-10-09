@@ -1,0 +1,32 @@
+# Runtime dependencies for the web/base API used by compose.yaml.
+# Heavy training, ASR, TTS, and digital-human workers are disabled in compose.
+modelscope==1.14.0
+opencv-python==4.9.0.80
+
+# RAG modules are imported by the API package, even when startup RAG loading is disabled.
+BCEmbedding==0.1.5
+langchain==0.2.0
+langchain-community==0.2.0
+langchain-core==0.2.1
+loguru==0.7.2
+python-dotenv>=1.0.0
+python-docx>=1.0.0
+openpyxl>=3.0.0
+faiss-cpu>=1.7.0
+
+# Agent imports used by the API package.
+lagent==0.2.2
+jionlp==1.5.14
+griffe==0.48.0
+class-registry==2.1.2
+
+# Web app 2.0
+fastapi[all]==0.111.0
+openai>=1.0.0
+edge-tts>=6.0.0
+sse-starlette==2.1.0
+PyJWT==2.9.0
+passlib==1.7.4
+sqlmodel==0.0.22
+cryptography>=42.0.0
+psycopg==3.2.1

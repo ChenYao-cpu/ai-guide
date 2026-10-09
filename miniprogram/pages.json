@@ -1,0 +1,86 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^u-(.*)": "uni-ui/components/u-$1/u-$1.vue"
+    }
+  },
+  "pages": [
+    {
+      "path": "pages/auth/auth",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "",
+        "navigationBarBackgroundColor": "#12172f",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#12172f",
+        "backgroundTextStyle": "light",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/tour/tour",
+      "style": {
+        "usingComponents": {
+          "tour-avatar-3d": "/wxcomponents/tour-avatar-3d/index"
+        },
+        "navigationStyle": "custom",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/ai-chat/ai-chat",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/tour-guide/tour-guide",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false,
+        "homeButton": false
+      }
+    },
+    {
+      "path": "pages/mine/mine",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/mine/history",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/favorites/favorites",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/xingyun/xingyun",
+      "style": { "navigationBarTitleText": "星云数字人导览", "navigationStyle": "default" }
+    },
+    {
+      "path": "pages/rank/rank",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "",
+    "navigationBarBackgroundColor": "#f6f7fa",
+    "backgroundColor": "#f6f7fa",
+    "navigationStyle": "custom"
+  }
+}

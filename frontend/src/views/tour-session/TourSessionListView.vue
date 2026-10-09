@@ -1,0 +1,566 @@
+<script setup lang="ts">
+import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus/es'
+import { VideoPlay, Plus, Check } from '@element-plus/icons-vue'
+
+import { getSessionList, createSession, startSession, endSession, analyzeSession, deleteSession, type TourSessionItem } from '@/api/tourSession'
+import { getRouteList, type TourRouteItem } from '@/api/tourRoute'
+import { getGuideList, type DigitalGuide } from '@/api/digitalHuman'
+import { AxiosError } from 'axios'
+
+// ======================== 列表数据 ========================
+
+const sessionList = ref<TourSessionItem[]>([])
+const loading = ref(false)
+
+const fetchSessions = async () => {
+  loading.value = true
+  try {
+    const { data } = await getSessionList(1, 100)
+    if (data.code === 0) {
+      sessionList.value = data.data.session_list
+    } else {
+      ElMessage.error('获取导览会话列表失败：' + data.message)
+    }
+  } catch (error: unknown) {
+    if (error instanceof AxiosError) {
+      ElMessage.error('获取导览会话列表失败：' + error.message)
+    } else {
+      ElMessage.error('未知错误')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+// ======================== 新建会话对话框 ========================
+
+const dialogVisible = ref(false)
+const creating = ref(false)
+const routeList = ref<TourRouteItem[]>([])
+const guideList = ref<DigitalGuide[]>([])
+const form = ref({
+  name: '',
+  route_id: 0,
+  guide_id: 0,
+  preferences: '',
+})
+
+const openCreateDialog = async () => {
+  form.value = { name: '', route_id: 0, guide_id: 0, preferences: '' }
+  // 加载路线和导游列表
+  try {
+    const [routeRes, guideRes] = await Promise.all([
+      getRouteList(1, 100),
+      getGuideList(1, 100),
+    ])
+    if (routeRes.data.code === 0) routeList.value = routeRes.data.data.route_list
+    if (guideRes.data.code === 0) guideList.value = guideRes.data.data.guide_list
+    if (guideList.value.length === 0) {
+      ElMessage.warning('请先在"数字导游"页面创建至少一个导游，再创建导览会话')
+    }
+    if (routeList.value.length === 0) {
+      ElMessage.warning('请先在"游览路线"页面创建至少一条路线，再创建导览会话')
+    }
+  } catch (e) {
+    console.error(e)
+  }
+  dialogVisible.value = true
+}
+
+const handleCreate = async () => {
+  if (!form.value.name.trim()) {
+    ElMessage.warning('请输入会话名称')
+    return
+  }
+  creating.value = true
+  try {
+    const { data } = await createSession(
+      form.value.name,
+      form.value.route_id,
+      form.value.guide_id,
+      form.value.preferences,
+    )
+    if (data.code === 0) {
+      ElMessage.success('导览会话创建成功！')
+      dialogVisible.value = false
+      await fetchSessions()
+    } else {
+      ElMessage.error('创建失败：' + data.message)
+    }
+  } catch (e: unknown) {
+    if (e instanceof AxiosError) {
+      ElMessage.error('创建失败：' + e.message)
+    } else {
+      ElMessage.error('未知错误')
+    }
+  } finally {
+    creating.value = false
+  }
+}
+
+// ======================== 状态映射 ========================
+
+interface StatusInfo {
+  label: string
+  tagType: 'info' | 'success' | 'warning' | 'danger' | ''
+}
+
+const getStatusInfo = (session: TourSessionItem): StatusInfo => {
+  const raw = session.live_status
+  switch (raw) {
+    case 0: return { label: '未开始', tagType: 'info' }
+    case 1: return { label: '进行中', tagType: 'success' }
+    case 2: return { label: '已结束', tagType: 'warning' }
+    default: return { label: '未知', tagType: '' }
+  }
+}
+
+const isLive = (session: TourSessionItem): boolean => session.live_status === 1
+const isPending = (session: TourSessionItem): boolean => session.live_status === 0
+
+const handleStart = async (sessionId: number) => {
+  try {
+    const { data } = await startSession(sessionId)
+    if (data.code === 0) {
+      ElMessage.success('导览已开始')
+      fetchSessions()
+    } else {
+      ElMessage.error('开始失败：' + data.message)
+    }
+  } catch (e: unknown) {
+    if (e instanceof AxiosError) ElMessage.error('开始失败：' + e.message)
+  }
+}
+
+const handleEnd = async (sessionId: number) => {
+  try {
+    const { data } = await endSession(sessionId)
+    if (data.code === 0) {
+      ElMessage.success('导览已结束')
+      fetchSessions()
+    } else {
+      ElMessage.error('结束失败：' + data.message)
+    }
+  } catch (e: unknown) {
+    if (e instanceof AxiosError) ElMessage.error('结束失败：' + e.message)
+  }
+}
+
+// ======================== 格式化时间 ========================
+
+const formatTime = (timeStr: string | undefined): string => {
+  if (!timeStr) return '-'
+  const d = new Date(timeStr)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// ======================== 删除会话 ========================
+const deleteMode = ref(false)
+const selectedIds = ref<Set<number>>(new Set())
+const deleting = ref(false)
+
+const toggleDeleteMode = () => {
+  deleteMode.value = !deleteMode.value
+  selectedIds.value = new Set()
+}
+
+const toggleSelect = (sessionId: number) => {
+  if (selectedIds.value.has(sessionId)) {
+    selectedIds.value.delete(sessionId)
+  } else {
+    selectedIds.value.add(sessionId)
+  }
+  // 触发响应式更新
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+const confirmDelete = async () => {
+  if (selectedIds.value.size === 0) {
+    ElMessage.warning('请至少勾选一个会话')
+    return
+  }
+  deleting.value = true
+  try {
+    const ids = Array.from(selectedIds.value)
+    const results = await Promise.allSettled(ids.map(id => deleteSession(id)))
+    const successCount = results.filter(r => r.status === 'fulfilled' && (r.value.data as any)?.code === 0).length
+    if (successCount > 0) {
+      ElMessage.success(`成功删除 ${successCount} 个会话`)
+    }
+    const failedCount = ids.length - successCount
+    if (failedCount > 0) {
+      ElMessage.warning(`${failedCount} 个会话删除失败`)
+    }
+    deleteMode.value = false
+    selectedIds.value = new Set()
+    await fetchSessions()
+  } catch (e: unknown) {
+    ElMessage.error('删除操作出错')
+  } finally {
+    deleting.value = false
+  }
+}
+
+// ======================== 进入导览 ========================
+
+const enterTour = (sessionId: number) => {
+  router.push(`/tour-session/${sessionId}/detail`)
+}
+
+// ═══════════ AI 分析 ═══════════
+const router = useRouter()
+const analyzingId = ref(0)
+const analysisDialogVisible = ref(false)
+const analysisResult = ref<any>(null)
+
+const handleAnalyze = async (sessionId: number) => {
+  analyzingId.value = sessionId
+  try {
+    const { data } = await analyzeSession(sessionId)
+    if (data.code === 0) {
+      analysisResult.value = data.data
+      analysisDialogVisible.value = true
+      ElMessage.success('AI分析完成')
+    } else {
+      ElMessage.error(data.message || '分析失败')
+    }
+  } catch (e: unknown) {
+    if (e instanceof AxiosError) ElMessage.error('分析失败：' + e.message)
+    else ElMessage.error('未知错误')
+  } finally {
+    analyzingId.value = 0
+  }
+}
+
+// ======================== 卡片栅格 ========================
+
+const chunkArray = <T,>(array: T[], chunkSize: number): T[][] => {
+  const result: T[][] = []
+  for (let i = 0; i < array.length; i += chunkSize) {
+    result.push(array.slice(i, i + chunkSize))
+  }
+  return result
+}
+
+const chunkedSessions = computed(() => chunkArray(sessionList.value, 3))
+
+// ======================== 生命周期 ========================
+
+onMounted(() => {
+  fetchSessions()
+})
+</script>
+
+<template>
+  <div class="tour-session-container">
+    <div class="page-header">
+      <h3 class="page-title">导览会话管理</h3>
+      <div class="header-actions">
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon> 新建会话
+        </el-button>
+        <el-button :loading="loading" @click="fetchSessions">刷新列表</el-button>
+        <el-button v-if="!deleteMode" @click="toggleDeleteMode">删除会话</el-button>
+        <el-button v-else type="danger" :loading="deleting" @click="confirmDelete">确认删除</el-button>
+      </div>
+    </div>
+
+    <!-- 会话卡片网格 -->
+    <div v-loading="loading" class="card-grid">
+      <el-empty v-if="!loading && sessionList.length === 0" description="暂无导览会话，请先创建" />
+
+      <div v-for="(row, rowIndex) in chunkedSessions" :key="rowIndex" class="card-row">
+        <el-row :gutter="20">
+          <el-col v-for="(item, index) in row" :key="index" :span="8">
+            <el-card
+              class="session-card"
+              :class="{ 'delete-card-mode': deleteMode, 'is-selected': selectedIds.has(item.session_id) }"
+              shadow="hover"
+              @click="deleteMode ? toggleSelect(item.session_id) : router.push(`/tour-session/${item.session_id}/detail`)"
+            >
+              <div v-if="deleteMode" class="delete-check-circle" @click.stop="toggleSelect(item.session_id)">
+                <div v-if="selectedIds.has(item.session_id)" class="checked-circle">
+                  <el-icon><Check /></el-icon>
+                </div>
+                <div v-else class="empty-circle" />
+              </div>
+              <div class="card-status">
+                <el-tag :type="getStatusInfo(item).tagType" size="small" effect="dark">
+                  {{ getStatusInfo(item).label }}
+                </el-tag>
+              </div>
+
+              <p class="session-name">
+                {{ item.name || `会话 #${item.session_id}` }}
+              </p>
+
+              <div class="session-info">
+                <div class="info-row">
+                  <span class="info-label">开始时间</span>
+                  <span class="info-value">{{ formatTime(item.start_time) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">消息数</span>
+                  <span class="info-value">{{ (item as any).message_count || 0 }} 条</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">景点进度</span>
+                  <span class="info-value">第 {{ ((item as any).current_spot_index || 0) + 1 }} 个</span>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                <template v-if="isPending(item)">
+                  <el-button type="primary" size="default" @click="handleStart(item.session_id)">
+                    开始导览
+                  </el-button>
+                </template>
+                <template v-else-if="isLive(item)">
+                  <el-button type="success" size="default" :icon="VideoPlay" @click="enterTour(item.session_id)">
+                    进入导览
+                  </el-button>
+                  <el-button type="danger" size="default" @click="handleEnd(item.session_id)">
+                    结束
+                  </el-button>
+                </template>
+                <template v-else>
+                  <el-button type="warning" size="default" :loading="analyzingId === item.session_id" @click="handleAnalyze(item.session_id)">
+                    AI 分析
+                  </el-button>
+                </template>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+    </div>
+
+    <!-- AI 分析结果弹窗 -->
+    <el-dialog v-model="analysisDialogVisible" title="AI 导览分析报告" width="650px" destroy-on-close>
+      <div v-if="analysisResult" class="analysis-content">
+        <div class="analysis-section">
+          <h4>游客满意度</h4>
+          <el-tag :type="analysisResult.satisfaction === '高' ? 'success' : analysisResult.satisfaction === '中' ? 'warning' : 'danger'" size="large">
+            {{ analysisResult.satisfaction || '-' }}
+          </el-tag>
+          <p class="analysis-desc">{{ analysisResult.satisfaction_reason || '-' }}</p>
+        </div>
+        <div class="analysis-section">
+          <h4>游客情感趋势</h4>
+          <p>{{ analysisResult.visitor_emotion_trend || '-' }}</p>
+        </div>
+        <div class="analysis-section">
+          <h4>热门话题</h4>
+          <div class="tag-group">
+            <el-tag v-for="(t, i) in (analysisResult.hot_topics || [])" :key="i" type="success" effect="plain">{{ t }}</el-tag>
+            <span v-if="!analysisResult.hot_topics?.length">-</span>
+          </div>
+        </div>
+        <div class="analysis-section">
+          <h4>游客常见提问</h4>
+          <ul class="question-list">
+            <li v-for="(q, i) in (analysisResult.frequent_questions || [])" :key="i">{{ q }}</li>
+            <li v-if="!analysisResult.frequent_questions?.length">-</li>
+          </ul>
+        </div>
+        <div class="analysis-section">
+          <h4>改进建议</h4>
+          <p class="analysis-desc">{{ analysisResult.service_suggestions || '-' }}</p>
+        </div>
+        <div class="analysis-section summary-box">
+          <h4>总结</h4>
+          <p>{{ analysisResult.summary || analysisResult.raw || '-' }}</p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="analysisDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新建会话对话框 -->
+    <el-dialog v-model="dialogVisible" title="新建导览会话" width="500px" destroy-on-close>
+      <el-form :model="form" label-width="100px">
+        <el-form-item label="会话名称" required>
+          <el-input v-model="form.name" placeholder="如：3月15日导览" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="游览路线">
+          <el-select v-model="form.route_id" placeholder="选择路线" style="width:100%">
+            <el-option v-for="r in routeList" :key="r.route_id" :label="r.name" :value="r.route_id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数字导游">
+          <el-select v-model="form.guide_id" placeholder="选择导游" style="width:100%">
+            <el-option v-for="g in guideList" :key="g.guide_id" :label="g.name" :value="g.guide_id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleCreate" :loading="creating">创建</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<style lang="scss" scoped>
+.tour-session-container {
+  padding: 16px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f5f7fa;
+  padding: 10px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.card-row {
+  margin-bottom: 20px;
+}
+
+.session-card {
+  border-radius: 12px;
+  transition: transform 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.card-status {
+  margin-bottom: 10px;
+}
+
+.session-name {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 14px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.info-label {
+  color: #909399;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #303133;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 12px;
+  text-align: right;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.not-live-hint {
+  font-size: 13px;
+  color: #c0c4cc;
+}
+.analysis-content { display: flex; flex-direction: column; gap: 16px; }
+.analysis-section h4 { margin: 0 0 6px; font-size: 14px; color: #303133; }
+.analysis-desc { margin: 6px 0 0; font-size: 13px; color: #606266; line-height: 1.6; }
+.tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.question-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: #606266; line-height: 1.8; }
+.summary-box { padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd; }
+.summary-box h4 { color: #0369a1; }
+
+/* ======================== 删除模式 ======================== */
+
+.delete-card-mode {
+  cursor: pointer;
+  position: relative;
+
+  &.is-selected {
+    border: 2px solid #e74c3c;
+    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.15);
+  }
+}
+
+.delete-check-circle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .empty-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #c0c4cc;
+    background: rgba(255, 255, 255, 0.7);
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: #e74c3c;
+    }
+  }
+
+  .checked-circle {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e74c3c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .el-icon {
+      font-size: 14px;
+      color: #fff;
+      font-weight: 700;
+    }
+  }
+}
+</style>

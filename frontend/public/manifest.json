@@ -1,0 +1,39 @@
+{
+  "name": "智游灵境",
+  "short_name": "智游灵境",
+  "description": "基于AI数字人技术的智能景区导览系统，支持语音问答、GPS位置感知、个性化路线推荐",
+  "start_url": "/visitor/home",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e0f7ff",
+  "theme_color": "#0284c7",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["travel", "navigation", "education"],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "390x844",
+      "type": "image/png"
+    }
+  ],
+  "features": [
+    "GPS位置感知自动讲解",
+    "AI数字人语音对话",
+    "个性化路线推荐",
+    "多景区形象适配"
+  ]
+}
