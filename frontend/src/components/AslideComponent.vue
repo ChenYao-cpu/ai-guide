@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import BrandLogo from '@/components/BrandLogo.vue'
 import { computed } from 'vue'
 import {
   User,
@@ -8,7 +9,6 @@ import {
   Guide,
   DataAnalysis,
   VideoCamera,
-  Monitor,
 } from '@element-plus/icons-vue'
 
 import { useRoute } from 'vue-router'
@@ -23,11 +23,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 <template>
   <div class="aside-shell" :class="{ collapsed: isCollapse }">
     <div class="brand-block">
-      <div class="brand-mark">AI</div>
-      <div v-show="!isCollapse" class="brand-copy">
-        <strong>智游灵境</strong>
-        <span>SCENIC INTELLIGENCE</span>
-      </div>
+      <BrandLogo compact :icon-only="isCollapse" />
     </div>
 
     <el-menu
@@ -68,11 +64,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
       </el-sub-menu>
     </el-menu>
 
-    <div v-show="!isCollapse" class="aside-footer">
-      <el-icon><Monitor /></el-icon>
-      <span>系统服务正常</span>
-      <i></i>
-    </div>
+
   </div>
 </template>
 
@@ -80,10 +72,8 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 .aside-shell {
   min-height: 100vh;
   padding: 18px 12px 16px;
-  color: #0b4166;
-  background:
-    radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.72), transparent 12rem),
-    linear-gradient(180deg, #e5f7ff 0%, #b9eaff 100%);
+  color: var(--champagne-text);
+  background: var(--glass);
 }
 
 .brand-block {
@@ -92,7 +82,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
   gap: 11px;
   min-height: 54px;
   padding: 0 10px 18px;
-  border-bottom: 1px solid rgba(2, 132, 199, 0.12);
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .brand-mark {
@@ -101,11 +91,11 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
   height: 34px;
   flex: 0 0 34px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--glass-line);
   border-radius: 9px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #38bdf8, #0284c7);
-  box-shadow: 0 7px 18px rgba(14, 116, 144, 0.22);
+  color: var(--text);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -123,7 +113,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
   }
 
   strong {
-    color: #083f63;
+    color: var(--text);
     font-size: 14px;
     font-weight: 750;
     letter-spacing: 0.025em;
@@ -131,7 +121,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 
   span {
     margin-top: 4px;
-    color: #42708c;
+    color: var(--champagne-text);
     font-size: 9px;
     letter-spacing: 0.15em;
   }
@@ -139,7 +129,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 
 .menu-caption {
   padding: 22px 12px 8px;
-  color: #4d7c96;
+  color: var(--champagne-text);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -151,9 +141,9 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 
 .enterprise-menu {
   --el-menu-bg-color: transparent;
-  --el-menu-text-color: #24516d;
-  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.5);
-  --el-menu-active-color: #075985;
+  --el-menu-text-color: var(--text-secondary);
+  --el-menu-hover-bg-color: var(--glass);
+  --el-menu-active-color: var(--champagne-text);
   border-right: none;
   background: transparent;
 }
@@ -170,22 +160,22 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 
 .enterprise-menu :deep(.el-menu-item .el-icon),
 .enterprise-menu :deep(.el-sub-menu__title .el-icon) {
-  color: #4182a6;
+  color: var(--champagne-text);
   font-size: 17px;
 }
 
 .enterprise-menu :deep(.el-menu-item.is-active) {
-  color: #075985;
-  background: rgba(255, 255, 255, 0.64);
-  box-shadow: inset 3px 0 0 #0ea5e9, 0 10px 20px rgba(14, 116, 144, 0.08);
+  color: var(--champagne-text);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
 
 .enterprise-menu :deep(.el-menu-item.is-active .el-icon) {
-  color: #0284c7;
+  color: var(--champagne-text);
 }
 
 .enterprise-menu :deep(.el-menu--inline) {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--glass);
 }
 
 .enterprise-menu :deep(.el-menu--collapse) {
@@ -198,14 +188,14 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
   gap: 7px;
   margin: 26px 8px 0;
   padding: 12px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--glass-line);
   border-radius: 8px;
-  color: #24516d;
-  background: rgba(255, 255, 255, 0.42);
+  color: var(--champagne-text);
+  background: var(--glass);
   font-size: 11px;
 
   .el-icon {
-    color: #16a34a;
+    color: var(--success);
   }
 
   i {
@@ -213,8 +203,8 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
     height: 6px;
     margin-left: auto;
     border-radius: 50%;
-    background: #5bc79e;
-    box-shadow: 0 0 0 4px rgba(91, 199, 158, 0.12);
+    background: var(--glass);
+    box-shadow: var(--glass-shadow);
   }
 }
 
@@ -231,63 +221,59 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
 
 /* Dark research-navigation skin */
 .aside-shell {
-  color: #d7e4e8;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(20, 184, 166, 0.12), transparent 14rem),
-    linear-gradient(180deg, #091c26 0%, #0b2431 56%, #0a202b 100%);
-  box-shadow: inset -1px 0 0 rgba(155, 184, 195, 0.12);
+  color: var(--text-muted);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
-.brand-block { border-bottom-color: rgba(142, 173, 185, 0.13); }
+.brand-block { border-bottom-color: var(--glass-line); }
 .brand-mark {
-  border-color: rgba(94, 234, 212, 0.22);
+  border-color: var(--glass-line);
   border-radius: 8px;
-  background: linear-gradient(145deg, #14b8a6, #0f5f66);
-  box-shadow: 0 8px 22px rgba(13, 148, 136, 0.2);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
-.brand-copy strong { color: #eef6f7; font-weight: 700; }
-.brand-copy span { color: #6f8c99; }
-.menu-caption { color: #607e8b; }
+.brand-copy strong { color: var(--text); font-weight: 700; }
+.brand-copy span { color: var(--text-muted); }
+.menu-caption { color: var(--text-secondary); }
 .enterprise-menu {
-  --el-menu-text-color: #9fb3bc;
-  --el-menu-hover-bg-color: rgba(45, 212, 191, 0.07);
-  --el-menu-active-color: #e7faf7;
+  --el-menu-text-color: var(--text-secondary);
+  --el-menu-hover-bg-color: var(--glass);
+  --el-menu-active-color: var(--champagne-text);
 }
 .enterprise-menu :deep(.el-menu-item .el-icon),
-.enterprise-menu :deep(.el-sub-menu__title .el-icon) { color: #7297a3; }
+.enterprise-menu :deep(.el-sub-menu__title .el-icon) { color: var(--text-muted); }
 .enterprise-menu :deep(.el-menu-item.is-active) {
-  color: #e7faf7;
-  background: rgba(20, 184, 166, 0.14);
-  box-shadow: inset 2px 0 0 #2dd4bf;
+  color: var(--text);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
-.enterprise-menu :deep(.el-menu-item.is-active .el-icon) { color: #5eead4; }
-.enterprise-menu :deep(.el-menu--inline) { background: rgba(3, 15, 21, 0.2); }
+.enterprise-menu :deep(.el-menu-item.is-active .el-icon) { color: var(--champagne-text); }
+.enterprise-menu :deep(.el-menu--inline) { background: var(--glass); }
 .aside-footer {
-  border-color: rgba(142, 173, 185, 0.14);
-  color: #8ea6b0;
-  background: rgba(5, 20, 27, 0.28);
+  border-color: var(--glass-line);
+  color: var(--text-muted);
+  background: var(--glass);
 }
 
 /* Obsidian/cobalt exhibition navigation */
 .aside-shell {
-  color: #e5e8f3;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(70,96,255,.2), transparent 17rem),
-    #10131c;
-  box-shadow: inset -1px 0 0 rgba(255,255,255,.07);
+  color: var(--text);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
-.brand-block { border-bottom-color: rgba(255,255,255,.08); }
-.brand-mark { border: 0; border-radius: 10px; background: #3b5bff; box-shadow: 0 12px 30px rgba(59,91,255,.28); }
-.brand-copy strong { color: #fff; font-weight: 720; }
-.brand-copy span { color: #6f778d; }
-.menu-caption { color: #616a80; letter-spacing: .12em; }
+.brand-block { border-bottom-color: var(--glass-line); }
+.brand-mark { border: 0; border-radius: 10px; background: var(--glass); box-shadow: var(--glass-shadow); }
+.brand-copy strong { color: var(--text); font-weight: 720; }
+.brand-copy span { color: var(--text-secondary); }
+.menu-caption { color: var(--text-secondary); letter-spacing: .12em; }
 .enterprise-menu {
-  --el-menu-text-color: #9aa2b7;
-  --el-menu-hover-bg-color: rgba(255,255,255,.055);
-  --el-menu-active-color: #fff;
+  --el-menu-text-color: var(--text-secondary);
+  --el-menu-hover-bg-color: var(--glass);
+  --el-menu-active-color: var(--champagne-text);
 }
-.enterprise-menu :deep(.el-menu-item .el-icon),.enterprise-menu :deep(.el-sub-menu__title .el-icon) { color: #707991; }
-.enterprise-menu :deep(.el-menu-item.is-active) { color: #fff; background: #3b5bff; box-shadow: 0 12px 28px rgba(59,91,255,.22); }
-.enterprise-menu :deep(.el-menu-item.is-active .el-icon) { color: #fff; }
-.enterprise-menu :deep(.el-menu--inline) { background: rgba(0,0,0,.12); }
-.aside-footer { border-color: rgba(255,255,255,.08); color: #7c8499; background: rgba(255,255,255,.035); }
+.enterprise-menu :deep(.el-menu-item .el-icon),.enterprise-menu :deep(.el-sub-menu__title .el-icon) { color: var(--text-secondary); }
+.enterprise-menu :deep(.el-menu-item.is-active) { color: var(--text); background: var(--glass); box-shadow: var(--glass-shadow); }
+.enterprise-menu :deep(.el-menu-item.is-active .el-icon) { color: var(--text); }
+.enterprise-menu :deep(.el-menu--inline) { background: var(--glass); }
+.aside-footer { border-color: var(--glass-line); color: var(--text-muted); background: rgba(99,102,241,0.035); }
 </style>

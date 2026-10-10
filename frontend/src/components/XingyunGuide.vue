@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { request_handler } from '@/api/base'
 import { avatarHeaders } from '@/api/xingyunTour'
-const props = defineProps<{ guideId?: number; tourId?: number; framing?: 'full' | 'half' }>()
+const props = defineProps<{ guideId?: number; tourId?: number; framing?: 'full' | 'half'; posterImage?: string }>()
 
 type Avatar = {
   init(options: Record<string, unknown>): Promise<void>
@@ -18,6 +18,7 @@ const provider = ref('')
 const loading = ref(false)
 const ready = ref(false)
 const message = ref('正在查询数字人配置')
+const statusText = computed(() => message.value.startsWith('数字人服务异常') ? '暂时无法连接，请重试' : message.value.replace(/SDK/g, '数字人资源').replace(/^Error:\s*/, ''))
 let avatar: Avatar | undefined
 let active = true
 let generation = 0
@@ -143,14 +144,25 @@ defineExpose({ speak, stop, isReady: () => ready.value })
 </script>
 <template>
   <section v-show="provider === 'xingyun'" class="xingyun-guide" :class="{ activated: ready || loading, half: framing === 'half' }">
-    <div v-show="ready || loading" class="xingyun-frame"><div :id="containerId" class="xingyun-canvas" /></div>
+    <div v-show="ready || loading || posterImage" class="xingyun-frame">
+      <div :id="containerId" class="xingyun-canvas" />
+      <img v-if="!ready && posterImage" class="xingyun-poster" :src="posterImage" alt="数字导游形象" />
+    </div>
     <div class="xingyun-controls">
       <button v-if="configured && !ready" :disabled="loading" @click="connect">{{ loading ? '连接中…' : '连接数字人' }}</button>
       <button v-if="ready" @click="release(); message='数字人连接已关闭'">断开连接</button>
-      <p role="status">{{ message }}</p>
+      <p v-if="!ready" role="status">{{ statusText }}</p>
     </div>
   </section>
 </template>
 <style scoped>
-.xingyun-guide{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;justify-content:center;flex:1}.xingyun-guide.activated{flex:1;min-height:180px}.xingyun-frame{flex:1;min-height:120px;width:100%;position:relative;overflow:hidden}.xingyun-canvas{position:absolute;inset:0;width:100%;height:100%}.half .xingyun-canvas{transform:scale(1.75);transform-origin:50% 0}.xingyun-controls{flex-shrink:0;text-align:center;padding:8px;font-size:12px;color:#59657a}.xingyun-controls button{padding:8px 14px;border:1px solid #dce0e9;border-radius:8px;color:#3b5bff;background:white;cursor:pointer}.xingyun-controls p{margin:6px 0}
+.xingyun-guide:not(.half) .xingyun-frame{box-sizing:border-box;padding:44px 16px 62px}
+.xingyun-guide:not(.half) .xingyun-canvas{position:absolute!important;inset:44px 16px 62px!important;width:calc(100% - 32px)!important;height:calc(100% - 106px)!important;transform:none!important}
+/* SDK injects its own pixel size, scale and offsets. Fit the complete source frame
+   into the available stage instead of cropping it or inheriting those offsets. */
+.xingyun-guide:not(.half) .xingyun-canvas :deep(canvas){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;transform:none!important;object-fit:contain!important;object-position:50% 50%!important}
+.xingyun-guide:not(.half) .xingyun-poster{inset:44px 16px 62px;width:calc(100% - 32px);height:calc(100% - 106px);object-position:50% 50%;transform:none}
+.xingyun-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.half .xingyun-poster{transform:scale(1.65);transform-origin:50% 15%}
+.xingyun-guide{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;justify-content:center;flex:1}.xingyun-guide.activated{flex:1;min-height:180px}.xingyun-frame{flex:1;min-height:120px;width:100%;position:relative;overflow:hidden}.xingyun-canvas{position:absolute;inset:0;width:100%;height:100%}.half .xingyun-canvas{transform:scale(1.75);transform-origin:50% 0}.xingyun-controls{flex-shrink:0;text-align:center;padding:8px;font-size:12px;color: var(--text-secondary)}.xingyun-controls button{padding:8px 14px;border: 1px solid var(--glass-line);border-radius:8px;color: var(--champagne-text);background: var(--glass);cursor:pointer}.xingyun-controls p{margin:6px 0}
 </style>

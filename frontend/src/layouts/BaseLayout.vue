@@ -41,8 +41,8 @@ import { RouterView } from 'vue-router'
   z-index: 4;
   overflow: hidden;
   background: var(--brand-950);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 8px 0 28px rgba(9, 24, 36, 0.1);
+  border-right: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
   transition: width 0.24s ease;
 }
 

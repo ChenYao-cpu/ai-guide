@@ -51,12 +51,12 @@ const statusLabel = (s: string) => {
 const services = computed(() => {
   if (!status.value) return []
   return [
-    { name: '数据库 PostgreSQL', icon: '🗄️', status: status.value.database.status, detail: status.value.database.error ? `异常: ${status.value.database.error}` : '连接正常', statusKey: 'connected' },
-    { name: 'LLM 大模型', icon: '🧠', status: status.value.llm.status, detail: `${status.value.llm.model} @ ${status.value.llm.api_base}`, extra: status.value.llm.key_configured ? '✅ Key已配置' : '⚠️ Key未配置' },
-    { name: 'TTS 语音合成', icon: '🔊', status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS', statusKey: 'available' },
-    { name: 'ASR 语音识别', icon: '🎙️', status: status.value.asr.status, detail: 'FunASR Paraformer', statusKey: 'available' },
-    { name: 'RAG 知识检索', icon: '📚', status: status.value.rag.status, detail: '向量数据库 + 景区知识库', statusKey: 'available' },
-    { name: '数字人驱动', icon: '🦸', status: status.value.digital_human.status, detail: 'MuseTalk 口型同步', statusKey: 'available' },
+    { name: '数据库 PostgreSQL', status: status.value.database.status, detail: status.value.database.error ? `异常: ${status.value.database.error}` : '连接正常', statusKey: 'connected' },
+    { name: 'LLM 大模型', status: status.value.llm.status, detail: `${status.value.llm.model} @ ${status.value.llm.api_base}`, extra: status.value.llm.key_configured ? ' Key已配置' : ' Key未配置' },
+    { name: 'TTS 语音合成', status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS', statusKey: 'available' },
+    { name: 'ASR 语音识别', status: status.value.asr.status, detail: 'FunASR Paraformer', statusKey: 'available' },
+    { name: 'RAG 知识检索', status: status.value.rag.status, detail: '向量数据库 + 景区知识库', statusKey: 'available' },
+    { name: '数字人驱动', status: status.value.digital_human.status, detail: 'MuseTalk 口型同步', statusKey: 'available' },
   ]
 })
 
@@ -68,7 +68,7 @@ onMounted(() => { loadStatus() })
 <template>
   <div class="overview-container" v-loading="loading">
     <div class="page-header">
-      <h2>🖥️ 系统概览</h2>
+      <h2> 系统概览</h2>
       <el-button :icon="'Refresh'" @click="loadStatus" :loading="loading">刷新状态</el-button>
     </div>
 
@@ -79,7 +79,7 @@ onMounted(() => { loadStatus() })
       <el-col :span="8" v-for="svc in services" :key="svc.name" style="margin-bottom:16px">
         <el-card shadow="hover" class="service-card">
           <div class="svc-header">
-            <span class="svc-icon">{{ svc.icon }}</span>
+
             <span class="svc-name">{{ svc.name }}</span>
             <el-tag :type="svc.status === (svc.statusKey || 'connected') ? 'success' : 'danger'" size="small" effect="dark">
               {{ svc.status === (svc.statusKey || 'connected') ? '● 正常' : '✕ 异常' }}
@@ -122,8 +122,8 @@ onMounted(() => { loadStatus() })
 .svc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .svc-icon { font-size: 28px; }
 .svc-name { font-size: 15px; font-weight: 600; flex: 1; }
-.svc-detail { font-size: 12px; color: #909399; margin-bottom: 4px; }
-.svc-extra { font-size: 12px; color: #67c23a; &.warn { color: #e6a23c; } }
+.svc-detail { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.svc-extra { font-size: 12px; color: var(--success); &.warn { color: var(--champagne); } }
 
 .env-card { border-radius: 12px; margin-top: 8px; }
 .card-title { font-size: 15px; font-weight: 600; }

@@ -67,5 +67,5 @@ onMounted(refresh)
   </section>
 </template>
 <style scoped>
-.xingyun-config{padding:16px;margin:18px 0;background:#f0f5ff;border:1px solid #dae5fc;border-radius:12px}.xingyun-config strong{font-size:14px}.xingyun-config p{font-size:12px;line-height:1.8;color:#59657a}
+.xingyun-config{padding:16px;margin:18px 0;background: var(--glass);border: 1px solid var(--glass-line);border-radius:12px}.xingyun-config strong{font-size:14px}.xingyun-config p{font-size:12px;line-height:1.8;color: var(--text-secondary)}
 </style>

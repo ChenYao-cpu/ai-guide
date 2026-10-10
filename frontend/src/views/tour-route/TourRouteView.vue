@@ -346,7 +346,7 @@ onMounted(async () => {
                 :step="10"
                 style="width: 100%"
               />
-              <span style="margin-left: 8px; color: #909399">分钟</span>
+              <span style="margin-left: 8px; color: var(--text-muted)">分钟</span>
             </el-form-item>
           </el-col>
         </el-row>
@@ -466,16 +466,16 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 10px;
   font-size: 13px;
-  color: #606266;
+  color: var(--text-secondary);
 }
 
 .meta-divider {
-  color: #dcdfe6;
+  color: var(--text-muted);
 }
 
 .card-desc {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-muted);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -504,13 +504,13 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--glass-line);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--glass);
   transition: background 0.2s;
 
   &:hover {
-    background: #f0f2f5;
+    background: var(--glass);
   }
 }
 
@@ -522,7 +522,7 @@ onMounted(async () => {
   height: 24px;
   border-radius: 50%;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--text);
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
@@ -539,7 +539,7 @@ onMounted(async () => {
 .spot-category {
   flex-shrink: 0;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-muted);
 }
 
 .spot-actions {
@@ -552,7 +552,7 @@ onMounted(async () => {
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--text-muted);
 }
 
 // 覆盖 el-dialog 样式

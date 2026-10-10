@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BrandLogo from '@/components/BrandLogo.vue'
 import { ref, onMounted, computed } from 'vue'
 import { Download, CircleClose } from '@element-plus/icons-vue'
 
@@ -152,14 +153,14 @@ function copyLink() {
     <div class="install-body">
       <!-- 标题图标 -->
       <div class="install-hero">
-        <div class="app-icon">🏔️</div>
-        <h3>智游灵境</h3>
-        <p>添加到手机桌面，享受APP级体验</p>
+
+        <h3><BrandLogo /></h3>
+        <p>添加到手机桌面</p>
       </div>
 
       <!-- 已安装 -->
       <div v-if="isInstalled" class="installed-msg">
-        <span class="check-icon">✅</span>
+
         <strong>APP已就绪</strong>
         <p>在手机桌面找到「智游灵境」图标即可开始使用</p>
         <el-button type="primary" @click="showDialog = false">开始导览</el-button>
@@ -189,7 +190,7 @@ function copyLink() {
       <!-- Android 引导 -->
       <div v-else-if="platform === 'android'" class="guide-steps">
         <template v-if="deferredPrompt">
-          <p style="text-align:center;margin-bottom:16px;">点击下方按钮一键安装</p>
+
           <el-button type="primary" size="large" class="install-btn" @click="installPwa">
             <el-icon><Download /></el-icon> 安装APP到桌面
           </el-button>
@@ -237,12 +238,12 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-          <strong>📱 要让手机扫码打开，请使用公网模式：</strong><br/>
+          <strong> 要让手机扫码打开，请使用公网模式：</strong><br/>
           在终端 <strong>Ctrl+C</strong> 停掉当前服务，然后运行：<br/>
-          <code style="background:#fef3c7;padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block;margin:4px 0;">
+          <code style="background:var(--glass);padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block;margin:4px 0;">
             npm run dev:public
           </code><br/>
-          <span style="font-size:11px;color:#92400e;">
+          <span style="font-size:11px;color:var(--champagne-text);">
             这个命令会自动创建公网隧道，生成一个全世界都能访问的链接
           </span>
         </template>
@@ -257,7 +258,7 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-          ✅ <strong>公网已连接！</strong>下方二维码手机扫码直接打开
+           <strong>公网已连接！</strong>下方二维码手机扫码直接打开
         </template>
       </el-alert>
 
@@ -270,8 +271,8 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-          ✅ <strong>公网已连接！</strong><br/>
-          ⚠️ 首次打开会提示输入IP验证（localtunnel安全机制），输入页面显示的IP即可，<strong>7天内不再提示</strong>
+           <strong>公网已连接！</strong><br/>
+           首次打开会提示输入IP验证（localtunnel安全机制），输入页面显示的IP即可，<strong>7天内不再提示</strong>
         </template>
       </el-alert>
 
@@ -287,14 +288,14 @@ function copyLink() {
             placeholder="输入可访问的地址"
             @change="onUrlChange"
           >
-            <template #prepend>🔗</template>
+
           </el-input>
         </div>
 
         <div class="qr-box">
           <img v-if="installUrl && !installUrl.includes('null')" :src="qrCodeUrl" alt="扫码打开智游灵境" class="qr-img" />
           <div v-else class="qr-placeholder">
-            <span>⚠️</span><p>URL无效<br/>请检查服务是否启动</p>
+            <p>URL无效<br/>请检查服务是否启动</p>
           </div>
         </div>
         <div class="qr-url-row">
@@ -304,11 +305,11 @@ function copyLink() {
 
         <!-- 排查提示 -->
         <el-collapse v-if="!isTunnelDetected" style="width:100%;margin-top:4px;">
-          <el-collapse-item title="💡 一键公网访问（用于比赛演示）" name="trouble">
+          <el-collapse-item title=" 公网访问设置" name="trouble">
             <div class="troubleshoot">
               <p>在终端运行：<br/>
-              <code style="font-size:13px;background:#f1f5f9;padding:4px 10px;border-radius:4px;display:inline-block;margin:4px 0;">npm run dev:public</code></p>
-              <p style="color:#909399;font-size:11px;">自动生成公网链接，游客扫码即用，无需任何网络配置</p>
+              <code style="font-size:13px;background:var(--glass);padding:4px 10px;border-radius:4px;display:inline-block;margin:4px 0;">npm run dev:public</code></p>
+              <p style="color:var(--text-muted);font-size:11px;">自动生成公网链接，游客扫码即用，无需任何网络配置</p>
             </div>
           </el-collapse-item>
         </el-collapse>
@@ -341,8 +342,8 @@ function copyLink() {
 .install-hero {
   text-align: center;
   .app-icon { font-size: 48px; margin-bottom: 8px; }
-  h3 { margin: 0; font-size: 18px; font-weight: 800; color: #083f63; }
-  p { margin: 4px 0 0; font-size: 12px; color: #909399; }
+  h3 { margin: 0; font-size: 18px; font-weight: 800; color: var(--text); }
+  p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
 }
 
 .installed-msg {
@@ -352,8 +353,8 @@ function copyLink() {
   align-items: center;
   gap: 8px;
   .check-icon { font-size: 36px; }
-  strong { font-size: 16px; color: #16a34a; }
-  p { font-size: 12px; color: #606266; margin: 0; }
+  strong { font-size: 16px; color: var(--success); }
+  p { font-size: 12px; color: var(--text-secondary); margin: 0; }
 }
 
 .guide-steps {
@@ -368,9 +369,9 @@ function copyLink() {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: #f8fafc;
+  background: var(--glass);
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--glass-line);
 
   .step-num {
     display: grid;
@@ -378,15 +379,15 @@ function copyLink() {
     flex-shrink: 0;
     place-items: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, #38bdf8, #0284c7);
-    color: #fff;
+    background: var(--glass);
+    color: var(--text);
     font-size: 12px;
     font-weight: 800;
   }
 
   div {
     font-size: 13px;
-    color: #374151;
+    color: var(--text-secondary);
     line-height: 1.5;
   }
 }
@@ -394,10 +395,10 @@ function copyLink() {
 .icon-demo {
   display: inline-block;
   padding: 2px 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--glass-line);
   border-radius: 4px;
   font-size: 14px;
-  background: #fff;
+  background: var(--glass);
   margin-left: 4px;
 }
 
@@ -425,23 +426,23 @@ function copyLink() {
   span {
     flex-shrink: 0;
     font-size: 11px;
-    color: #909399;
+    color: var(--text-muted);
     font-weight: 600;
   }
   &::before, &::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: #e5e7eb;
+    background: var(--glass);
   }
 }
 
 .qr-box {
   padding: 12px;
-  background: #fff;
-  border: 2px solid #e5e7eb;
+  background: var(--glass);
+  border: 2px solid var(--glass-line);
   border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  box-shadow: var(--glass-shadow);
 }
 
 .qr-img {
@@ -457,7 +458,7 @@ function copyLink() {
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: #909399;
+  color: var(--text-muted);
   span { font-size: 36px; margin-bottom: 8px; }
   p { font-size: 12px; margin: 0; line-height: 1.4; }
 }
@@ -470,10 +471,10 @@ function copyLink() {
 
 .troubleshoot {
   font-size: 12px;
-  color: #606266;
+  color: var(--text-secondary);
   line-height: 1.8;
   p { margin: 4px 0; }
-  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  code { background: var(--glass); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 }
 
 .qr-url-row {
@@ -489,10 +490,10 @@ function copyLink() {
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 6px 10px;
-    background: #f1f5f9;
+    background: var(--glass);
     border-radius: 6px;
     font-size: 11px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   .copy-link-btn {

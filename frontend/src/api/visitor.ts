@@ -139,10 +139,11 @@ export function getTourLiveInfo(sessionId: number) {
 }
 
 /** 发送聊天消息 */
-export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio') {
+export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number }) {
   return request({
     url: '/tour-session/chat',
     method: 'put',
+    ...options,
     data: {
       sessionId,
       message,
@@ -164,28 +165,54 @@ export interface RouteRecommendationResult {
   spot_count: number
   algorithm_version: string
   recommendation_explanation: string
+  preferences?: string[]
+  requested_time_minutes?: number
+  visit_time_minutes?: number
+  walking_time_minutes?: number
+  rest_time_minutes?: number
+  walking_distance_meters?: number
+  candidate_count?: number
+  catalog_count?: number
+  stairs_excluded_count?: number
+  pace?: 'standard' | 'relaxed'
+  start_area?: 'auto' | 'east' | 'north' | 'south'
+  start_label?: string
+  data_basis?: string
+  planning_note?: string
+  source_urls?: string[]
   score_details: Array<{
     spot_id: number
     spot_name: string
     score: number
     diversity_penalty: number
     components: Record<string, number | string[]>
+    reason?: string
+    matched_preferences?: string[]
+    walk_from_previous_minutes?: number
+    walk_from_previous_meters?: number
   }>
 }
 
-export function getRouteRecommendation(preferences: string[]) {
+export interface PlanningOptions {
+  time_budget_minutes: number
+  pace: 'standard' | 'relaxed'
+  start_area: 'auto' | 'east' | 'north' | 'south'
+}
+export function getRouteRecommendation(preferences: string[], options?: PlanningOptions) {
   return request<{ code: number; success: boolean; data: RouteRecommendationResult; message: string }>({
     url: '/tour-routes/recommend',
     method: 'post',
     data: {
       preferences,
+      ...options,
     },
   })
 }
 
 /** AI对话式景点推荐（LLM自然语言理解） */
-export interface AiChatRecommendResult {
+export interface AiChatRecommendResult extends RouteRecommendationResult {
   ai_response: string
+  preferences?: string[]
   spot_ids: number[]
   spot_names: string[]
   total_duration: number
@@ -196,11 +223,11 @@ export interface AiChatRecommendResult {
   excluded_spot_count?: number
 }
 
-export function aiChatRecommend(message: string) {
+export function aiChatRecommend(message: string, options?: PlanningOptions) {
   return request<{ code: number; data: AiChatRecommendResult; message: string }>({
     url: '/tour-session/ai-chat-recommend',
     method: 'post',
-    params: { message },
+    params: { message, ...options },
   })
 }
 

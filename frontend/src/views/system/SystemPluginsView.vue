@@ -83,7 +83,7 @@ onMounted(async () => {
 
   .content {
     font-size: 15px;
-    color: #b1b3b8;
+    color: var(--text-muted);
   }
 }
 </style>

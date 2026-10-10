@@ -38,32 +38,32 @@ const statCards = computed(() => {
       title: '总互动次数',
       value: r?.total_interactions ?? 0,
       unit: '次',
-      color: '#409eff',
-      bgColor: '#ecf5ff',
+      color: '#818cf8',
+      bgColor: 'rgba(99,102,241,0.08)',
       sub: '游客提问总数',
     },
     {
       title: '好评率',
       value: r ? (r.positive_ratio * 100).toFixed(1) : '0.0',
       unit: '%',
-      color: '#67c23a',
-      bgColor: '#f0f9eb',
+      color: '#059669',
+      bgColor: 'rgba(99,102,241,0.08)',
       sub: `${r?.positive_count ?? 0} 条正面`,
     },
     {
       title: '负面反馈',
       value: r?.negative_count ?? 0,
       unit: '条',
-      color: '#f56c6c',
-      bgColor: '#fef0f0',
+      color: '#e11d48',
+      bgColor: 'rgba(99,102,241,0.08)',
       sub: `占比 ${r ? (r.negative_ratio * 100).toFixed(1) : '0'}%`,
     },
     {
       title: '整体趋势',
       value: sentimentTrendLabel.value,
       unit: '',
-      color: '#e6a23c',
-      bgColor: '#fdf6ec',
+      color: '#4f46e5',
+      bgColor: 'rgba(99,102,241,0.08)',
       sub: sentimentTrendSub.value,
       isText: true,
     },
@@ -95,9 +95,9 @@ const sentimentBars = computed(() => {
   const neutralPercent = Math.round(r.neutral_ratio * 100)
   const negativePercent = Math.round(r.negative_ratio * 100)
   return [
-    { label: '正面评价', percent: positivePercent, count: r.positive_count, color: '#67c23a' },
-    { label: '中性评价', percent: neutralPercent, count: r.neutral_count, color: '#e6a23c' },
-    { label: '负面评价', percent: negativePercent, count: r.negative_count, color: '#f56c6c' },
+    { label: '正面评价', percent: positivePercent, count: r.positive_count, color: '#059669' },
+    { label: '中性评价', percent: neutralPercent, count: r.neutral_count, color: '#4f46e5' },
+    { label: '负面评价', percent: negativePercent, count: r.negative_count, color: '#e11d48' },
   ]
 })
 
@@ -120,9 +120,9 @@ const commentHighlights = computed(() => {
 })
 
 const sentimentColorMap: Record<string, string> = {
-  positive: '#67c23a',
-  neutral: '#909399',
-  negative: '#f56c6c',
+  positive: '#059669',
+  neutral: '#64748b',
+  negative: '#e11d48',
 }
 
 // ======================== 服务建议 ========================
@@ -156,7 +156,7 @@ onMounted(() => {
             </span>
             <span v-if="card.unit" class="stat-card-unit">{{ card.unit }}</span>
           </div>
-          <div class="stat-card-sub">{{ card.sub }}</div>
+
         </div>
       </el-col>
     </el-row>
@@ -217,7 +217,7 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title">🔥 热门提问 TOP8</span>
+            <span class="chart-title"> 热门提问 TOP8</span>
           </template>
           <div v-if="hotQuestions.length > 0" class="hot-questions-list">
             <div v-for="(q, idx) in hotQuestions" :key="idx" class="hot-q-item">
@@ -234,7 +234,7 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title">💡 服务优化建议</span>
+            <span class="chart-title"> 服务优化建议</span>
           </template>
           <div v-if="serviceSuggestions.length > 0" class="suggestions-list">
             <el-alert
@@ -257,12 +257,12 @@ onMounted(() => {
       <el-col :span="24">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title">💬 游客留言精选</span>
+            <span class="chart-title"> 游客留言精选</span>
           </template>
           <div v-if="commentHighlights.length > 0" class="comments-grid">
             <div v-for="(item, idx) in commentHighlights" :key="idx" class="comment-item">
               <div class="comment-header">
-                <span class="sentiment-dot" :style="{ backgroundColor: sentimentColorMap[item.sentiment] || '#909399' }" />
+                <span class="sentiment-dot" :style="{ backgroundColor: sentimentColorMap[item.sentiment] || '#64748b' }" />
                 <span class="comment-sentiment-label">
                   {{ item.sentiment === 'positive' ? '正面' : item.sentiment === 'negative' ? '负面' : '中性' }}
                 </span>
@@ -285,12 +285,12 @@ onMounted(() => {
 .stat-row { margin-bottom: 20px; }
 .stat-card { border-radius: 12px; padding: 20px 24px; transition: transform .2s; &:hover { transform: translateY(-2px); } }
 .stat-card-header { margin-bottom: 10px; }
-.stat-card-title { font-size: 14px; color: #606266; font-weight: 500; }
+.stat-card-title { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
 .stat-card-body { display: flex; align-items: baseline; gap: 4px; }
 .stat-card-value { font-size: 32px; font-weight: 700; line-height: 1.2; }
 .stat-card-text { font-size: 22px; }
-.stat-card-unit { font-size: 14px; color: #909399; }
-.stat-card-sub { margin-top: 4px; font-size: 12px; color: #909399; }
+.stat-card-unit { font-size: 14px; color: var(--text-muted); }
+.stat-card-sub { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
 
 .charts-row { margin-bottom: 20px; }
 .bottom-row { margin-bottom: 20px; }
@@ -299,18 +299,18 @@ onMounted(() => {
 // 柱状图
 .bar-chart { display: flex; flex-direction: column; gap: 18px; }
 .bar-item { display: flex; align-items: center; gap: 10px; }
-.bar-label { width: 70px; font-size: 13px; color: #606266; flex-shrink: 0; }
-.bar-track { flex: 1; height: 28px; background: #f0f2f5; border-radius: 6px; overflow: hidden; position: relative; }
+.bar-label { width: 70px; font-size: 13px; color: var(--text-secondary); flex-shrink: 0; }
+.bar-track { flex: 1; height: 28px; background: var(--glass); border-radius: 6px; overflow: hidden; position: relative; }
 .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width .6s ease; min-width: 0; }
-.bar-percent { color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; &.outside { color: #303133; position: absolute; right: -40px; top: 50%; transform: translateY(-50%); } }
-.bar-count { width: 45px; font-size: 12px; color: #909399; text-align: right; flex-shrink: 0; }
+.bar-percent { color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; &.outside { color: var(--text); position: absolute; right: -40px; top: 50%; transform: translateY(-50%); } }
+.bar-count { width: 45px; font-size: 12px; color: var(--text-muted); text-align: right; flex-shrink: 0; }
 
 // 热门提问
 .hot-questions-list { display: flex; flex-direction: column; gap: 8px; }
-.hot-q-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #fafafa; border-radius: 8px; }
-.hot-q-rank { width: 22px; height: 22px; border-radius: 6px; background: #e5e7eb; color: #909399; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; &.top3 { background: #fdf6ec; color: #e6a23c; } }
-.hot-q-text { flex: 1; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-q-count { font-size: 11px; color: #c0c4cc; flex-shrink: 0; }
+.hot-q-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--glass); border-radius: 8px; }
+.hot-q-rank { width: 22px; height: 22px; border-radius: 6px; background: var(--glass); color: var(--text-muted); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; &.top3 { background: var(--glass); color: var(--champagne); } }
+.hot-q-text { flex: 1; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot-q-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
 
 // 服务建议
 .suggestions-list { display: flex; flex-direction: column; gap: 10px; }
@@ -318,10 +318,10 @@ onMounted(() => {
 
 // 评论
 .comments-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-height: 440px; overflow-y: auto; }
-.comment-item { padding: 12px 14px; background: #fafafa; border-radius: 8px; border-left: 3px solid #dcdfe6; }
+.comment-item { padding: 12px 14px; background: var(--glass); border-radius: 8px; border-left: 3px solid var(--glass-line); }
 .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .sentiment-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.comment-sentiment-label { font-size: 12px; color: #606266; font-weight: 500; }
-.comment-time { font-size: 11px; color: #c0c4cc; margin-left: auto; }
-.comment-text { font-size: 13px; color: #303133; line-height: 1.5; margin: 0; }
+.comment-sentiment-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.comment-time { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.comment-text { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0; }
 </style>

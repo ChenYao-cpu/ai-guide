@@ -24,7 +24,7 @@ const props = defineProps({
 })
 
 const initChart = () => {
-  const chart = echarts.init(chartRef.value)
+  const chart = echarts.init(chartRef.value, 'soft-ui')
 
   const option = {
     title: {

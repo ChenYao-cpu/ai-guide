@@ -14,7 +14,7 @@ const props = defineProps<{
 
 function initChart() {
   if (!chartRef.value) return
-  chartInstance = echarts.init(chartRef.value)
+  chartInstance = echarts.init(chartRef.value, 'soft-ui')
 
   const option: echarts.EChartsOption = {
     title: props.title ? {
@@ -34,7 +34,7 @@ function initChart() {
       radius: '65%',
       indicator: props.indicators,
       axisName: {
-        color: '#606266',
+        color: '#64748b',
         fontSize: 12,
       },
     },

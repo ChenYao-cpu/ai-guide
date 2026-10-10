@@ -42,7 +42,7 @@ async function save() {
       <el-form-item label="展示封面" required><FileUpload v-model="form.poster_image" file-type="image" /></el-form-item>
       <el-form-item label="头像" required><FileUpload v-model="form.avatar" file-type="image" /></el-form-item>
     </el-form>
-    <p>封面和头像用于网页、小程序的人物选择与预览展示，可使用对应人物截图。无需上传人物视频。实时导览的背景和音色使用数字人应用配置；网页显示全身，小程序导览页显示半身。保存后默认下架，密钥由后端加密保存。</p>
+    <p>封面和头像用于网页、小程序的人物选择与预览展示，可使用对应人物截图。无需上传人物视频。实时导览的背景和音色使用数字人应用配置；网页和小程序导览页均完整显示全身。保存后默认下架，密钥由后端加密保存。</p>
     <template #footer>
       <el-button :disabled="busy" @click="visible=false">取消</el-button>
       <el-button type="primary" :loading="busy" @click="save">创建并绑定</el-button>

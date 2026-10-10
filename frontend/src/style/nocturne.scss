@@ -1,0 +1,295 @@
+/* StyleKit Nocturne Glassmorphism: a neutral glass surface over cool light wells.
+   This layer changes materials, typography and interaction states, not layout. */
+html[data-ui-theme='nocturne'] {
+  color-scheme: dark;
+  --night: #0b1322;
+  --steel: #33517a;
+  --moonlight: #7c9cc4;
+  --champagne: #e4b863;
+  --champagne-text: #f3dca8;
+  --glass: rgba(255, 255, 255, .08);
+  --glass-raised: rgba(255, 255, 255, .12);
+  --glass-line: rgba(255, 255, 255, .15);
+  --text: rgba(255, 255, 255, .85);
+  --text-secondary: rgba(255, 255, 255, .60);
+  --text-muted: rgba(255, 255, 255, .45);
+  --glass-shadow: 0 16px 40px rgba(3, 7, 18, .5), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(2, 6, 16, .35);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), transparent 50%);
+  --spring: cubic-bezier(.16, 1, .3, 1);
+  --brand-950: var(--night);
+  --brand-900: var(--night);
+  --brand-800: var(--steel);
+  --brand-700: var(--champagne);
+  --brand-600: var(--champagne);
+  --brand-500: var(--moonlight);
+  --brand-100: var(--glass-raised);
+  --brand-50: var(--glass);
+  --ink-900: var(--text);
+  --ink-700: var(--text-secondary);
+  --ink-500: var(--text-muted);
+  --ink-400: var(--text-muted);
+  --line-strong: var(--glass-line);
+  --line-soft: rgba(255, 255, 255, .08);
+  --canvas: var(--night);
+  --surface: var(--glass);
+  --surface-muted: rgba(255, 255, 255, .04);
+  --success: #8cbfa9;
+  --warning: var(--champagne);
+  --danger: #e5a0a8;
+  --shadow-panel: var(--glass-shadow);
+  --shadow-lift: 0 24px 56px rgba(3, 7, 18, .55), inset 0 1px 0 rgba(255, 255, 255, .28);
+  --el-color-primary: var(--champagne);
+  --el-color-primary-dark-2: #cba156;
+  --el-color-primary-light-3: #edd098;
+  --el-color-primary-light-5: #f3dca8;
+  --el-color-primary-light-7: rgba(228, 184, 99, .30);
+  --el-color-primary-light-8: rgba(228, 184, 99, .22);
+  --el-color-primary-light-9: rgba(228, 184, 99, .15);
+  --el-color-success: var(--success);
+  --el-color-success-light-9: rgba(140, 191, 169, .10);
+  --el-color-success-light-8: rgba(140, 191, 169, .20);
+  --el-color-danger: var(--danger);
+  --el-color-danger-light-9: rgba(229, 160, 168, .10);
+  --el-color-danger-light-8: rgba(229, 160, 168, .20);
+  --el-color-warning: var(--champagne);
+  --el-color-warning-light-9: rgba(228, 184, 99, .10);
+  --el-color-warning-light-8: rgba(228, 184, 99, .20);
+  --el-color-info: var(--moonlight);
+  --el-color-info-light-9: rgba(124, 156, 196, .10);
+  --el-color-info-light-8: rgba(124, 156, 196, .20);
+  --el-bg-color: var(--night);
+  --el-bg-color-page: var(--night);
+  --el-bg-color-overlay: #172234;
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-muted);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-text-color-disabled: rgba(255, 255, 255, .30);
+  --el-border-color: var(--glass-line);
+  --el-border-color-light: rgba(255, 255, 255, .12);
+  --el-border-color-lighter: rgba(255, 255, 255, .08);
+  --el-border-color-extra-light: rgba(255, 255, 255, .05);
+  --el-border-color-dark: rgba(255, 255, 255, .22);
+  --el-fill-color: var(--glass);
+  --el-fill-color-light: rgba(255, 255, 255, .04);
+  --el-fill-color-lighter: rgba(255, 255, 255, .03);
+  --el-fill-color-extra-light: rgba(255, 255, 255, .02);
+  --el-fill-color-blank: transparent;
+  --el-fill-color-dark: rgba(255, 255, 255, .12);
+  --el-fill-color-darker: rgba(255, 255, 255, .18);
+  --el-disabled-bg-color: rgba(255, 255, 255, .025);
+  --el-disabled-border-color: rgba(255, 255, 255, .08);
+  --el-disabled-text-color: rgba(255, 255, 255, .30);
+  --el-mask-color: rgba(11, 19, 34, .80);
+  --el-mask-color-extra-light: rgba(11, 19, 34, .65);
+  --el-border-radius-base: 16px;
+  --el-border-radius-small: 10px;
+  --el-box-shadow: var(--glass-shadow);
+  --el-box-shadow-light: var(--glass-shadow);
+  --el-box-shadow-dark: var(--shadow-lift);
+
+  body {
+    color: var(--text);
+    background: radial-gradient(900px circle at 82% -5%, rgba(124, 156, 196, .22), transparent 55%),
+      radial-gradient(700px circle at 8% 30%, rgba(51, 81, 122, .28), transparent 60%),
+      radial-gradient(600px circle at 70% 85%, rgba(228, 184, 99, .08), transparent 55%), var(--night);
+    background-attachment: fixed;
+  }
+  ::selection { background: rgba(228, 184, 99, .28); color: #fff; }
+  h1, h2, .el-dialog__title, .page-title {
+    font-family: var(--app-font-family);
+    color: var(--text);
+  }
+  :focus-visible { outline: 2px solid var(--champagne); outline-offset: 3px; }
+  input::placeholder, textarea::placeholder { color: var(--text-muted); }
+  /* The existing mobile pages are fixed to the viewport; desktop min-width
+     must not leave an unrelated horizontal scrollbar under them. */
+  &:has(.mh-root, .mt-root), body:has(.mh-root, .mt-root), #app:has(.mh-root, .mt-root) {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .mh-scroll, .mh-route-row, .mh-guide-row, .mt-chat, .mt-quick-row {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .20) transparent;
+  }
+
+  /* Keep the original page geometry; let the shared background shine through. */
+  :is(.layout-container, .header-and-content-container, .el-main, .content-stage,
+    .visitor-home, .tour-interaction-container, .login-page, .brand-panel, .access-panel, .mh-root, .mt-root) {
+    background: transparent !important;
+  }
+  .content-stage::before { display: none; }
+  :is(.layout-aside, .aside-shell, .topbar, .visitor-topbar-shell, .mh-top, .mh-bar, .mt-top, .mt-bar) {
+    background: rgba(255, 255, 255, .04) !important;
+    border-color: var(--glass-line) !important;
+    backdrop-filter: blur(60px) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15);
+  }
+  .layout-aside { border-right-color: var(--glass-line); }
+
+  /* All business surfaces, including visitor cards and mobile selectors. */
+  :is(.el-card, .dashboard-hero, .visitor-intro, .access-card, .login-shell, .content-card,
+    .route-card, .spot-card, .guide-card, .pref-card, .model-card, .start-card,
+    .ai-chat-panel, .selected-summary, .visitor-menu, .avatar-card, .tour-right, .tour-banner, .guide-stage,
+    .preference-card, .service-card, .session-card, .stat-card,
+    .mh-route, .mh-guide, .mh-chip, .mt-spot, .motion-console, .qr-panel) {
+    border-color: var(--glass-line) !important;
+    border-radius: 24px !important;
+    background-color: var(--glass) !important;
+    background-image: var(--glass-sheen) !important;
+    box-shadow: var(--glass-shadow) !important;
+    backdrop-filter: blur(60px) saturate(180%);
+    -webkit-backdrop-filter: blur(60px) saturate(180%);
+    color: var(--text);
+  }
+  :is(.route-card, .spot-card, .guide-card, .pref-card, .model-card,
+    .preference-card, .mh-route, .mh-guide, .mh-chip):is(:hover, .selected, .active, .on) {
+    background-color: var(--glass-raised) !important;
+    border-color: rgba(228, 184, 99, .55) !important;
+  }
+  :is(.guide-card, .spot-card, .route-card, .metric-card, .mh-route, .mh-guide) {
+    transition: background-color .5s var(--spring), border-color .5s var(--spring), box-shadow .5s var(--spring), transform .5s var(--spring);
+  }
+  .dashboard-hero::before { background: var(--champagne) !important; }
+  .dashboard-hero::after { color: rgba(255, 255, 255, .035); }
+  .visitor-intro::before { color: rgba(255, 255, 255, .035); }
+  :is(.eyebrow, .section-heading > span, .chart-header > span, .access-heading > span, .metric-icon) { color: var(--champagne) !important; }
+  :is(.el-statistic__number, .stat-value, .stat-card-value, .brand-summary strong, .selected-summary strong) { color: var(--champagne-text) !important; }
+  :is(.metric-icon, .stat-icon, .stat-card-icon, .visitor-mark, .brand-mark, .mh-guide-mark) {
+    background: var(--glass) !important; border: 1px solid var(--glass-line); color: var(--champagne-text) !important;
+  }
+  :is(.brand-summary > div, .flow-card, .report-summary, .metric-item, .hot-q-item, .comment-item, .info-cell, .chat-welcome, .route-spot-item) {
+    background: rgba(255, 255, 255, .04) !important; border-color: var(--glass-line) !important;
+  }
+  .orbit-system, .data-stars, .scan-ribbon { opacity: .12; }
+  .ambient-layer::before, .ambient-layer::after { opacity: .08; }
+  .access-card::before { background: var(--glass-sheen) !important; animation: none !important; transform: none; opacity: .2; }
+  .access-card::after { border-color: var(--glass-line) !important; background: transparent !important; animation: none !important; box-shadow: none; }
+  :is(.login-shell, .brand-panel)::before, :is(.login-shell, .brand-panel)::after {
+    opacity: .04 !important; animation: none !important; background: transparent !important; box-shadow: none;
+  }
+  .guide-stage::after { opacity: .12; box-shadow: none; }
+
+  /* Neutral controls, champagne primary actions, no opaque accent blocks. */
+  :is(.el-button, .top-visitor-entry, .ai-float-trigger, .mhb-start, .mt-send-btn) {
+    background: rgba(255, 255, 255, .06) !important;
+    border: 1px solid var(--glass-line) !important;
+    border-radius: 16px;
+    color: var(--text) !important;
+    backdrop-filter: blur(40px) saturate(180%);
+    box-shadow: 0 2px 8px rgba(3, 7, 18, .35), inset 0 1px 0 rgba(255, 255, 255, .18) !important;
+    transition: background .5s var(--spring), border-color .5s var(--spring), box-shadow .5s var(--spring), transform .5s var(--spring);
+  }
+  :is(.el-button--primary, .login-btn, .mhb-start, .mt-send-btn, .ai-float-trigger) {
+    background: rgba(228, 184, 99, .15) !important;
+    border-color: rgba(228, 184, 99, .4) !important;
+    color: var(--champagne-text) !important;
+    box-shadow: 0 4px 16px rgba(3, 7, 18, .45), inset 0 1px 0 rgba(228, 184, 99, .3), inset 0 -1px 0 rgba(2, 6, 16, .3) !important;
+  }
+  .el-button:not(.is-disabled):hover { background: var(--glass-raised) !important; border-color: rgba(255, 255, 255, .3) !important; transform: translateY(-2px); }
+  :is(.el-button--primary, .login-btn, .mhb-start, .mt-send-btn):not(:disabled):not(.is-disabled):hover {
+    background: rgba(228, 184, 99, .22) !important;
+    border-color: rgba(228, 184, 99, .55) !important;
+    box-shadow: 0 10px 32px rgba(3, 7, 18, .55), 0 0 24px rgba(228, 184, 99, .2), inset 0 1px 0 rgba(228, 184, 99, .4) !important;
+  }
+  .el-button:not(.is-disabled):active { transform: scale(.97); }
+  :is(.el-button, .top-visitor-entry, .mhb-start, .mt-send-btn) {
+    background-image: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .12) 50%, transparent 65%) !important;
+    background-size: 250% 100% !important;
+    background-position: 150% 0 !important;
+  }
+  :is(.el-button, .top-visitor-entry, .mhb-start, .mt-send-btn):not(:disabled):not(.is-disabled):hover { background-position: -50% 0 !important; }
+  .login-btn::before { background: transparent !important; }
+  .el-button:is(.is-link, .is-text) { background: transparent !important; border-color: transparent !important; box-shadow: none !important; backdrop-filter: none; }
+  .el-button--primary:is(.is-link, .is-text) { color: var(--champagne-text) !important; }
+  .el-button--danger { color: var(--danger) !important; }
+  .el-button.is-disabled { opacity: .4; transform: none; }
+  :is(.el-input__wrapper, .el-select__wrapper, .el-textarea__inner, .mt-input, .chat-input-area textarea) {
+    background: rgba(255, 255, 255, .04) !important; color: var(--text) !important;
+    border-radius: 16px; box-shadow: 0 0 0 1px var(--glass-line) inset !important;
+  }
+  :is(.el-input__wrapper.is-focus, .el-select__wrapper.is-focused, .el-textarea__inner:focus) {
+    background: var(--glass) !important; box-shadow: 0 0 0 1px rgba(228, 184, 99, .6) inset, 0 0 0 3px rgba(228, 184, 99, .10) !important;
+  }
+  :is(.el-input__inner, .el-textarea__inner, .el-form-item__label, .el-select__selected-item, .el-radio__label, .el-checkbox__label) { color: var(--text) !important; }
+  .el-checkbox__input.is-checked .el-checkbox__inner::after { border-color: var(--night); }
+  .el-radio__input.is-checked .el-radio__inner::after { background: var(--night); }
+
+  /* Navigation and data grids retain their original density and dimensions. */
+  .el-menu { --el-menu-bg-color: transparent; --el-menu-text-color: var(--text-secondary); --el-menu-hover-bg-color: var(--glass); --el-menu-active-color: var(--champagne-text); background: transparent !important; }
+  .el-menu-item, .el-sub-menu__title { color: var(--text-secondary) !important; }
+  .el-menu-item:hover, .el-sub-menu__title:hover { background: var(--glass) !important; color: var(--text) !important; }
+  .el-menu-item.is-active { background: var(--glass-raised) !important; color: var(--champagne-text) !important; box-shadow: inset 2px 0 var(--champagne); }
+  .el-table {
+    --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: rgba(255, 255, 255, .04);
+    --el-table-row-hover-bg-color: rgba(255, 255, 255, .06); --el-table-current-row-bg-color: rgba(255, 255, 255, .08);
+    --el-table-border-color: rgba(255, 255, 255, .08); --el-table-text-color: var(--text-secondary); --el-table-header-text-color: var(--text);
+    background: transparent !important;
+  }
+  .el-table th.el-table__cell { color: var(--text) !important; background: rgba(255, 255, 255, .04) !important; }
+  .el-table tr, .el-table td.el-table__cell { background: transparent; }
+  .el-table__fixed-right-patch, .el-table__fixed .el-table__cell, .el-table__fixed-right .el-table__cell { background: #1c293b !important; }
+  .el-pagination { --el-pagination-button-bg-color: var(--glass); --el-pagination-button-color: var(--text); }
+  .el-pagination.is-background :is(.el-pager li, .btn-next, .btn-prev) { background: var(--glass); color: var(--text-secondary); border: 1px solid var(--glass-line); }
+  .el-pagination.is-background .el-pager li.is-active { background: rgba(228, 184, 99, .15) !important; color: var(--champagne-text) !important; border-color: rgba(228, 184, 99, .4); }
+  .el-tag { --el-tag-bg-color: var(--glass); --el-tag-border-color: var(--glass-line); --el-tag-text-color: var(--text-secondary); }
+  .el-tag--primary { --el-tag-bg-color: rgba(228, 184, 99, .10); --el-tag-border-color: rgba(228, 184, 99, .25); --el-tag-text-color: var(--champagne-text); }
+  .el-tag--success { --el-tag-text-color: var(--success); }
+  .el-tag--danger { --el-tag-text-color: var(--danger); }
+  .el-tag--warning { --el-tag-text-color: var(--champagne-text); }
+  .el-tabs__item { color: var(--text-secondary); }
+  .el-tabs__item.is-active { color: var(--champagne-text); }
+  .el-tabs__active-bar { background: var(--champagne); }
+  .el-tabs--border-card, .el-tabs--border-card > .el-tabs__header { background: var(--glass); border-color: var(--glass-line); }
+  .el-tabs--border-card { border-radius: 24px; overflow: hidden; box-shadow: var(--glass-shadow); backdrop-filter: blur(60px) saturate(180%); }
+  .el-descriptions__body, .el-descriptions__cell { background: transparent !important; color: var(--text) !important; border-color: var(--glass-line) !important; }
+  .el-descriptions__label { background: rgba(255, 255, 255, .04) !important; color: var(--text-secondary) !important; }
+  .el-collapse, .el-collapse-item__header, .el-collapse-item__wrap { background: transparent; color: var(--text); border-color: var(--glass-line); }
+  .el-upload-dragger { background: var(--glass); border-color: var(--glass-line); }
+  .el-progress-bar__outer { background: rgba(255, 255, 255, .08); }
+  .el-progress__text { color: var(--text-secondary); }
+  .emotion-fill, .bar-fill .bar-percent:not(.outside) { color: var(--night) !important; }
+  .bar-percent.outside { color: var(--text) !important; }
+
+  /* Teleported surfaces need the same material, with a denser night backing
+     to keep text legible over tables and photographs. */
+  :is(.el-dialog, .el-message-box, .el-drawer, .el-popper.is-light, .el-notification, .el-message) {
+    background: linear-gradient(rgba(255, 255, 255, .12), rgba(255, 255, 255, .08)), rgba(11, 19, 34, .88) !important;
+    border: 1px solid var(--glass-line) !important; border-radius: 24px;
+    backdrop-filter: blur(60px) saturate(180%); box-shadow: var(--glass-shadow) !important; color: var(--text);
+  }
+  .el-popper.is-light .el-popper__arrow::before { background: #253044; border-color: var(--glass-line); }
+  :is(.el-select-dropdown__item, .el-dropdown-menu, .el-dropdown-menu__item, .el-cascader-node) { background: transparent; color: var(--text-secondary); }
+  :is(.el-select-dropdown__item.is-hovering, .el-dropdown-menu__item:not(.is-disabled):hover, .el-cascader-node:not(.is-disabled):hover) { background: var(--glass) !important; color: var(--champagne-text); }
+  .el-overlay { background: rgba(3, 7, 18, .65); backdrop-filter: blur(8px); }
+  .el-loading-mask { background: rgba(11, 19, 34, .8); backdrop-filter: blur(8px); }
+  .el-empty { --el-empty-fill-color-0: #0b1322; --el-empty-fill-color-1: #33517a; --el-empty-fill-color-2: #253b5a; --el-empty-fill-color-3: #253b5a; --el-empty-fill-color-4: #1c2b40; --el-empty-fill-color-5: #182438; --el-empty-fill-color-6: #253b5a; --el-empty-fill-color-7: #172234; --el-empty-fill-color-8: #172234; --el-empty-fill-color-9: #1c2b40; }
+  .md-editor { --md-bk-color: transparent; --md-color: var(--text); --md-border-color: var(--glass-line); --md-bk-color-outstand: var(--glass); --md-bk-hover-color: var(--glass-raised); background: transparent; color: var(--text); }
+  .md-editor-preview { color: var(--text); }
+  .md-editor-preview :is(pre, code, blockquote) { background: var(--glass); border-color: var(--glass-line); color: var(--text-secondary); }
+  :is(.msg-content, .mc-bubble, .message-content) { background: var(--glass) !important; color: var(--text) !important; border-color: var(--glass-line) !important; }
+  :is(.user-msg .msg-content, .mc-row.user .mc-bubble) { background: rgba(228, 184, 99, .10) !important; }
+  .mt-hero { background: radial-gradient(ellipse at center, rgba(51, 81, 122, .4), transparent 70%) !important; }
+  .mhb-info b { color: var(--champagne-text); }
+  .qr-img-wrap { background: #fff !important; }
+  .spot-marker > div { background: var(--night) !important; border-color: var(--moonlight) !important; color: var(--text) !important; }
+  .spot-marker > div[style*='#3b5bff'] { background: var(--champagne) !important; color: var(--night) !important; border-color: var(--champagne-text) !important; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-bar a { background: #172234; color: var(--text); border-color: var(--glass-line); }
+  .leaflet-bar a:hover { background: #253044; }
+  .md-editor[style] { background: transparent !important; }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    :is(.el-card, .access-card, .dashboard-hero, .content-card, .guide-card, .route-card, .spot-card, .mh-route, .mh-guide, .mh-chip) { background-color: #1c293b !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  }
+}
+
+/* The overview fits the available admin panel instead of imposing a desktop width. */
+html[data-ui-theme="nocturne"]:has(.dashboard-page),
+html[data-ui-theme="nocturne"] body:has(.dashboard-page),
+html[data-ui-theme="nocturne"] #app:has(.dashboard-page) { min-width: 0; }
+
+/* Player controls share the same UI font as the surrounding application. */
+html[data-ui-theme="nocturne"] :is(.xgplayer, .xgplayer *) { font-family: var(--app-font-family) !important; }

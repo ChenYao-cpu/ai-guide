@@ -322,7 +322,7 @@ defineExpose({ showItemInfoDialog })
   border-radius: 10px;
   padding: 20px;
 
-  --el-dialog-bg-color: #f7f8fa;
+  --el-dialog-bg-color: var(--glass);
   --el-dialog-title-font-size: 20px;
 }
 </style>
