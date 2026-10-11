@@ -12,11 +12,11 @@ const props = defineProps<{
   height?: string
 }>()
 
-const defaultColors = ['#67c23a', '#409eff', '#e6a23c', '#f56c6c', '#909399', '#b37feb', '#36cfc9', '#ff85c0']
+const defaultColors = ["#4f46e5", "#818cf8", "#6366f1", "#10b981", "#ec4899", "#f59e0b", "#d15d1a", "#64748b"]
 
 function initChart() {
   if (!chartRef.value) return
-  chartInstance = echarts.init(chartRef.value)
+  chartInstance = echarts.init(chartRef.value, 'soft-ui')
 
   const option: echarts.EChartsOption = {
     title: props.title ? {
@@ -41,7 +41,7 @@ function initChart() {
         avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 6,
-          borderColor: '#fff',
+          borderColor: '#f8fafc',
           borderWidth: 2,
         },
         label: {

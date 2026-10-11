@@ -31,5 +31,5 @@ export default {
 }
 </script>
 <style scoped>
-.notice{padding:60rpx 40rpx;display:flex;flex-direction:column;gap:28rpx;line-height:1.8;color:#59657a}
+.notice{padding:60rpx 40rpx;display:flex;flex-direction:column;gap:28rpx;line-height:1.8;color:var(--ng-secondary)}
 </style>

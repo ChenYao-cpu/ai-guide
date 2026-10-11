@@ -290,7 +290,7 @@ const handleAccuracyTest = async () => {
         <el-table-column prop="file_type" label="文件类型" align="center" width="120px">
           <template #default="scope">
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px">
-              <el-icon :size="18" color="#409eff">
+              <el-icon :size="18" color="var(--champagne-text)">
                 <Document />
               </el-icon>
               <span>{{ scope.row.file_type ? scope.row.file_type.toUpperCase() : '-' }}</span>
@@ -346,10 +346,10 @@ const handleAccuracyTest = async () => {
     >
       <!-- 加载圆圈 -->
       <div v-if="accuracyLoading" style="text-align: center; padding: 60px 0">
-        <el-icon :size="48" style="animation: spin 1s linear infinite; color: #409eff">
+        <el-icon :size="48" style="animation: spin 1s linear infinite; color: var(--champagne-text)">
           <Loading />
         </el-icon>
-        <p style="margin-top: 16px; color: #909399">正在执行 RAG 检索与大模型回答评测，请稍候...</p>
+        <p style="margin-top: 16px; color: var(--text-muted)">正在执行 RAG 检索与大模型回答评测，请稍候...</p>
       </div>
 
       <el-alert v-else-if="accuracyError" :title="accuracyError" type="error" show-icon :closable="false" />
@@ -399,7 +399,7 @@ const handleAccuracyTest = async () => {
             <el-table-column prop="expected_answer" label="预期答案" min-width="140" show-overflow-tooltip />
             <el-table-column prop="actual_answer" label="RAG 回答" min-width="140" show-overflow-tooltip>
               <template #default="scope">
-                <span :style="{ color: scope.row.error ? '#dc2626' : '#303133' }">
+                <span :style="{ color: scope.row.error ? 'var(--danger)' : 'var(--text)' }">
                   {{ scope.row.error || scope.row.actual_answer }}
                 </span>
               </template>
@@ -407,7 +407,7 @@ const handleAccuracyTest = async () => {
             <el-table-column label="覆盖" width="95" align="center">
               <template #default="scope">
                 {{ scope.row.matched_count }}/{{ scope.row.required_count }}
-                <div style="font-size: 11px; color: #909399">{{ scope.row.keyword_coverage }}%</div>
+                <div style="font-size: 11px; color: var(--text-muted)">{{ scope.row.keyword_coverage }}%</div>
               </template>
             </el-table-column>
             <el-table-column prop="is_correct" label="结果" width="80" align="center">
@@ -423,7 +423,7 @@ const handleAccuracyTest = async () => {
 
       <template #footer>
         <div style="display: flex; justify-content: center; gap: 12px">
-          <el-button @click="handleAccuracyTest" type="primary">🔄 重新测试</el-button>
+          <el-button @click="handleAccuracyTest" type="primary"> 重新测试</el-button>
           <el-button @click="accuracyDialogVisible = false">关闭</el-button>
         </div>
       </template>

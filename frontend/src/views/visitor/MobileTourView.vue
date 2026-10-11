@@ -1,82 +1,80 @@
 <template>
-  <div class="mt-root">
-    <!-- 顶栏 -->
+  <main class="mt-root">
     <header class="mt-top">
-      <button class="mt-btn-x" @click="confirmEnd">✕</button>
-      <div class="mt-title">
-        <strong>{{ currentSpot?.spot_name || '景区导览中' }}</strong>
-        <span>{{ spotIdx+1 }}/{{ spotCards.length||1 }} · {{ guideInfo?.name||'AI导游' }}</span>
-      </div>
-      <button class="mt-btn-gps" :class="{on:gpsTracking}" @click="toggleGps">📍</button>
+      <div class="mt-title"><BrandLogo compact /></div>
+      <button class="mt-btn-gps" :class="{ on: gpsTracking }" @click="toggleGps" :aria-pressed="gpsTracking"><el-icon><Location /></el-icon>{{ gpsTracking ? '定位已开' : '定位' }}</button>
+      <button class="mt-btn-end" @click="confirmEnd">结束</button>
     </header>
 
-    <!-- 数字人 ~1/3屏幕 -->
-    <div class="mt-hero">
-      <div v-if="guideReady" class="mt-3d-wrap">
+    <section class="mt-hero" aria-label="数字人导游">
+      <div class="mt-guide-heading">
+        <h1>{{ guideInfo?.name || '数字导游' }}</h1>
+        <span v-if="isSpeaking || loading" class="mt-status" role="status"><i></i>{{ isSpeaking ? '正在讲解' : '正在准备讲解' }}</span>
+      </div>
+      <div v-if="guideInfo?.guide_id" class="mt-3d-wrap">
         <DigitalAvatarPlayer ref="live2dRef" :audioElement="ttsAudio" :width="gw" :height="gh"
-          :tour-id="sid" :framing="route.query.framing === 'half' ? 'half' : 'full'"
-          :guide-id="guideInfo?.guide_id" :speaking="isSpeaking" :busy="loading" @playing="isSpeaking=$event" />
+          :tour-id="sid" framing="full"
+          :poster-image="guideInfo.poster_image" :source-video="guideInfo.base_mp4_path"
+          :guide-id="guideInfo.guide_id" :speaking="isSpeaking" :busy="loading" @playing="isSpeaking = $event" />
       </div>
-      <div v-else class="mt-fallback" @click="guideReady=true">
-        <span class="mt-model-mark">AI</span>
-        <strong>{{ guideInfo?.name||'AI导游' }}</strong>
-        <small>{{ guideInfo?.character||'专业景区讲解' }}</small>
-        <span class="mt-load-hint">轻触查看数字人接入状态</span>
-      </div>
-      <div class="mt-status" :class="{on:isSpeaking}">{{ isSpeaking ? '🔊 正在播放讲解语音' : loading ? '✨ 正在思考' : '可开始文字或语音导览' }}</div>
-    </div>
+      <p v-else class="mt-avatar-loading" role="status">正在加载数字人…</p>
+    </section>
 
-    <!-- 景点位置 -->
-    <div class="mt-spot" v-if="spotCards.length">
-      <button class="mts-nav" @click="prevSpot">◀</button>
-      <div class="mts-card">
-        <span class="mts-idx">{{ spotIdx+1 }}/{{ spotCards.length }}</span>
-        <strong>{{ spotCards[spotIdx]?.spot_name }}</strong>
-        <p>{{ spotCards[spotIdx]?.description?.slice(0,80)||'' }}</p>
-      </div>
-      <button class="mts-nav" @click="nextSpot">▶</button>
-    </div>
-
-    <!-- 对话区 — 可滚动，占满剩余空间 -->
-    <div class="mt-chat" ref="chatEl">
-      <div v-if="!conversations.length" class="mt-chat-empty">
-        <span>💬</span>
-        <p>点击推荐问题或语音输入<br/>开始与AI导游对话</p>
-      </div>
-      <div v-for="(m,i) in conversations" :key="i" class="mc-row" :class="m.role">
-        <div class="mc-bubble">
-          <div class="mc-text" v-html="fmt(m.message)"></div>
-          <div class="mc-time">{{ fmtTime(m.send_time) }}</div>
+    <section class="mt-chat-panel" aria-label="景区问答">
+      <header class="mt-chat-heading"><h2>景区问答</h2><span>{{ spotCards[spotIdx]?.spot_name || currentSpot?.spot_name }}</span></header>
+      <div class="mt-chat" ref="chatEl" role="log" aria-label="导览对话" aria-live="polite">
+        <p v-if="!conversations.length" class="mt-chat-empty">想了解什么？直接向导游提问。</p>
+        <div v-for="(m, i) in conversations" :key="i" class="mc-row" :class="m.role">
+          <div class="mc-bubble">
+            <div class="mc-text" v-html="fmt(m.message, m.role)"></div>
+            <details v-if="m.role === 'guide' && m.message?.includes('以上内容来自景区知识档案')" class="mc-source"><summary>参考资料</summary><p>景区知识档案</p></details>
+          </div>
         </div>
+        <p v-if="loading" class="mc-loading" role="status">正在准备讲解…</p>
       </div>
-      <div v-if="loading" class="mc-loading">
-        <i></i><i></i><i></i> 思考中
-      </div>
-    </div>
+    </section>
 
-    <!-- 底部输入 — 固定不动 -->
-    <div class="mt-bar">
-      <div class="mt-quick-row">
-        <button v-for="q in quickQuestions.slice(0,4)" :key="q" class="mt-quick-btn" @click="send(q)">{{ q.length>8?q.slice(0,8)+'…':q }}</button>
+    <footer class="mt-bar">
+      <div class="mt-quick-row" aria-label="快捷提问">
+        <button v-for="q in quickQuestions" :key="q.message" class="mt-quick-btn" :disabled="loading || recognizing || recording" @click="send(q.message)">{{ q.label }}</button>
       </div>
       <div class="mt-input-row">
-        <button aria-label="按住录音，松开识别" class="mt-voice-btn" :class="{rec:recording}" @touchstart.prevent="startVoice" @touchend.prevent="stopVoice" @touchcancel.prevent="stopVoice" :disabled="recognizing || loading">🎤</button>
-        <input v-model="inputText" class="mt-input" :placeholder="recording ? '正在录音，松开后识别' : recognizing ? '正在识别录音...' : '输入你想了解的...'" enterkeyhint="send" @keydown.enter="send(inputText)" />
-        <button class="mt-send-btn" @click="send(inputText)" :disabled="!inputText.trim()||loading">发送</button>
+        <button :aria-label="recording ? '结束录音' : '开始录音'" :title="recording ? '点击结束录音' : '点击开始录音'" class="mt-voice-btn" :class="{ rec: recording }"
+          @click="recording ? stopVoice() : startVoice()" :disabled="recognizing || loading"><el-icon><Microphone /></el-icon></button>
+        <input v-model="inputText" class="mt-input" aria-label="导览问题" :disabled="loading || recognizing || recording"
+          :placeholder="recording ? '录音中，点击麦克风结束' : recognizing ? '正在识别录音…' : '有什么想问的？'" enterkeyhint="send" @keydown.enter="send(inputText)" />
+        <button class="mt-send-btn" @click="send(inputText)" :disabled="!inputText.trim() || loading || recording || recognizing">发送</button>
       </div>
-    </div>
+    </footer>
 
+    <section class="mt-spot" v-if="spotCards.length" aria-label="当前景点">
+      <div class="mts-row">
+        <button class="mts-nav" aria-label="浏览上一个景点" @click="prevSpot" :disabled="spotCards.length < 2"><el-icon><ArrowLeft /></el-icon></button>
+        <button class="mts-summary" @click="spotExpanded = !spotExpanded" :aria-expanded="spotExpanded" aria-controls="mobile-spot-description">
+          <strong>{{ spotCards[spotIdx]?.spot_name }}</strong>
+          <span>{{ spotIdx + 1 }} / {{ spotCards.length }}</span>
+          <el-icon :class="{ expanded: spotExpanded }"><ArrowDown /></el-icon>
+        </button>
+        <button class="mts-nav" aria-label="浏览下一个景点" @click="nextSpot" :disabled="spotCards.length < 2"><el-icon><ArrowRight /></el-icon></button>
+      </div>
+      <p v-if="spotExpanded" id="mobile-spot-description" class="mts-description">{{ spotCards[spotIdx]?.description }}</p>
+      <button v-if="!finalSpot" class="mts-advance" @click="advanceSpot" :disabled="advancingSpot || loading || recording || recognizing">{{ advancingSpot ? '正在切换…' : '前往下一景点' }}</button>
+      <span v-else class="mts-finished">已到达路线最后一站</span>
+    </section>
     <audio ref="ttsAudio" @play="onPlay" @ended="onEnd" @pause="onEnd" />
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
+import BrandLogo from '@/components/BrandLogo.vue'
 import { computed,ref,onMounted,onUnmounted,nextTick,watch } from 'vue'
 import { useRouter,useRoute } from 'vue-router'
 import { ElMessage,ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowRight, ArrowDown, Location, Microphone } from '@element-plus/icons-vue'
+import { formatTourMessage } from '@/utils/tourPresentation'
 import DigitalAvatarPlayer from '@/components/DigitalAvatarPlayer.vue'
 import { receiveAvatarToken } from '@/api/xingyunTour'
-import { getTourLiveInfo,sendTourChatMessage,endTourSession,getVisitorSpotList } from '@/api/visitor'
+import { getTourLiveInfo,sendTourChatMessage,endTourSession,getVisitorSpotList,nextSpot as advanceTourSpot } from '@/api/visitor'
 import { useRecordedSpeech } from '@/composables/useRecordedSpeech'
 import { useGeolocation } from '@/composables/useGeolocation'
 
@@ -88,31 +86,58 @@ receiveAvatarToken(sid)
 const conversations=ref<any[]>([])
 const currentSpot=ref<any>(null)
 const guideInfo=ref<any>(null)
-const guideModelPath=computed(()=>guideInfo.value?.live2d_model_path||'/models/西装女.vrm')
 const spotCards=ref<any[]>([])
 const spotIdx=ref(0)
 const isSpeaking=ref(false)
 const loading=ref(false)
 const inputText=ref('')
 const { recording, recognizing, start: startVoice, stop: stopVoice } = useRecordedSpeech(text => { inputText.value=text; send(text) }, message => ElMessage.error(message))
-const guideReady=ref(route.query.framing === 'half')
+const spotExpanded = ref(false)
+const finalSpot = ref(false)
+const advancingSpot = ref(false)
+const viewportWidth = ref(window.innerWidth)
+const viewportHeight = ref(window.innerHeight)
+function syncViewport() { viewportWidth.value = window.innerWidth; viewportHeight.value = window.innerHeight }
 const chatEl=ref<HTMLElement|null>(null)
 const ttsAudio=ref<HTMLAudioElement|null>(null)
 const live2dRef=ref<InstanceType<typeof DigitalAvatarPlayer>|null>(null)
 
-const gw=Math.min(window.innerWidth-32,360)
-const gh=Math.round(gw*1.15)
+const gw = computed(() => viewportWidth.value >= 900 ? Math.min(viewportWidth.value * .52, 1000) : viewportWidth.value - 24)
+const gh = computed(() => viewportWidth.value >= 900 ? viewportHeight.value - 100 : Math.max(240, Math.min(viewportHeight.value * .43, 440)))
 
 const gps=useGeolocation(); const gpsTracking=ref(false)
 
-const quickQuestions=['这里有什么历史故事？','最佳拍照点在哪？','请介绍景点特色','附近有什么设施？']
+const quickQuestions = [
+  { label: '历史故事', message: '这里有什么历史故事？' },
+  { label: '拍照位置', message: '最佳拍照点在哪？' },
+  { label: '景点特色', message: '请介绍景点特色' },
+  { label: '附近设施', message: '附近有什么设施？' },
+]
 
-function fmt(m:string){ return m?.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br/>')||'' }
-function fmtTime(t:string){ if(!t)return''; try{return new Date(t).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}catch{return''} }
+function fmt(message: string, role: string) { return formatTourMessage(message, role === 'guide', [guideInfo.value?.name || '']) }
 function sc(){ nextTick(()=>{ if(chatEl.value) chatEl.value.scrollTop=chatEl.value.scrollHeight }) }
 
 function prevSpot(){ if(spotCards.value.length>1) spotIdx.value=(spotIdx.value-1+spotCards.value.length)%spotCards.value.length }
 function nextSpot(){ if(spotCards.value.length>1) spotIdx.value=(spotIdx.value+1)%spotCards.value.length }
+
+async function advanceSpot() {
+  if (advancingSpot.value || finalSpot.value || loading.value) return
+  advancingSpot.value = true
+  try {
+    const res = await advanceTourSpot(sid)
+    if (res.data?.success) {
+      await refresh()
+      spotExpanded.value = false
+      ElMessage.success('已切换景点')
+    } else {
+      ElMessage.error(res.data?.message || '切换失败')
+    }
+  } catch {
+    ElMessage.error('切换失败，请重试')
+  } finally {
+    advancingSpot.value = false
+  }
+}
 
 function onPlay(){ isSpeaking.value=true }
 function onEnd(){ isSpeaking.value=false }
@@ -151,6 +176,7 @@ async function refresh(){
     if(res?.data?.success){
       const d=res.data.data
       conversations.value=d.conversation||[]
+      finalSpot.value=Boolean(d.final_spot)
       currentSpot.value=d.current_spot_info; guideInfo.value=d.guide_info
       try{
         const prefs=JSON.parse(d.visitor_preferences||'{}')
@@ -169,60 +195,100 @@ async function confirmEnd(){
   try{ await ElMessageBox.confirm('结束本次导览？','退出',{confirmButtonText:'结束',cancelButtonText:'继续'}); await endTourSession(sid); router.push('/m/home') }catch{}
 }
 
-onMounted(refresh)
-onUnmounted(()=>{ if(gpsTracking.value) gps.stopTracking() })
+onMounted(() => { refresh(); window.addEventListener('resize', syncViewport) })
+onUnmounted(() => { window.removeEventListener('resize', syncViewport); if (gpsTracking.value) gps.stopTracking() })
 </script>
 
 <style lang="scss" scoped>
-.mt-root { position:fixed; inset:0; display:flex; flex-direction:column; background:#111827; color:#e5e7eb; }
-
-// 顶栏
-.mt-top { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:10px 14px; background:rgba(0,0,0,.4); }
-.mt-btn-x { width:30px;height:30px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;font-size:14px;cursor:pointer; }
-.mt-title { flex:1;min-width:0; strong{display:block;font-size:15px;} span{font-size:11px;color:#9ca3af;} }
-.mt-btn-gps { width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.1);font-size:16px;cursor:pointer; &.on{background:rgba(34,197,94,.3);} }
-
-// 数字人 ~1/3屏
-.mt-hero { flex:0 0 auto; height:32vh; min-height:200px; position:relative; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 35%,#1e293b,#0f172a); overflow:hidden;
-  :deep(canvas){ max-width:100%;max-height:100%; }
+.mt-root {
+  position: fixed; inset: 0; display: grid; min-width: 0; min-height: 0;
+  grid-template-areas: "top" "hero" "chat" "bar" "spot";
+  grid-template-rows: auto clamp(230px, 40dvh, 440px) minmax(0, 1fr) auto auto;
+  gap: 8px; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); color: var(--text); font-size: 16px; background: var(--canvas); overflow: hidden;
 }
-.mt-3d-wrap { width:100%;height:100%;display:flex;align-items:center;justify-content:center; }
-.mt-fallback { display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer; strong{font-size:17px;} small{font-size:12px;color:#9ca3af;} }
-.mt-model-mark { display:grid; width:72px; height:72px; place-items:center; border-radius:18px; color:#0369a1; background:#e0f2fe; font-size:17px; font-weight:900; letter-spacing:.1em; }
-.mt-load-hint { font-size:11px;color:#38bdf8;margin-top:4px;padding:4px 14px;border:1px solid rgba(56,189,248,.3);border-radius:20px; }
-.mt-status { position:absolute;bottom:8px;left:50%;transform:translateX(-50%);padding:4px 14px;border-radius:20px;background:rgba(255,255,255,.06);font-size:11px; &.on{background:rgba(34,197,94,.15);color:#4ade80;} }
-
-// 景点
-.mt-spot { flex:0 0 auto; display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,.03); }
-.mts-nav { width:28px;height:28px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:#fff;font-size:12px;cursor:pointer; }
-.mts-card { flex:1;min-width:0; .mts-idx{font-size:10px;color:#6b7280;} strong{display:block;font-size:14px;margin:2px 0;} p{font-size:12px;color:#9ca3af;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} }
-
-// 对话 — 滚动区
-.mt-chat { flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 14px; -webkit-overflow-scrolling:touch; }
-.mt-chat-empty { height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#6b7280; span{font-size:40px;margin-bottom:12px;} p{font-size:15px;text-align:center;line-height:1.6;margin:0;} }
-
-.mc-row { margin-bottom:16px; display:flex;
-  &.guide { justify-content:flex-start; .mc-bubble{background:#1f2937;border-bottom-left-radius:4px;} }
-  &.user  { justify-content:flex-end;   .mc-bubble{background:#0284c7;border-bottom-right-radius:4px;} }
+.mt-top { grid-area: top; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 10px; border-radius: 16px; }
+.mt-title { flex: 1; min-width: 0; }
+.mt-title strong { font-size: 18px; font-weight: 700; }
+.mt-btn-gps, .mt-btn-end { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 40px; border: 0; border-radius: 12px; padding: 0 10px; font-size: 14px; color: var(--text-secondary); background: #f1f5f9; cursor: pointer; white-space: nowrap; }
+.mt-btn-gps.on { color: var(--success); background: #ecfdf5; }
+.mt-btn-end { color: var(--danger); }
+.mt-hero { grid-area: hero; position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 20px; background: var(--glass); }
+.mt-guide-heading { position: absolute; z-index: 2; top: 14px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; pointer-events: none; }
+.mt-guide-heading h1 { margin: 0; font-size: 20px; font-weight: 700; }
+.mt-status { display: flex; align-items: center; gap: 6px; color: var(--champagne-text); font-size: 14px; }
+.mt-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--champagne); }
+.mt-3d-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.mt-hero :deep(.digital-avatar) { padding: 0; }
+.mt-hero :deep(.viewport) { border: 0; border-radius: 0; background: transparent; position: relative; }
+.mt-hero :deep(.xingyun-guide) { position: relative; }
+.mt-hero :deep(.xingyun-frame) { min-height: 0; }
+.mt-hero :deep(.xingyun-controls) { position: absolute; z-index: 3; left: 12px; right: 12px; bottom: 10px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 0; font-size: 14px; }
+.mt-hero :deep(.xingyun-controls button) { min-height: 36px; padding: 6px 12px; font-size: 14px; border: 0; border-radius: 12px; background: rgba(255,255,255,.93); box-shadow: 0 3px 14px rgba(30,41,59,.08); }
+.mt-hero :deep(.xingyun-controls p) { margin: 0; padding: 4px 8px; font-size: 14px; line-height: 1.4; border-radius: 8px; background: rgba(255,255,255,.93); max-width: 100%; overflow-wrap: anywhere; }
+.mt-hero :deep(.playback-message) { position: absolute; bottom: 8px; left: 12px; right: 12px; margin: 0; text-align: center; font-size: 14px; padding: 6px; background: rgba(255,255,255,.9); }
+.mt-avatar-loading { display: grid; place-items: center; height: 100%; margin: 0; color: var(--text-secondary); font-size: 16px; }
+.mt-spot { grid-area: spot; min-width: 0; max-height: 180px; overflow-y: auto; padding: 6px 10px; border: 0; border-radius: 16px !important; box-shadow: none !important; }
+.mts-row { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.mts-nav { display: grid; place-items: center; width: 36px; min-height: 40px; flex: 0 0 36px; border: 0; border-radius: 10px; background: #f1f5f9; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
+.mts-nav:disabled { opacity: .35; cursor: default; }
+.mts-summary { display: flex; align-items: center; justify-content: center; gap: 12px; flex: 1; min-width: 0; min-height: 40px; padding: 0 4px; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.mts-summary strong { font-size: 16px; font-weight: 700; }
+.mts-summary span { font-size: 14px; color: var(--text-muted); white-space: nowrap; }
+.mts-summary .el-icon { color: var(--text-muted); font-size: 14px; transition: transform .2s; }
+.mts-summary .expanded { transform: rotate(180deg); }
+.mts-description { margin: 4px 4px 10px; color: var(--text-secondary); font-size: 15px; line-height: 1.6; max-height: 96px; overflow: auto; }
+.mts-advance { display: block; width: 100%; min-height: 36px; margin-top: 6px; padding: 6px 12px; border: 0; border-radius: 12px; background: var(--champagne) !important; color: #fff !important; font-size: 15px; cursor: pointer; }
+.mts-finished { display: block; padding: 4px 0; color: var(--text-secondary); font-size: 14px; text-align: center; }
+.mt-chat-panel { grid-area: chat; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--glass); border-radius: 18px; overflow: hidden; }
+.mt-chat-heading { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 6px; gap: 10px; flex: 0 0 auto; }
+.mt-chat-heading h2 { font-size: 17px; font-weight: 700; margin: 0; }
+.mt-chat-heading > span { font-size: 14px; color: var(--text-muted); }
+.mt-chat { min-height: 0; flex: 1; overflow-y: auto; padding: 8px 14px 12px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.mt-chat-empty { margin: 14px 0; font-size: 15px; color: var(--text-secondary); text-align: center; }
+.mc-row { display: flex; margin-bottom: 12px; }
+.mc-row.user { justify-content: flex-end; }
+.mc-row.guide { justify-content: flex-start; }
+.mc-bubble { max-width: 94%; padding: 10px 12px; border-radius: 14px; }
+.mc-row.guide .mc-bubble { border-radius: 4px 14px 14px; background: #f8fafc; }
+.mc-row.user .mc-bubble { border-radius: 14px 4px 14px 14px; background: var(--glass-raised); }
+.mc-text { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.mc-source { margin-top: 8px; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+.mc-source summary { cursor: pointer; width: fit-content; }
+.mc-source p { margin: 6px 0; }
+.mc-loading { color: var(--text-secondary); font-size: 15px; line-height: 1.5; margin: 8px 0; }
+.mt-bar { grid-area: bar; min-width: 0; padding: 6px 10px 8px; border: 0; border-radius: 18px; background: var(--glass); }
+.mt-quick-row { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 8px; scrollbar-width: none; }
+.mt-quick-btn { min-height: 32px; padding: 4px 10px; flex-shrink: 0; border: 0; border-radius: 9px; background: #f1f5f9; color: var(--text-secondary); font-size: 14px; white-space: nowrap; cursor: pointer; }
+.mt-input-row { display: flex; align-items: center; gap: 8px; }
+.mt-voice-btn { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; padding: 0; border: 0; border-radius: 12px; background: #f1f5f9; color: var(--text-secondary); font-size: 20px; cursor: pointer; }
+.mt-voice-btn.rec { color: var(--danger); background: #fff1f2; }
+.mt-input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border: 0; border-radius: 12px; color: var(--text); font-size: 15px; outline: none; }
+.mt-input:focus { box-shadow: 0 0 0 2px var(--champagne) inset !important; }
+.mt-send-btn { min-height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--champagne) !important; background-image: none !important; box-shadow: none !important; color: #fff !important; font-size: 15px; cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+@media (min-width: 900px) {
+  .mt-root { grid-template-areas: "top top" "hero chat" "hero bar" "hero spot"; grid-template-columns: minmax(360px, 1.08fr) minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr) auto auto; gap: 16px; padding: 16px 24px; }
+  .mt-top { padding: 0 18px; }
+  .mt-title strong { font-size: 21px; }
+  .mt-guide-heading { top: 20px; left: 22px; right: 22px; }
+  .mt-guide-heading h1 { font-size: 22px; }
+  .mt-chat-heading { padding: 14px 16px 8px; }
+  .mt-chat-heading h2 { font-size: 19px; }
+  .mt-chat { padding: 8px 16px 12px; }
+  .mc-bubble { max-width: 90%; padding: 10px 12px; }
+  .mt-spot { padding: 10px 14px; }
+  .mt-bar { padding: 10px 14px; }
+  .mt-quick-row { padding-bottom: 10px; }
 }
-.mc-bubble { max-width:85%; padding:12px 14px; border-radius:16px; }
-.mc-text { font-size:15px; line-height:1.6; word-break:break-word; }
-.mc-time { font-size:10px; color:#9ca3af; text-align:right; margin-top:6px; }
-
-.mc-loading { text-align:center;padding:8px;color:#9ca3af;font-size:14px;
-  i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af;margin:0 2px;animation:dot 1.4s infinite both;
-    &:nth-child(2){animation-delay:.2s} &:nth-child(3){animation-delay:.4s}
-  }
+@media (max-height: 650px) and (max-width: 899px) {
+  .mt-root { grid-template-rows: auto clamp(150px, 32dvh, 210px) minmax(0, 1fr) auto auto; gap: 4px; padding-top: 4px; }
+  .mt-guide-heading { top: 10px; }
+  .mt-chat-heading { padding-top: 7px; }
+  .mt-bar { padding: 4px 8px; }
+  .mt-quick-row { padding-bottom: 4px; }
 }
-@keyframes dot{0%,80%,100%{opacity:0;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
-
-// 底部输入 — 固定
-.mt-bar { flex:0 0 auto; border-top:1px solid rgba(255,255,255,.06); background:rgba(0,0,0,.3); padding-bottom:env(safe-area-inset-bottom); }
-.mt-quick-row { display:flex;gap:6px;padding:6px 12px;overflow-x:auto; }
-.mt-quick-btn { padding:6px 12px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:transparent;color:#9ca3af;font-size:12px;white-space:nowrap;cursor:pointer; }
-.mt-input-row { display:flex;align-items:center;gap:8px;padding:8px 12px; }
-.mt-voice-btn { width:44px;height:44px;border:2px solid rgba(255,255,255,.12);border-radius:50%;background:transparent;font-size:22px;cursor:pointer;display:grid;place-items:center; &.rec{border-color:#ef4444;background:rgba(239,68,68,.15);animation:rec 1s infinite;} }
-@keyframes rec{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
-.mt-input { flex:1;min-width:0;height:42px;padding:0 14px;border:1px solid rgba(255,255,255,.08);border-radius:21px;background:rgba(255,255,255,.04);color:#e5e7eb;font-size:15px;outline:none; &::placeholder{color:#6b7280;} }
-.mt-send-btn { height:42px;padding:0 18px;border:0;border-radius:21px;background:#0284c7;color:#fff;font-size:15px;font-weight:700;cursor:pointer; &:disabled{opacity:.3;} }
+@media (max-height: 460px) and (min-width: 600px) {
+  .mt-root { grid-template-areas: "top top" "hero chat" "hero bar" "hero spot"; grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) auto auto; }
+}
+@media (prefers-reduced-motion: reduce) { *, :deep(*) { transition: none !important; } }
 </style>

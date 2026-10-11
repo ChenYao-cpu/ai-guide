@@ -11,6 +11,11 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'xgplayer/dist/index.min.css'
 
 import '@/style/index.scss'
+import '@/style/soft-ui.scss'
+import '@/style/soft-ui-charts'
+import '@/style/tour-backdrop.scss'
+
+document.documentElement.dataset.uiTheme = 'soft-ui'
 
 import App from './App.vue'
 import router from './router'

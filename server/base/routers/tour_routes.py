@@ -137,9 +137,10 @@ async def get_route_recommendation(
         return make_return_data(False, ResultCode.FAIL, "暂无可用景点", "")
 
     # 调用推荐算法
-    result = await recommend_route(request.preferences, spot_list,city=request.city)
+    result = await recommend_route(request.preferences, spot_list, request.time_budget_minutes,
+                                   city=request.city, pace=request.pace, start_area=request.start_area)
     if not result['spot_ids']:
-        return make_return_data(False,ResultCode.FAIL,'该城市暂无可用景点','')
+        return make_return_data(False,ResultCode.FAIL,'当前时间与步行节奏下暂无匹配路线，请增加时长或调整出发区域','')
 
     return make_return_data(True, ResultCode.SUCCESS, "推荐成功", result)
 

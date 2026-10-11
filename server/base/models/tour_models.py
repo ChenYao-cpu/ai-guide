@@ -8,9 +8,9 @@
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field as PydanticField
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 from ..models.user_model import UserInfo
@@ -32,8 +32,8 @@ class ScenicSpotInfo(SQLModel, table=True):
     tags: str = ""  # 标签，用 ; 分隔，如 "古建筑;园林;世界遗产"
     location: str = ""  # 景点位置描述，如 "景区东门入口向北200米"
     city: str = ""  # 所属城市；未配置时不参与跨景点路线推荐
-    latitude: float = 0.0  # GPS纬度
-    longitude: float = 0.0  # GPS经度
+    latitude: float = 0.0  # WGS84 GPS纬度；GCJ02底图展示时转换，不直接覆盖数据库
+    longitude: float = 0.0  # WGS84 GPS经度
     trigger_radius: float = 50.0  # 自动触发讲解的半径（米）
     visit_duration: int = 20  # 建议游览时长（分钟），10~40，随机分配
     best_season: str = ""  # 最佳游览季节，如 "春季/秋季"
@@ -342,3 +342,6 @@ class RouteRecommendRequest(BaseModel):
     preferences: List[str] = []
     session_id: int | None = None
     city: str = ""
+    time_budget_minutes: int = PydanticField(default=120, ge=15, le=480)
+    pace: Literal['standard', 'relaxed'] = 'standard'
+    start_area: Literal['auto', 'east', 'north', 'south'] = 'auto'

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Fold, Expand, Monitor, ArrowDown } from '@element-plus/icons-vue'
+import { Fold, Expand, ArrowDown } from '@element-plus/icons-vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { isCollapse } from '@/utils/navbar'
@@ -52,11 +52,7 @@ onMounted(async () => {
     <BreadCrumb class="breadcrumb" />
 
     <div class="topbar-actions">
-      <div class="system-health">
-        <el-icon><Monitor /></el-icon>
-        <span>运营系统</span>
-        <b>在线</b>
-      </div>
+
       <el-dropdown trigger="click" placement="bottom-end">
         <button class="user-trigger" type="button">
           <el-avatar :size="34" :src="userInfoItem.avatar" class="user-avatar">{{ displayName.slice(0, 1) }}</el-avatar>
@@ -84,9 +80,9 @@ onMounted(async () => {
   height: 68px;
   padding: 0 26px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.93);
-  box-shadow: 0 5px 18px rgba(19, 42, 56, 0.04);
-  backdrop-filter: blur(16px);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: none;
 }
 
 .collapse-trigger,
@@ -150,7 +146,7 @@ onMounted(async () => {
     padding: 2px 6px;
     border-radius: 4px;
     color: var(--success);
-    background: #edf8f4;
+    background: var(--glass);
     font-size: 10px;
     font-weight: 700;
   }
@@ -166,7 +162,7 @@ onMounted(async () => {
 }
 
 .user-avatar {
-  border: 2px solid #e2eff2;
+  border: 2px solid var(--glass-line);
   color: var(--brand-700);
   background: var(--brand-100);
   font-size: 12px;
@@ -203,26 +199,26 @@ onMounted(async () => {
 .topbar {
   height: 64px;
   padding: 0 24px;
-  border-bottom-color: #e3e8eb;
-  background: rgba(250, 251, 251, 0.94);
-  box-shadow: 0 4px 16px rgba(7, 25, 35, 0.035);
+  border-bottom-color: var(--glass-line);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
-.collapse-trigger:hover { color: #0f5f66; background: #edf7f5; }
-.system-health .el-icon { color: #0d9488; }
-.system-health b { color: #0f7a67; background: #e8f5f1; }
-.user-avatar { border-color: #d8e4e3; color: #0f5f66; background: #e3f2ef; }
+.collapse-trigger:hover { color: var(--champagne-text); background: var(--glass); }
+.system-health .el-icon { color: var(--champagne-text); }
+.system-health b { color: var(--champagne-text); background: var(--glass); }
+.user-avatar { border-color: var(--glass-line); color: var(--champagne-text); background: var(--glass); }
 
 /* Clean exhibition topbar */
 .topbar {
   height: 68px;
   padding: 0 28px;
-  border-bottom-color: #e7e9ef;
-  background: rgba(255,255,255,.9);
+  border-bottom-color: var(--glass-line);
+  background: var(--glass);
   box-shadow: none;
-  backdrop-filter: blur(20px);
+  backdrop-filter: none;
 }
-.collapse-trigger:hover { color: #3b5bff; background: #f0f2ff; }
-.system-health .el-icon { color: #3b5bff; }
-.system-health b { color: #247a5c; background: #ecf8f3; }
-.user-avatar { border-color: #dfe3f5; color: #2948c8; background: #edf0ff; }
+.collapse-trigger:hover { color: var(--champagne-text); background: var(--glass); }
+.system-health .el-icon { color: var(--champagne-text); }
+.system-health b { color: var(--champagne-text); background: var(--glass); }
+.user-avatar { border-color: var(--glass-line); color: var(--champagne-text); background: var(--glass); }
 </style>

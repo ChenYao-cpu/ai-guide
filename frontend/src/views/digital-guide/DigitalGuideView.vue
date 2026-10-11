@@ -472,9 +472,7 @@ onMounted(() => {
 .digital-guide-container {
   min-height: calc(100vh - 86px);
   padding: 28px 34px 42px;
-  background:
-    radial-gradient(circle at 92% 2%, rgba(28, 187, 184, 0.08), transparent 28%),
-    linear-gradient(180deg, #f8fafc 0%, #f4f7fa 100%);
+  background: var(--glass);
 }
 
 .toolbar {
@@ -484,7 +482,7 @@ onMounted(() => {
   gap: 28px;
   margin-bottom: 22px;
   padding-bottom: 18px;
-  border-bottom: 1px solid #e4eaf1;
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .page-intro {
@@ -492,7 +490,7 @@ onMounted(() => {
 
   h2 {
     margin: 0;
-    color: #10243e;
+    color: var(--text);
     font-size: 25px;
     font-weight: 750;
     letter-spacing: -0.02em;
@@ -505,8 +503,8 @@ onMounted(() => {
   height: 44px;
   border: 0;
   border-radius: 10px;
-  background: linear-gradient(135deg, #173f72 0%, #246b8f 100%);
-  box-shadow: 0 10px 22px rgba(28, 76, 118, 0.2);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
 }
 
 .card-grid {
@@ -519,16 +517,16 @@ onMounted(() => {
 .guide-card {
   height: 100%;
   overflow: hidden;
-  border: 1px solid rgba(211, 221, 231, 0.92);
+  border: 1px solid var(--glass-line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 35px rgba(32, 53, 78, 0.08);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 
   &:hover {
     transform: translateY(-5px);
-    border-color: rgba(61, 117, 157, 0.38);
-    box-shadow: 0 20px 42px rgba(28, 57, 87, 0.13);
+    border-color: var(--glass-line);
+    box-shadow: var(--glass-shadow);
   }
 
   :deep(.el-card__body) {
@@ -543,7 +541,7 @@ onMounted(() => {
   position: relative;
   height: 236px;
   overflow: hidden;
-  background: #dfe8ee;
+  background: var(--glass);
 }
 
 .poster-img {
@@ -575,13 +573,13 @@ onMounted(() => {
     align-items: center;
     min-height: 27px;
     padding: 0 9px;
-    border: 1px solid rgba(255, 255, 255, 0.42);
+    border: 1px solid var(--glass-line);
     border-radius: 999px;
-    background: rgba(14, 31, 50, 0.58);
-    color: #fff;
+    background: var(--glass);
+    color: var(--text);
     font-size: 11px;
     font-weight: 650;
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
   }
 
   .online-badge i {
@@ -589,8 +587,8 @@ onMounted(() => {
     height: 7px;
     margin-right: 6px;
     border-radius: 50%;
-    background: #70e2c1;
-    box-shadow: 0 0 0 3px rgba(112, 226, 193, 0.18);
+    background: var(--glass);
+    box-shadow: var(--glass-shadow);
   }
 }
 
@@ -602,8 +600,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 3px;
   padding: 42px 18px 16px;
-  background: linear-gradient(180deg, transparent 0%, rgba(9, 25, 42, 0.82) 100%);
-  color: #fff;
+  background: var(--glass);
+  color: var(--text);
 
   span {
     font-size: 9px;
@@ -626,18 +624,16 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 50% 25%, rgba(116, 196, 202, 0.45), transparent 26%),
-    linear-gradient(145deg, #183c5d 0%, #326f7b 100%);
-  color: #fff;
+  background: var(--glass);
+  color: var(--text);
 
   .placeholder-orbit {
     position: absolute;
     width: 164px;
     height: 164px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid var(--glass-line);
     border-radius: 50%;
-    box-shadow: 0 0 0 28px rgba(255, 255, 255, 0.035);
+    box-shadow: var(--glass-shadow);
   }
 
   .placeholder-avatar {
@@ -647,12 +643,12 @@ onMounted(() => {
     height: 70px;
     place-items: center;
     margin-bottom: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.46);
+    border: 1px solid var(--glass-line);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.13);
+    background: rgba(99,102,241,0.12);
     font-size: 29px;
     font-weight: 700;
-    backdrop-filter: blur(8px);
+    backdrop-filter: none;
   }
 
   strong,
@@ -682,11 +678,11 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 22px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e7edf2;
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .guide-code {
-  color: #7b8998;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .14em;
@@ -702,10 +698,10 @@ onMounted(() => {
     align-items: center;
     min-height: 25px;
     padding: 0 9px;
-    border: 1px solid #dbe6ec;
+    border: 1px solid var(--glass-line);
     border-radius: 999px;
-    background: #f6fafb;
-    color: #496878;
+    background: var(--glass);
+    color: var(--text-secondary);
     font-size: 10px;
     font-weight: 700;
   }
@@ -715,8 +711,8 @@ onMounted(() => {
     height: 6px;
     margin-right: 6px;
     border-radius: 50%;
-    background: #2ca982;
-    box-shadow: 0 0 0 3px rgba(44, 169, 130, .12);
+    background: var(--glass);
+    box-shadow: var(--glass-shadow);
   }
 }
 
@@ -724,8 +720,8 @@ onMounted(() => {
   flex: none;
   padding: 5px 9px;
   border-radius: 6px;
-  background: #eef4f7;
-  color: #587184;
+  background: var(--glass);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
 }
@@ -738,14 +734,14 @@ onMounted(() => {
 
   h3 {
     margin: 0;
-    color: #14283f;
+    color: var(--text);
     font-size: 20px;
     font-weight: 750;
   }
 
   p {
     margin: 5px 0 0;
-    color: #5f758a;
+    color: var(--text-secondary);
     font-size: 12px;
     font-weight: 550;
   }
@@ -755,8 +751,8 @@ onMounted(() => {
   flex: none;
   padding: 4px 8px;
   border-radius: 6px;
-  background: #eef3f7;
-  color: #78889a;
+  background: var(--glass);
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -771,10 +767,10 @@ onMounted(() => {
 
   span {
     padding: 4px 8px;
-    border: 1px solid #d9e7ec;
+    border: 1px solid var(--glass-line);
     border-radius: 6px;
-    background: #f4f9fa;
-    color: #356776;
+    background: var(--glass);
+    color: var(--text-secondary);
     font-size: 11px;
     line-height: 1;
   }
@@ -783,7 +779,7 @@ onMounted(() => {
 .guide-character {
   min-height: 42px;
   margin: 12px 0 16px;
-  color: #778597;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.7;
   display: -webkit-box;
@@ -798,15 +794,15 @@ onMounted(() => {
   gap: 1px;
   overflow: hidden;
   margin-bottom: 18px;
-  border: 1px solid #e5ebf0;
+  border: 1px solid var(--glass-line);
   border-radius: 10px;
-  background: #e5ebf0;
+  background: var(--glass);
 }
 
 .meta-item {
   min-width: 0;
   padding: 10px 8px;
-  background: #f9fbfc;
+  background: var(--glass);
   text-align: center;
 
   span,
@@ -819,12 +815,12 @@ onMounted(() => {
 
   span {
     margin-bottom: 4px;
-    color: #93a0ae;
+    color: var(--text-muted);
     font-size: 10px;
   }
 
   strong {
-    color: #33495f;
+    color: var(--text-secondary);
     font-size: 11px;
     font-weight: 650;
   }
@@ -890,7 +886,7 @@ onMounted(() => {
   padding: 0 2px 20px 0;
 
   :deep(.el-slider) {
-    --el-slider-runway-bg-color: #e6edf4;
+    --el-slider-runway-bg-color: var(--glass);
     min-width: 0;
   }
 
@@ -910,7 +906,7 @@ onMounted(() => {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--text-muted);
   line-height: 1.2;
 }
 

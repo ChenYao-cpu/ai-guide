@@ -531,12 +531,12 @@ const handelControlClick = (
 
       .content {
         font-size: 12px;
-        color: #b1b3b8;
+        color: var(--text-muted);
       }
 
       .price {
         font-size: 12px;
-        color: #fda100;
+        color: var(--champagne-text);
       }
     }
   }

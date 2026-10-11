@@ -1,5 +1,5 @@
 // 本地开发地址由 scripts/configure_miniprogram.ps1 更新；正式部署改为 HTTPS。
-export const LAN_SERVER_ORIGIN = 'http://10.30.43.153:8000'
+export const LAN_SERVER_ORIGIN = 'http://172.27.36.186:8000'
 
 // 模拟器直连本机；真机使用编译时检测到的局域网地址。
 const runtimePlatform = typeof wx !== 'undefined'
@@ -28,7 +28,9 @@ export function assetUrl(value) {
 
 
 // 开发测试号使用真实后端账号；正式微信登录时设为 false。
-export const DEVELOPMENT_LOGIN = false
+// Only the local development simulator uses the existing backend test account.
+// Release builds and real devices still require WeChat authorization.
+export const DEVELOPMENT_LOGIN = import.meta.env.MODE === 'development' && runtimePlatform === 'devtools'
 export const LOGIN_PROVIDER = DEVELOPMENT_LOGIN ? 'development' : 'weixin'
 
 

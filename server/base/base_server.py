@@ -40,7 +40,7 @@ from .database.init_db import create_db_and_tables
 from .routers import (
     digital_human, llm, products, streamer_info, streaming_room, users,
     scenic_spots, knowledge_base, tour_routes, tour_chat, feedback_analytics,
-    digital_guide, avatar, spot_favorites, xingyun,
+    digital_guide, avatar, spot_favorites, xingyun, tts,
 )
 from .server_info import SERVER_PLUGINS_INFO
 from .utils import ChatItem, ResultCode, gen_default_data, make_return_data, streamer_sales_process
@@ -124,6 +124,7 @@ app.include_router(scenic_spots.router)
 app.include_router(knowledge_base.router)
 app.include_router(tour_routes.router)
 app.include_router(tour_chat.router)
+app.include_router(tts.router)
 app.include_router(feedback_analytics.router)
 app.include_router(digital_guide.router)
 app.include_router(avatar.router)

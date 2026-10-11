@@ -1,6 +1,8 @@
 @use 'sass:color';
 
 :root {
+  --app-font-family: "SimSun", "宋体", "Songti SC", "STSong", serif;
+  --el-font-family: var(--app-font-family);
   --brand-950: #090b12;
   --brand-900: #111521;
   --brand-800: #182039;
@@ -65,12 +67,20 @@ html {
 
 body {
   color: var(--ink-900);
-  font-family: 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   letter-spacing: 0.01em;
   text-rendering: optimizeLegibility;
 }
 
+// 地图组件自带字体，需要显式跟随全局文字字体。
+.leaflet-container,
+.leaflet-container * {
+  font-family: var(--app-font-family) !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+code, pre, kbd, samp,
 button,
 input,
 textarea,

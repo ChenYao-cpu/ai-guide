@@ -421,12 +421,12 @@ const handleStop = async () => {
 
     .content {
       font-size: 15px;
-      color: #b1b3b8;
+      color: var(--text-muted);
     }
 
     .price {
       font-size: 16px;
-      color: #fda100;
+      color: var(--champagne-text);
     }
   }
 }

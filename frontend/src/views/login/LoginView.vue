@@ -1,7 +1,16 @@
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { User, Lock, Guide, ArrowRight } from '@element-plus/icons-vue'
+import {
+  User,
+  Lock,
+  Guide,
+  ArrowRight,
+  Location,
+  ChatDotRound,
+  MapLocation
+} from '@element-plus/icons-vue'
 import { ElMessage, ElNotification, type FormInstance, type FormRules } from 'element-plus'
 import { loginRequest } from '@/api/user'
 import { useTokenStore, type TokenItem } from '@/stores/userToken'
@@ -10,188 +19,358 @@ import { request_handler } from '@/api/base'
 
 const router = useRouter()
 const route = useRoute()
+type EntryMode = 'visitor' | 'admin'
+const entryMode = ref<EntryMode>(route.query.redirect ? 'admin' : 'visitor')
 const isLogining = ref(false)
-const serviceStatus = ref('正在检查后端连接')
+const serviceState = ref<'checking' | 'ready' | 'offline'>('checking')
 const rememberAccount = ref(true)
 const tokenStore = useTokenStore()
 const formRef = ref<FormInstance>()
-
-interface FormType { username: string; password: string }
-
+const rememberedAccountKey = 'zhiyou.remembered-account'
+const entryPage = ref<HTMLElement>()
+let pointerFrame = 0
+let motionPreference: MediaQueryList | undefined
+function moveAtmosphere(event: PointerEvent) {
+  if (event.pointerType !== 'mouse' || motionPreference?.matches) return
+  const bounds =
+    event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
+  if (!bounds) return
+  const x = (event.clientX - bounds.left) / bounds.width - 0.5
+  const y = (event.clientY - bounds.top) / bounds.height - 0.5
+  cancelAnimationFrame(pointerFrame)
+  pointerFrame = requestAnimationFrame(() => {
+    entryPage.value?.style.setProperty('--pointer-x', x * 48 + 'px')
+    entryPage.value?.style.setProperty('--pointer-y', y * 32 + 'px')
+  })
+}
+function resetAtmosphere() {
+  cancelAnimationFrame(pointerFrame)
+  entryPage.value?.style.setProperty('--pointer-x', '0px')
+  entryPage.value?.style.setProperty('--pointer-y', '0px')
+}
+interface FormType {
+  username: string
+  password: string
+}
 const loginForm = reactive<FormType>({ username: '', password: '' })
 const rules = reactive<FormRules<FormType>>({
-  username: [{ required: true, message: '请输入登录名', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 18, message: '密码长度必须为 6 至 18 位', trigger: 'blur' },
-  ],
+    { min: 6, max: 18, message: '密码长度必须为 6 至 18 位', trigger: 'blur' }
+  ]
 })
-
-const onSubmit = async () => {
-  isLogining.value = true
-  await formRef.value?.validate().catch((err) => {
-    ElMessage.error('表单校验失败')
-    isLogining.value = false
-    throw err
-  })
-
-  const logRes = await loginRequest({ username: loginForm.username, password: loginForm.password })
-    .then((res) => {
-      if (res.status !== 200) {
-        ElMessage.error('账号名或密码错误')
-        isLogining.value = false
-        throw new Error('账号名或密码错误')
-      }
-      ElNotification({ title: '登录成功', message: `欢迎登录，${loginForm.username}`, type: 'success' })
-      return res.data
-    })
-    .catch((error) => {
-      isLogining.value = false
-      if (error.response?.status === 401) ElMessage.error('账号名或密码错误')
-      else if (error instanceof AxiosError) ElMessage.error('登录失败：' + error.message)
-      else ElMessage.error('未知错误')
-      throw error
-    })
-
-  tokenStore.saveToken(logRes as TokenItem)
-  tokenStore.saveUserInfo({ username: loginForm.username, role: 'admin' })
-  isLogining.value = false
-  router.push((route.query.redirect as string) || '/home')
+async function selectEntry(mode: EntryMode, focus = false) {
+  if (isLogining.value) return
+  entryMode.value = mode
+  if (focus) {
+    await nextTick()
+    document.getElementById('entry-tab-' + mode)?.focus()
+  }
 }
-
+const onSubmit = async () => {
+  if (isLogining.value || !formRef.value) return
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  isLogining.value = true
+  try {
+    const response = await loginRequest({
+      username: loginForm.username,
+      password: loginForm.password
+    })
+    if (response.status !== 200) {
+      ElMessage.error('账号或密码错误')
+      return
+    }
+    tokenStore.saveToken(response.data as TokenItem)
+    tokenStore.saveUserInfo({ username: loginForm.username, role: 'admin' })
+    try {
+      if (rememberAccount.value) localStorage.setItem(rememberedAccountKey, loginForm.username)
+      else localStorage.removeItem(rememberedAccountKey)
+    } catch {
+      /* Account recall is optional when browser storage is restricted. */
+    }
+    ElNotification({ title: '登录成功', message: '已进入后台', type: 'success' })
+    router.push((route.query.redirect as string) || '/home')
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 401)
+      ElMessage.error('账号或密码错误')
+    else ElMessage.error('登录失败，请稍后重试')
+  } finally {
+    isLogining.value = false
+  }
+}
 const enterAsVisitor = () => router.push('/visitor/home')
 const handleForgotPassword = () => ElMessage.info('请联系系统管理员重置密码')
 onMounted(() => {
-  request_handler.get('/tour-session/guides', { timeout: 5000 }).then(() => { serviceStatus.value = '后端已连接' }).catch(() => { serviceStatus.value = '后端连接失败，请检查数据库与服务' })
+  motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+  try {
+    loginForm.username = localStorage.getItem(rememberedAccountKey) || ''
+  } catch {
+    /* Optional account recall. */
+  }
+  request_handler
+    .get('/tour-session/guides', { timeout: 5000 })
+    .then(() => {
+      serviceState.value = 'ready'
+    })
+    .catch(() => {
+      serviceState.value = 'offline'
+    })
   document.documentElement.classList.add('login-viewport')
   document.body.classList.add('login-viewport')
 })
 onBeforeUnmount(() => {
+  cancelAnimationFrame(pointerFrame)
   document.documentElement.classList.remove('login-viewport')
   document.body.classList.remove('login-viewport')
 })
 </script>
 
 <template>
-  <main class="login-page">
-    <div class="ambient-layer" aria-hidden="true">
-      <span class="ambient-curtain"></span>
-      <span class="ambient-wave wave-a"></span>
-      <span class="ambient-wave wave-b"></span>
-      <span class="ambient-wave wave-c"></span>
-      <span class="ambient-line line-a"></span>
-      <span class="ambient-line line-b"></span>
-      <span class="ambient-line line-c"></span>
-      <div class="orbit-system">
-        <span class="orbit-ring orbit-ring-a"></span>
-        <span class="orbit-ring orbit-ring-b"></span>
-        <span class="orbit-ring orbit-ring-c"></span>
-        <i class="orbit-core"></i>
-        <b class="orbit-particle particle-a"></b>
-        <b class="orbit-particle particle-b"></b>
-        <b class="orbit-particle particle-c"></b>
+  <main
+    ref="entryPage"
+    class="entry-page"
+    @pointermove="moveAtmosphere"
+    @pointerleave="resetAtmosphere"
+  >
+    <div class="entry-atmosphere" aria-hidden="true">
+      <i class="entry-glow glow-purple"></i><i class="entry-glow glow-blue"></i
+      ><i class="entry-glow glow-mint"></i>
+      <div class="entry-contour contour-left"></div>
+      <div class="entry-contour contour-right"></div>
+      <div class="entry-aurora"></div>
+      <svg class="entry-flow-map" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+        <g fill="none" stroke-linecap="round">
+          <path class="flow-track" d="M-60 660C100 650 370 520 315 310S70 110 210 25" />
+          <path class="flow-track" d="M1480 170C1190 120 1000 260 1160 485S1460 735 1100 920" />
+          <path
+            class="flow-stream stream-purple"
+            pathLength="1200"
+            d="M-60 660C100 650 370 520 315 310S70 110 210 25"
+          />
+          <path
+            class="flow-stream stream-blue"
+            pathLength="1200"
+            d="M1480 170C1190 120 1000 260 1160 485S1460 735 1100 920"
+          />
+        </g>
+      </svg>
+      <div class="entry-motes">
+        <i
+          v-for="n in 9"
+          :key="n"
+          :style="{
+            left: ((n * 31) % 96) + '%',
+            top: ((n * 23) % 88) + '%',
+            '--mote-delay': -n * 1.3 + 's',
+            '--mote-duration': 7 + (n % 4) + 's'
+          }"
+        ></i>
       </div>
-      <div class="data-stars">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
+      <svg class="entry-lake" viewBox="0 0 1440 360" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="entry-lake-fill" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#c6d8f0" stop-opacity=".18" />
+            <stop offset="1" stop-color="#b9dcd8" stop-opacity=".35" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M0 210 Q160 135 310 220 T630 235 T960 195 T1260 230 T1440 215 V360 H0Z"
+          fill="url(#entry-lake-fill)"
+        />
+        <g class="lake-ripples" fill="none" stroke="#97b5ca" stroke-width="1.3">
+          <path d="M-80 230 Q140 195 350 250 T820 260 T1240 228 T1530 250" />
+          <path d="M-120 264 Q150 230 370 282 T830 292 T1260 264 T1560 284" />
+          <path d="M-60 304 Q200 280 460 320 T960 328 T1500 304" />
+        </g>
+      </svg>
+      <span class="entry-orbit orbit-one"></span><span class="entry-orbit orbit-two"></span
+      ><span class="entry-orbit orbit-three"></span>
     </div>
-    <header class="login-topbar">
-      <div class="system-brand">
-        <span class="brand-mark">AI</span>
-        <div>
-          <strong>智游灵境运营中枢</strong>
-          <small>Zhiyou Lingjing Console</small>
+    <header class="entry-header"><BrandLogo /></header>
+    <section class="entry-center" aria-label="选择访问入口">
+      <div class="entry-card">
+        <div class="entry-tabs" role="tablist" aria-label="访问方式">
+          <span
+            class="entry-tab-indicator"
+            :class="{ admin: entryMode === 'admin' }"
+            aria-hidden="true"
+          ></span>
+          <button
+            id="entry-tab-visitor"
+            type="button"
+            role="tab"
+            :aria-selected="entryMode === 'visitor'"
+            aria-controls="entry-panel-visitor"
+            :tabindex="entryMode === 'visitor' ? 0 : -1"
+            :disabled="isLogining"
+            @click="selectEntry('visitor')"
+            @keydown.right.prevent="selectEntry('admin', true)"
+            @keydown.end.prevent="selectEntry('admin', true)"
+          >
+            <el-icon><Guide /></el-icon><span>游客导览</span>
+          </button>
+          <button
+            id="entry-tab-admin"
+            type="button"
+            role="tab"
+            :aria-selected="entryMode === 'admin'"
+            aria-controls="entry-panel-admin"
+            :tabindex="entryMode === 'admin' ? 0 : -1"
+            :disabled="isLogining"
+            @click="selectEntry('admin')"
+            @keydown.left.prevent="selectEntry('visitor', true)"
+            @keydown.home.prevent="selectEntry('visitor', true)"
+          >
+            <el-icon><User /></el-icon><span>后台登录</span>
+          </button>
+        </div>
+        <Transition name="entry-switch" mode="out-in">
+          <section
+            v-if="entryMode === 'visitor'"
+            id="entry-panel-visitor"
+            key="visitor"
+            class="entry-content"
+            role="tabpanel"
+            aria-labelledby="entry-tab-visitor"
+            tabindex="0"
+          >
+            <div class="entry-heading">
+              <h1>游客导览</h1>
+              <p>选好路线，跟随数字人出发。</p>
+            </div>
+            <div class="visitor-scene" aria-hidden="true">
+              <svg viewBox="0 0 400 170" fill="none">
+                <defs>
+                  <linearGradient
+                    id="entry-mountain"
+                    x1="80"
+                    y1="50"
+                    x2="300"
+                    y2="160"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop stop-color="#a5a6f7" />
+                    <stop offset="1" stop-color="#a6d8e6" />
+                  </linearGradient>
+                </defs>
+                <ellipse cx="200" cy="147" rx="145" ry="15" fill="#e9edf8" />
+                <path
+                  d="M50 128L112 54Q118 47 125 54L164 97L204 37Q209 29 217 37L300 128Z"
+                  fill="url(#entry-mountain)"
+                  opacity=".65"
+                />
+                <path d="M142 129L216 72Q221 68 225 73L271 129Z" fill="#c9d7f3" />
+                <path
+                  d="M75 132Q136 110 191 140T323 130"
+                  stroke="#7abacc"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                />
+                <path
+                  class="scene-trail"
+                  d="M95 124Q140 137 197 120T312 124"
+                  stroke="#7775df"
+                  stroke-width="2"
+                  stroke-dasharray="4 7"
+                  stroke-linecap="round"
+                />
+                <g class="scene-pin">
+                  <circle cx="294" cy="70" r="31" fill="#fff" />
+                  <path
+                    d="M310 66C310 79 294 94 294 94S278 79 278 66A16 16 0 11310 66Z"
+                    fill="#5750e9"
+                  />
+                  <circle cx="294" cy="66" r="5" fill="#fff" />
+                </g>
+                <path
+                  class="scene-star"
+                  d="M104 36L108 47L119 51L108 55L104 66L100 55L89 51L100 47Z"
+                  fill="#9c96ed"
+                />
+              </svg>
+            </div>
+            <div class="entry-features">
+              <span
+                ><el-icon><MapLocation /></el-icon>景区地图</span
+              ><span
+                ><el-icon><Location /></el-icon>路线规划</span
+              >
+              <span
+                ><el-icon><ChatDotRound /></el-icon>数字人导览</span
+              >
+            </div>
+            <el-button type="primary" class="entry-primary" @click="enterAsVisitor"
+              >进入游客导览<el-icon><ArrowRight /></el-icon
+            ></el-button>
+          </section>
+          <section
+            v-else
+            id="entry-panel-admin"
+            key="admin"
+            class="entry-content"
+            role="tabpanel"
+            aria-labelledby="entry-tab-admin"
+            tabindex="0"
+          >
+            <div class="entry-heading">
+              <h1>后台登录</h1>
+              <p>管理景点、路线与数字人。</p>
+            </div>
+            <el-form
+              ref="formRef"
+              :model="loginForm"
+              :rules="rules"
+              label-position="top"
+              size="large"
+              class="entry-form"
+              @submit.prevent="onSubmit"
+            >
+              <el-form-item label="账号" prop="username"
+                ><el-input
+                  v-model="loginForm.username"
+                  :prefix-icon="User"
+                  placeholder="输入账号"
+                  autocomplete="username"
+                  :disabled="isLogining"
+              /></el-form-item>
+              <el-form-item label="密码" prop="password"
+                ><el-input
+                  v-model="loginForm.password"
+                  :prefix-icon="Lock"
+                  type="password"
+                  placeholder="输入密码"
+                  autocomplete="current-password"
+                  show-password
+                  :disabled="isLogining"
+              /></el-form-item>
+              <div class="entry-options">
+                <el-checkbox v-model="rememberAccount">记住账号</el-checkbox
+                ><button type="button" @click="handleForgotPassword">忘记密码？</button>
+              </div>
+              <el-button
+                type="primary"
+                native-type="submit"
+                :loading="isLogining"
+                class="entry-primary"
+                >登录后台<el-icon v-if="!isLogining"><ArrowRight /></el-icon
+              ></el-button>
+            </el-form>
+          </section>
+        </Transition>
+        <div class="entry-status" :class="serviceState" role="status">
+          <i aria-hidden="true"></i>
+          <span>{{
+            serviceState === 'ready'
+              ? '服务可用'
+              : serviceState === 'offline'
+                ? '服务暂不可用，请稍后重试'
+                : '正在连接服务'
+          }}</span>
         </div>
       </div>
-      <button class="top-visitor-entry" type="button" @click="enterAsVisitor">
-        <el-icon><Guide /></el-icon>
-        <span>游客导览入口</span>
-        <el-icon><ArrowRight /></el-icon>
-      </button>
-    </header>
-
-    <section class="login-shell">
-      <section class="brand-panel">
-        <div class="signal-field" aria-hidden="true">
-          <span class="signal-line signal-line-a"></span>
-          <span class="signal-line signal-line-b"></span>
-          <span class="signal-line signal-line-c"></span>
-          <span class="signal-node node-a"></span>
-          <span class="signal-node node-b"></span>
-          <span class="signal-node node-c"></span>
-        </div>
-        <div class="scan-ribbon" aria-hidden="true"></div>
-        <div class="brand-content">
-          <div class="brand-badge"><i></i> 智慧景区后台入口</div>
-          <h1>智游灵境运营中枢</h1>
-          <p>统一管理景点知识、游客反馈与运营数据，让导览服务可维护、可追踪、可优化。</p>
-          <div class="brand-highlights">
-            <span>知识库统一维护</span>
-            <span>游客反馈闭环处理</span>
-            <span>运营数据实时汇总</span>
-          </div>
-          <div class="brand-summary">
-            <div>
-              <strong>AI</strong>
-              <span>智能导览服务</span>
-            </div>
-            <div>
-              <strong>3类</strong>
-              <span>核心资产管理</span>
-            </div>
-            <div>
-              <strong>云端</strong>
-              <span>多角色协同</span>
-            </div>
-          </div>
-          <div class="motion-console" aria-hidden="true">
-            <div class="console-head">
-              <span>运营态势</span>
-              <i></i>
-            </div>
-            <div class="console-visual">
-              <span class="flow-card flow-card-a"><b>导览服务</b><em>98%</em></span>
-              <span class="flow-card flow-card-b"><b>内容资产</b><em>同步中</em></span>
-              <span class="flow-card flow-card-c"><b>游客反馈</b><em>实时</em></span>
-              <div class="waveform">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="access-panel">
-        <div class="access-halo" aria-hidden="true"></div>
-        <div class="access-card">
-          <div class="access-heading">
-            <span>权限入口</span>
-            <h2>登录运营后台</h2>
-            <p>使用管理员账号进入智游灵境运营中枢。</p>
-          </div>
-
-          <el-form ref="formRef" :model="loginForm" :rules="rules" label-position="top" size="large" @submit.prevent="onSubmit">
-            <el-form-item label="账号" prop="username">
-              <el-input v-model="loginForm.username" :prefix-icon="User" placeholder="请输入手机号 / 工号 / 邮箱" />
-            </el-form-item>
-            <el-form-item label="密码" prop="password">
-              <el-input v-model="loginForm.password" :prefix-icon="Lock" type="password" placeholder="请输入登录密码" show-password />
-            </el-form-item>
-            <div class="form-options">
-              <el-checkbox v-model="rememberAccount">记住账号</el-checkbox>
-              <button type="button" @click="handleForgotPassword">忘记密码？</button>
-            </div>
-            <el-form-item class="form-action">
-              <el-button type="primary" size="large" native-type="submit" :loading="isLogining" class="login-btn">登录</el-button>
-            </el-form-item>
-          </el-form>
-
-          <div class="access-status"><span>{{ serviceStatus }}</span></div>
-        </div>
-      </section>
     </section>
-
-    <footer class="login-footer">© 智游灵境运营中枢 · Version 1.0 · 技术支持：运营服务团队</footer>
   </main>
 </template>
 
@@ -201,1560 +380,709 @@ onBeforeUnmount(() => {
 :global(html.login-viewport #app) {
   min-width: 0;
 }
-
-.login-page {
-  position: relative;
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 22px 32px 18px;
-  background:
-    radial-gradient(circle at 14% 12%, rgba(56, 189, 248, 0.26), transparent 30rem),
-    radial-gradient(circle at 86% 16%, rgba(186, 230, 253, 0.72), transparent 34rem),
-    linear-gradient(rgba(14, 165, 233, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(14, 165, 233, 0.034) 1px, transparent 1px),
-    #f4fbff;
-  background-size: auto, auto, 32px 32px, 32px 32px, auto;
-  animation: pageGridDrift 15s linear infinite;
-}
-
-.login-page,
-.login-page *,
-.login-page *::before,
-.login-page *::after {
+.entry-page,
+.entry-page *,
+.entry-page *::before,
+.entry-page *::after {
   box-sizing: border-box;
 }
-
-.ambient-layer {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    width: 150%;
-    height: 34%;
-    filter: blur(18px);
-    opacity: 0.7;
-    mix-blend-mode: multiply;
-    transform: translateZ(0);
-  }
-
-  &::before {
-    top: 4%;
-    left: -34%;
-    background: linear-gradient(98deg, transparent 0%, rgba(125, 211, 252, 0.58) 28%, rgba(255, 255, 255, 0.84) 45%, rgba(14, 165, 233, 0.28) 62%, transparent 82%);
-    transform: rotate(-10deg);
-    animation: broadLightPass 7.2s ease-in-out infinite;
-  }
-
-  &::after {
-    right: -38%;
-    bottom: 0;
-    background: linear-gradient(108deg, transparent 0%, rgba(186, 230, 253, 0.62) 30%, rgba(255, 255, 255, 0.72) 52%, rgba(56, 189, 248, 0.22) 68%, transparent 88%);
-    transform: rotate(12deg);
-    animation: broadLightPass 8.4s -3s ease-in-out infinite reverse;
-  }
-}
-
-.ambient-curtain {
-  position: absolute;
-  inset: -24% -14%;
-  background:
-    linear-gradient(105deg, transparent 6%, rgba(255, 255, 255, 0.78) 28%, rgba(125, 211, 252, 0.28) 42%, transparent 58%),
-    linear-gradient(118deg, transparent 24%, rgba(125, 211, 252, 0.34) 48%, rgba(255, 255, 255, 0.54) 57%, transparent 74%);
-  transform: translateX(-18%) rotate(-2deg);
-  animation: curtainDrift 5.6s ease-in-out infinite alternate;
-}
-
-.ambient-wave {
-  position: absolute;
-  left: -24%;
-  width: 148%;
-  height: 240px;
-  border-radius: 48%;
-  filter: blur(12px);
-  opacity: 0.52;
-  background: linear-gradient(100deg, transparent 5%, rgba(255, 255, 255, 0.72) 28%, rgba(125, 211, 252, 0.32) 48%, rgba(255, 255, 255, 0.4) 66%, transparent 88%);
-  transform: rotate(-11deg);
-  animation: waveSlide 6.6s ease-in-out infinite;
-}
-
-.wave-a {
-  top: 18%;
-  --wave-rotate: -11deg;
-}
-
-.wave-b {
-  top: 46%;
-  --wave-rotate: 8deg;
-  transform: rotate(8deg);
-  animation-delay: -2.1s;
-}
-
-.wave-c {
-  bottom: 4%;
-  --wave-rotate: -5deg;
-  transform: rotate(-5deg);
-  animation-delay: -4.4s;
-}
-
-.ambient-line {
-  position: absolute;
-  width: 42vw;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.28), rgba(255, 255, 255, 0.76), transparent);
-  opacity: 0.46;
-  transform: rotate(-18deg);
-  animation: ambientLineMove 7.8s ease-in-out infinite;
-}
-
-.line-a { top: 14%; left: -8%; }
-.line-b { top: 44%; right: 2%; animation-delay: -3.4s; }
-.line-c { bottom: 16%; left: 38%; animation-delay: -6.2s; }
-
-.login-topbar {
+.entry-page {
   position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1360px;
-  width: 100%;
-  margin: 0 auto 20px;
-  animation: panelRise 0.66s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.system-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  .brand-mark {
-    display: grid;
-    position: relative;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 12px;
-    color: #fff;
-    background: linear-gradient(135deg, #38bdf8, #0284c7);
-    box-shadow: 0 12px 26px rgba(14, 116, 144, 0.2);
-    font-size: 13px;
-    font-weight: 900;
-
-    &::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(110deg, transparent 18%, rgba(255, 255, 255, 0.38) 48%, transparent 72%);
-      transform: translateX(-110%);
-      animation: markSweep 3.6s ease-in-out infinite;
-    }
-  }
-
-  strong,
-  small {
-    display: block;
-  }
-
-  strong {
-    color: #0f2742;
-    font-size: 17px;
-    font-weight: 850;
-  }
-
-  small {
-    margin-top: 3px;
-    color: #64748b;
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: 0.08em;
-  }
-}
-
-.top-visitor-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 15px;
-  border: 1px solid #c8e3f2;
-  border-radius: 12px;
-  color: #075985;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10px 24px rgba(14, 116, 144, 0.08);
-  font-size: 13px;
-  font-weight: 750;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-
-  &:hover {
-    border-color: rgba(14, 165, 233, 0.42);
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 16px 34px rgba(14, 116, 144, 0.14);
-    transform: translateY(-1px);
-  }
-}
-
-.login-shell {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(420px, 0.44fr) minmax(520px, 0.56fr);
-  max-width: 1360px;
-  width: 100%;
-  min-height: calc(100vh - 126px);
-  margin: 0 auto;
-  overflow: hidden;
-  border: 1px solid rgba(200, 227, 242, 0.9);
-  border-radius: 28px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(239, 249, 255, 0.5)),
-    rgba(255, 255, 255, 0.58);
-  box-shadow:
-    0 34px 100px rgba(14, 80, 120, 0.18),
-    0 10px 34px rgba(14, 165, 233, 0.1);
-  backdrop-filter: blur(18px);
-  animation: panelRise 0.78s 0.06s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    background:
-      linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.48) 36%, rgba(125, 211, 252, 0.24) 48%, transparent 62%),
-      radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.36), transparent 34%);
-    opacity: 0.78;
-    transform: translateX(-34%) rotate(-2deg);
-    animation: shellLightSweep 5.2s ease-in-out infinite;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    border-radius: inherit;
-    background: linear-gradient(112deg, transparent 0%, transparent 27%, rgba(255, 255, 255, 0.58) 43%, rgba(186, 230, 253, 0.26) 50%, transparent 65%, transparent 100%);
-    transform: translateX(-120%);
-    animation: shellSweep 6.2s ease-in-out infinite;
-  }
-}
-
-.brand-panel {
-  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
   overflow: hidden;
-  padding: 64px 58px;
-  color: #0b4166;
-  background:
-    radial-gradient(circle at 74% 58%, rgba(14, 165, 233, 0.38), transparent 44%),
-    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.76), transparent 30%),
-    linear-gradient(135deg, #e9f9ff 0%, #bfeeff 48%, #7dd3fc 100%);
-  isolation: isolate;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -28%;
-    z-index: 0;
-    background:
-      linear-gradient(115deg, transparent 10%, rgba(255, 255, 255, 0.64) 34%, transparent 54%),
-      radial-gradient(circle at 58% 48%, rgba(255, 255, 255, 0.34), transparent 34%);
-    transform: translateX(-16%) rotate(-9deg);
-    animation: lightVeil 4.8s ease-in-out infinite alternate;
-    pointer-events: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    right: -170px;
-    bottom: -190px;
-    width: 540px;
-    height: 540px;
-    border: 1px solid rgba(255, 255, 255, 0.56);
-    border-radius: 50%;
-    box-shadow:
-      0 0 0 86px rgba(255, 255, 255, 0.16),
-      0 0 120px rgba(14, 165, 233, 0.22);
-    animation: ringBreathe 6.2s ease-in-out infinite;
-  }
+  padding: 24px 40px;
+  color: #243248;
+  background: #f5f7fb;
 }
-
-.signal-field {
+.entry-atmosphere {
   position: absolute;
   inset: 0;
-  z-index: 0;
-  opacity: 0.14;
+  z-index: -1;
+  overflow: hidden;
   pointer-events: none;
 }
-
-.signal-line {
+.entry-glow {
   position: absolute;
-  height: 1px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(2, 132, 199, 0.18), rgba(255, 255, 255, 0.6), transparent);
-  transform-origin: left center;
-  animation: signalFlow 5.6s ease-in-out infinite;
-}
-
-.signal-line-a { top: 24%; left: 8%; width: 58%; transform: rotate(0deg); }
-.signal-line-b { top: 58%; left: 2%; width: 64%; transform: rotate(-10deg); animation-delay: -1.8s; }
-.signal-line-c { bottom: 20%; left: 24%; width: 54%; transform: rotate(12deg); animation-delay: -3.2s; }
-
-.signal-node {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border: 2px solid rgba(255, 255, 255, 0.84);
+  display: block;
+  width: min(60vw, 780px);
+  aspect-ratio: 1;
   border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 0 7px rgba(14, 165, 233, 0.12), 0 0 24px rgba(14, 165, 233, 0.42);
-  animation: nodePulse 3.2s ease-in-out infinite;
+  filter: blur(65px);
 }
-
-.node-a { top: 23%; left: 32%; }
-.node-b { top: 55%; left: 62%; animation-delay: -0.9s; }
-.node-c { bottom: 18%; left: 45%; animation-delay: -1.8s; }
-
-.scan-ribbon {
+.glow-purple {
+  left: -18%;
+  top: -35%;
+  background: radial-gradient(circle, #ccc9f7 0, #e3e4fc 38%, transparent 70%);
+  animation: entry-light-drift 18s ease-in-out infinite alternate;
+}
+.glow-blue {
+  right: -18%;
+  top: 10%;
+  background: radial-gradient(circle, #c0dcf1 0, #dbe9f5 40%, transparent 70%);
+  animation: entry-light-drift 22s -8s ease-in-out infinite alternate-reverse;
+}
+.glow-mint {
+  left: 15%;
+  bottom: -65%;
+  width: 75vw;
+  background: radial-gradient(circle, #c6e3dc 0, #e0ece8 40%, transparent 70%);
+  animation: entry-light-drift 26s -12s ease-in-out infinite alternate;
+}
+.entry-contour {
   position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.54) 48%, rgba(125, 211, 252, 0.16) 52%, transparent 100%);
-  transform: translateY(-120%);
-  animation: verticalScan 4.6s ease-in-out infinite;
-  pointer-events: none;
+  width: 720px;
+  height: 470px;
+  opacity: 0.16;
+  background: url('/images/tour-landscape-outline.svg') center / contain no-repeat;
+  animation: entry-landscape-drift 22s ease-in-out infinite alternate;
 }
-
-.brand-content {
+.contour-left {
+  left: -170px;
+  bottom: 16px;
+}
+.contour-right {
+  right: -240px;
+  top: 100px;
+  transform: scaleX(-1);
+  animation-direction: alternate-reverse;
+}
+.entry-lake {
+  position: absolute;
+  bottom: 0;
+  left: -6%;
+  width: 112%;
+  height: 34vh;
+  min-height: 180px;
+}
+.lake-ripples {
+  opacity: 0.28;
+  animation: entry-ripple-drift 12s ease-in-out infinite alternate;
+}
+.entry-orbit {
+  position: absolute;
+  border: 1px solid rgba(131, 145, 203, 0.14);
+  border-radius: 50%;
+}
+.orbit-one {
+  left: -220px;
+  top: 18%;
+  width: 550px;
+  height: 550px;
+  animation: entry-orbit-breathe 16s ease-in-out infinite;
+}
+.orbit-two {
+  right: -150px;
+  bottom: 12%;
+  width: 380px;
+  height: 380px;
+  animation: entry-orbit-breathe 18s -5s ease-in-out infinite;
+}
+.orbit-three {
+  right: 9%;
+  top: 8%;
+  width: 14px;
+  height: 14px;
+  background: #c9c5f7;
+  border: none;
+  animation: entry-pin-float 5s ease-in-out infinite;
+}
+.entry-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  min-height: 44px;
+}
+.entry-header :deep(.brand-logo) {
+  mix-blend-mode: multiply;
+}
+.entry-center {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  padding: 24px 0;
+}
+.entry-card {
+  width: min(100%, 500px);
+  padding: 26px 32px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 22px 70px -28px rgba(82, 99, 135, 0.22),
+    0 2px 6px rgba(255, 255, 255, 0.8);
+  animation: entry-card-reveal 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.entry-tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 18px;
+  background: #f1f3f9;
+  box-shadow:
+    inset 2px 2px 6px rgba(151, 162, 186, 0.12),
+    inset -2px -2px 6px #fff;
+}
+.entry-tab-indicator {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: calc(50% - 9px);
+  height: calc(100% - 12px);
+  background: #fff;
+  border: 1px solid #e9e8fc;
+  border-radius: 13px;
+  box-shadow: 0 4px 10px rgba(96, 93, 174, 0.1);
+  transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.entry-tab-indicator.admin {
+  transform: translateX(calc(100% + 6px));
+}
+.entry-tabs button {
   position: relative;
   z-index: 1;
-  max-width: 470px;
-  margin: auto 0;
-  animation: contentSlide 0.78s 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.brand-badge {
-  display: inline-flex;
+  display: flex;
+  justify-content: center;
   align-items: center;
   gap: 9px;
-  margin-bottom: 18px;
-  padding: 8px 12px;
-  border: 1px solid rgba(2, 132, 199, 0.18);
-  border-radius: 999px;
-  color: #0369a1;
-  background: rgba(255, 255, 255, 0.64);
-  box-shadow: 0 12px 24px rgba(14, 116, 144, 0.08);
-  font-size: 11px;
-  font-weight: 800;
-
-  i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #38bdf8;
-    box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.17);
-    animation: badgePulse 2.4s ease-in-out infinite;
-  }
+  min-height: 46px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #6b7790;
+  font-size: 17px;
+  cursor: pointer;
+  transition: color 0.25s;
 }
-
-.brand-content h1 {
-  margin: 0 0 18px;
-  color: transparent;
-  background:
-    linear-gradient(110deg, #0f2742 0%, #0f2742 32%, #0284c7 48%, #0f2742 64%, #0f2742 100%);
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-size: clamp(34px, 3vw, 46px);
-  font-weight: 850;
-  line-height: 1.16;
-  letter-spacing: 0;
-  text-wrap: balance;
-  animation: titleShine 5.2s ease-in-out infinite;
+.entry-tabs button[aria-selected='true'] {
+  color: #5147df;
+  font-weight: 600;
 }
-
-.brand-content p {
-  max-width: 430px;
-  margin: 0;
-  color: #24516d;
-  font-size: 15px;
-  line-height: 1.8;
+.entry-tabs button:disabled {
+  cursor: wait;
 }
-
-.brand-highlights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-
-  span {
-    padding: 9px 12px;
-    border: 1px solid rgba(2, 132, 199, 0.16);
-    border-radius: 999px;
-    color: #075985;
-    background: rgba(255, 255, 255, 0.62);
-    box-shadow: none;
-    font-size: 12px;
-    font-weight: 750;
-    animation: chipFloat 5.8s ease-in-out infinite;
-
-    &:nth-child(2) { animation-delay: -1.4s; }
-    &:nth-child(3) { animation-delay: -2.7s; }
-  }
+.entry-page button:focus-visible,
+.entry-content:focus-visible {
+  outline: 2px solid #8178ed;
+  outline-offset: 4px;
 }
-
-.brand-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 460px;
-  margin-top: 20px;
-
-  div {
-    min-width: 0;
-    padding: 15px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.66);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.48);
-    box-shadow: 0 16px 34px rgba(14, 116, 144, 0.08);
-    backdrop-filter: blur(14px);
-    transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
-
-    &:hover {
-      border-color: rgba(255, 255, 255, 0.86);
-      background: rgba(255, 255, 255, 0.62);
-      transform: translateY(-2px);
-    }
-  }
-
-  strong,
-  span {
-    display: block;
-  }
-
-  strong {
-    color: #075985;
-    font-size: 24px;
-    font-weight: 900;
-    line-height: 1;
-  }
-
-  span {
-    margin-top: 8px;
-    color: #42657d;
-    font-size: 12px;
-    font-weight: 700;
-  }
-}
-
-.motion-console {
-  position: relative;
-  overflow: hidden;
-  max-width: 460px;
-  margin-top: 24px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.38);
-  box-shadow:
-    0 22px 52px rgba(14, 116, 144, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(16px);
-  animation: consoleFloat 4.2s ease-in-out infinite;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.62) 42%, rgba(125, 211, 252, 0.28) 52%, transparent 68%);
-    transform: translateX(-110%);
-    animation: consoleSweep 3.2s ease-in-out infinite;
-  }
-}
-
-.console-head {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #075985;
-  font-size: 12px;
-  font-weight: 850;
-
-  i {
-    width: 42px;
-    height: 8px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #38bdf8, #e0f7ff);
-    box-shadow: 0 0 18px rgba(14, 165, 233, 0.32);
-    animation: statusBarPulse 1.8s ease-in-out infinite;
-  }
-}
-
-.console-visual {
-  position: relative;
-  z-index: 1;
-  min-height: 116px;
-  margin-top: 14px;
-}
-
-.flow-card {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 58%;
-  min-width: 190px;
-  padding: 10px 12px;
-  border: 1px solid rgba(186, 230, 253, 0.82);
-  border-radius: 14px;
-  color: #0f2742;
-  background: rgba(255, 255, 255, 0.66);
-  box-shadow: 0 14px 28px rgba(14, 116, 144, 0.12);
-  animation: flowCardLoop 4.8s ease-in-out infinite;
-
-  b,
-  em {
-    font-style: normal;
-    font-size: 12px;
-  }
-
-  b { font-weight: 850; }
-  em { color: #0284c7; font-weight: 850; }
-}
-
-.flow-card-a { top: 0; left: 0; }
-.flow-card-b { top: 37px; right: 0; animation-delay: -1.6s; }
-.flow-card-c { top: 74px; left: 12%; animation-delay: -3.2s; }
-
-.waveform {
-  position: absolute;
-  right: 0;
-  bottom: 4px;
-  display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  height: 46px;
-
-  i {
-    display: block;
-    width: 6px;
-    height: 18px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #0ea5e9, #bae6fd);
-    opacity: 0.82;
-    animation: waveBar 1.1s ease-in-out infinite;
-
-    &:nth-child(2) { animation-delay: -0.18s; }
-    &:nth-child(3) { animation-delay: -0.36s; }
-    &:nth-child(4) { animation-delay: -0.54s; }
-    &:nth-child(5) { animation-delay: -0.72s; }
-    &:nth-child(6) { animation-delay: -0.9s; }
-    &:nth-child(7) { animation-delay: -1.08s; }
-  }
-}
-
-.access-panel {
-  position: relative;
+.entry-content {
+  min-height: 400px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 56px;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(186, 230, 253, 0.38), transparent 28rem),
-    linear-gradient(rgba(14, 165, 233, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(14, 165, 233, 0.024) 1px, transparent 1px),
-    #f7fcff;
-  background-size: auto, 34px 34px, 34px 34px, auto;
-  animation: accessGridDrift 16s linear infinite;
+  padding-top: 24px;
+  outline: none;
 }
-
-.access-halo {
-  position: absolute;
-  inset: 11% 14%;
-  border: 1px solid rgba(14, 165, 233, 0.16);
-  border-radius: 34px;
-  background:
-    radial-gradient(circle at 52% 28%, rgba(255, 255, 255, 0.92), transparent 34%),
-    linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.14), transparent),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), transparent);
-  filter: blur(0.2px);
-  opacity: 0.92;
-  box-shadow:
-    0 0 0 28px rgba(255, 255, 255, 0.18),
-    0 0 90px rgba(14, 165, 233, 0.12);
-  animation: haloShift 5.8s ease-in-out infinite;
-  pointer-events: none;
+.entry-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.35;
 }
-
-.access-card {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 460px);
-  overflow: hidden;
-  padding: 44px 42px;
-  border: 1px solid rgba(125, 211, 252, 0.58);
-  border-radius: 24px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 253, 255, 0.88)),
-    rgba(255, 255, 255, 0.92);
-  box-shadow:
-    0 34px 84px rgba(15, 39, 66, 0.15),
-    0 12px 36px rgba(14, 165, 233, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(22px);
-  animation:
-    cardEnter 0.82s 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both,
-    cardGlow 3.8s 1.1s ease-in-out infinite;
-  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0), rgba(125, 211, 252, 0.32), rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0));
-    transform: translateX(-120%);
-    animation: cardSweep 4.8s 0.6s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 14px;
-    border: 1px solid rgba(125, 211, 252, 0.34);
-    border-radius: 20px;
-    box-shadow: 0 0 42px rgba(125, 211, 252, 0.16) inset;
-    animation: innerFrameGlow 3.8s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  &:hover {
-    border-color: rgba(125, 211, 252, 0.72);
-    box-shadow:
-      0 30px 72px rgba(15, 39, 66, 0.13),
-      0 8px 24px rgba(14, 165, 233, 0.08);
-    transform: translateY(-8px);
-  }
-}
-
-.access-heading {
-  margin-bottom: 28px;
-
-  span {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--brand-600);
-    font-size: 11px;
-    font-weight: 800;
-  }
-
-  h2 {
-    margin: 0 0 8px;
-    color: var(--ink-900);
-    font-size: 25px;
-    font-weight: 800;
-  }
-
-  p {
-    margin: 0;
-    color: var(--ink-500);
-    font-size: 13px;
-    line-height: 1.65;
-  }
-}
-
-:deep(.el-form-item__label) {
-  color: var(--ink-700);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.form-action {
-  margin-top: 24px;
-  margin-bottom: 0;
-}
-
-.login-btn {
-  width: 100%;
-  height: 50px;
-  overflow: hidden;
-  border-radius: 14px;
-  background:
-    linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.34) 18%, transparent 36%) 0 0 / 240% 100%,
-    linear-gradient(135deg, #22b7f4, #0284c7);
-  box-shadow: 0 16px 36px rgba(14, 165, 233, 0.26);
+.entry-heading p {
+  margin: 10px 0 0;
+  color: #728096;
   font-size: 15px;
-  animation: buttonSheen 3.4s ease-in-out infinite;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-
-  &:hover {
-    box-shadow: 0 22px 42px rgba(14, 165, 233, 0.34);
-    transform: translateY(-2px);
-  }
+  line-height: 1.5;
 }
-
-.form-options {
+.visitor-scene {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 170px;
+  margin: 8px 0;
+}
+.visitor-scene svg {
+  width: 100%;
+  max-width: 360px;
+  height: 158px;
+  overflow: visible;
+}
+.scene-pin {
+  animation: entry-pin-float 4.8s ease-in-out infinite;
+}
+.scene-star {
+  transform-origin: 104px 51px;
+  animation: entry-star-breathe 5s ease-in-out infinite;
+}
+.scene-trail {
+  animation: entry-trail-flow 9s linear infinite;
+}
+.entry-features {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0 24px;
+  color: #69788c;
+}
+.entry-features span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.entry-features .el-icon {
+  color: #7a73df;
+  font-size: 17px;
+}
+.entry-primary.el-button {
+  width: 100%;
+  height: 52px;
+  flex: none;
+  border-radius: 15px;
+  font-size: 17px;
+  letter-spacing: 1px;
+  transition:
+    transform 0.25s,
+    box-shadow 0.25s;
+}
+.entry-primary :deep(.el-icon) {
+  margin-left: 12px;
+  transition: transform 0.25s;
+}
+.entry-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -8px rgba(79, 70, 229, 0.4);
+}
+.entry-primary:hover :deep(.el-icon) {
+  transform: translateX(3px);
+}
+.entry-primary:active {
+  transform: translateY(0);
+}
+.entry-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 18px;
+}
+.entry-form :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+.entry-form :deep(.el-form-item__label) {
+  font-size: 15px;
+  height: auto;
+  line-height: 22px;
+  padding: 0;
+  margin-bottom: 8px;
+}
+.entry-form :deep(.el-input__wrapper) {
+  min-height: 48px;
+  border-radius: 12px;
+}
+.entry-form :deep(.el-input__inner) {
+  font-size: 16px;
+}
+.entry-options {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -2px;
-
-  button {
-    border: 0;
-    color: var(--brand-700);
-    cursor: pointer;
-    background: transparent;
-    font-size: 12px;
-    font-weight: 700;
-    transition: color 0.16s ease, transform 0.16s ease;
-
-    &:hover {
-      color: #0284c7;
-      transform: translateX(1px);
-    }
-  }
+  gap: 12px;
+  margin: -1px 0 16px;
 }
-
-:deep(.el-input__wrapper) {
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.86);
-  transition: box-shadow 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+.entry-options :deep(.el-checkbox) {
+  height: 32px;
 }
-
-:deep(.el-input__wrapper.is-focus) {
-  background: rgba(248, 253, 255, 0.96);
-  box-shadow:
-    0 0 0 1px rgba(14, 165, 233, 0.7) inset,
-    0 12px 28px rgba(14, 165, 233, 0.12);
-  transform: translateY(-1px);
+.entry-options :deep(.el-checkbox__label) {
+  font-size: 14px;
 }
-
-.access-status {
+.entry-options button {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #6962d7;
+  font-size: 14px;
+  cursor: pointer;
+}
+.entry-form .entry-primary {
+  margin-top: auto;
+}
+.entry-status {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line-soft);
-  color: var(--ink-500);
-  font-size: 12px;
-  font-weight: 650;
-
-  i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #22c55e;
-    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12);
-    animation: statusBlink 2.2s ease-in-out infinite;
-  }
-}
-
-.login-footer {
-  max-width: 1360px;
-  width: 100%;
-  margin: 14px auto 0;
-  color: var(--ink-500);
-  font-size: 12px;
-  text-align: center;
-  animation: panelRise 0.72s 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-@keyframes pageGridDrift {
-  0% { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
-  100% { background-position: 0 0, 0 0, 32px 32px, 32px 32px, 0 0; }
-}
-
-@keyframes accessGridDrift {
-  0% { background-position: 0 0, 0 0, 0 0, 0 0; }
-  100% { background-position: 0 0, 34px 34px, 34px 34px, 0 0; }
-}
-
-@keyframes ambientLineMove {
-  0%, 100% { opacity: 0.18; transform: translate3d(-24px, 0, 0) rotate(-18deg); }
-  45% { opacity: 0.72; transform: translate3d(44px, 10px, 0) rotate(-18deg); }
-}
-
-@keyframes curtainDrift {
-  0% { opacity: 0.42; transform: translate3d(-24%, -4%, 0) rotate(-4deg); }
-  100% { opacity: 0.96; transform: translate3d(18%, 4%, 0) rotate(3deg); }
-}
-
-@keyframes broadLightPass {
-  0%, 100% { opacity: 0.28; transform: translate3d(-18%, -4%, 0) rotate(-10deg); }
-  50% { opacity: 0.86; transform: translate3d(24%, 8%, 0) rotate(-6deg); }
-}
-
-@keyframes waveSlide {
-  0%, 100% { opacity: 0.22; transform: translate3d(-18%, 0, 0) rotate(var(--wave-rotate, -11deg)); }
-  50% { opacity: 0.74; transform: translate3d(18%, -10px, 0) rotate(var(--wave-rotate, -11deg)); }
-}
-
-@keyframes panelRise {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes contentSlide {
-  from { opacity: 0; transform: translateX(-18px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes cardEnter {
-  from { opacity: 0; transform: translate3d(18px, 12px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes markSweep {
-  0%, 58% { transform: translateX(-110%); }
-  78%, 100% { transform: translateX(110%); }
-}
-
-@keyframes shellSweep {
-  0%, 56% { transform: translateX(-120%); }
-  74%, 100% { transform: translateX(120%); }
-}
-
-@keyframes shellLightSweep {
-  0%, 100% { opacity: 0.32; transform: translateX(-42%) rotate(-2deg); }
-  50% { opacity: 0.92; transform: translateX(34%) rotate(2deg); }
-}
-
-@keyframes cardSweep {
-  0%, 62% { transform: translateX(-120%); }
-  82%, 100% { transform: translateX(120%); }
-}
-
-@keyframes lightVeil {
-  0% { opacity: 0.38; transform: translate3d(-20%, -3%, 0) rotate(-9deg); }
-  100% { opacity: 0.88; transform: translate3d(16%, 4%, 0) rotate(-4deg); }
-}
-
-@keyframes cardGlow {
-  0%, 100% {
-    border-color: rgba(125, 211, 252, 0.5);
-    box-shadow:
-      0 34px 84px rgba(15, 39, 66, 0.15),
-      0 12px 36px rgba(14, 165, 233, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.96);
-  }
-  50% {
-    border-color: rgba(56, 189, 248, 0.86);
-    box-shadow:
-      0 42px 100px rgba(15, 39, 66, 0.18),
-      0 20px 56px rgba(14, 165, 233, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 1);
-  }
-}
-
-@keyframes consoleFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes consoleSweep {
-  0%, 34% { transform: translateX(-110%); opacity: 0; }
-  52% { opacity: 1; }
-  78%, 100% { transform: translateX(110%); opacity: 0; }
-}
-
-@keyframes statusBarPulse {
-  0%, 100% { transform: scaleX(0.68); opacity: 0.58; }
-  50% { transform: scaleX(1); opacity: 1; }
-}
-
-@keyframes flowCardLoop {
-  0%, 100% { transform: translate3d(-8px, 0, 0); opacity: 0.72; }
-  50% { transform: translate3d(14px, -4px, 0); opacity: 1; }
-}
-
-@keyframes waveBar {
-  0%, 100% { height: 14px; opacity: 0.5; }
-  50% { height: 44px; opacity: 1; }
-}
-
-@keyframes buttonSheen {
-  0%, 42% { background-position: -160% 0, 0 0; }
-  72%, 100% { background-position: 160% 0, 0 0; }
-}
-
-@keyframes titleShine {
-  0%, 45% { background-position: 0% 50%; }
-  75%, 100% { background-position: 120% 50%; }
-}
-
-@keyframes innerFrameGlow {
-  0%, 100% { opacity: 0.38; box-shadow: 0 0 34px rgba(125, 211, 252, 0.12) inset; }
-  50% { opacity: 0.82; box-shadow: 0 0 54px rgba(56, 189, 248, 0.22) inset; }
-}
-
-@keyframes signalFlow {
-  0%, 100% { opacity: 0.15; clip-path: inset(0 100% 0 0); }
-  45%, 70% { opacity: 0.7; clip-path: inset(0 0 0 0); }
-}
-
-@keyframes verticalScan {
-  0%, 56% { transform: translateY(-120%); opacity: 0; }
-  70% { opacity: 0.5; }
-  100% { transform: translateY(120%); opacity: 0; }
-}
-
-@keyframes nodePulse {
-  0%, 100% { opacity: 0.58; transform: scale(0.92); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-
-@keyframes ringBreathe {
-  0%, 100% { transform: scale(1); opacity: 0.88; }
-  50% { transform: scale(1.04); opacity: 0.62; }
-}
-
-@keyframes chipFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-
-@keyframes haloShift {
-  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.62; }
-  50% { transform: translate3d(8px, -8px, 0); opacity: 0.86; }
-}
-
-@keyframes statusBlink {
-  0%, 100% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12); }
-  50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.05); }
-}
-
-@keyframes badgePulse {
-  0%, 100% { box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.17); }
-  50% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0.07); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
-@media (max-width: 960px) {
-  .login-page { padding: 18px; }
-  .login-topbar { flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
-  .system-brand { min-width: 0; }
-  .login-shell { grid-template-columns: 1fr; min-height: auto; }
-  .brand-panel { display: none; }
-  .access-panel { min-height: calc(100vh - 120px); padding: 28px; }
-  .access-card { width: min(100%, 430px); padding: 34px 28px; }
-}
-
-/* Premium research-console theme */
-.login-page {
-  padding: 24px 36px 18px;
-  color: #d7e2e8;
-  background:
-    radial-gradient(circle at 18% 8%, rgba(20, 184, 166, 0.13), transparent 30rem),
-    radial-gradient(circle at 84% 12%, rgba(69, 94, 163, 0.12), transparent 32rem),
-    linear-gradient(rgba(151, 177, 190, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(151, 177, 190, 0.035) 1px, transparent 1px),
-    #07141d;
-  background-size: auto, auto, 42px 42px, 42px 42px, auto;
-}
-
-.ambient-layer {
-  &::before,
-  &::after {
-    opacity: 0.42;
-    mix-blend-mode: screen;
-    filter: blur(34px);
-  }
-
-  &::before {
-    background: linear-gradient(98deg, transparent, rgba(20, 184, 166, 0.32), rgba(105, 137, 173, 0.17), transparent);
-  }
-
-  &::after {
-    background: linear-gradient(108deg, transparent, rgba(42, 78, 97, 0.2), rgba(20, 184, 166, 0.22), transparent);
-  }
-}
-
-.ambient-curtain {
-  opacity: 0.36;
-  background:
-    linear-gradient(105deg, transparent 12%, rgba(20, 184, 166, 0.14) 34%, transparent 58%),
-    linear-gradient(118deg, transparent 28%, rgba(73, 106, 126, 0.16) 50%, transparent 72%);
-}
-
-.ambient-wave {
-  height: 190px;
-  opacity: 0.24;
-  filter: blur(28px);
-  background: linear-gradient(100deg, transparent, rgba(20, 184, 166, 0.2), rgba(79, 104, 158, 0.13), transparent);
-}
-
-.ambient-line {
-  height: 1px;
-  opacity: 0.34;
-  background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.42), rgba(165, 192, 207, 0.22), transparent);
-}
-
-.login-topbar {
-  max-width: 1400px;
-  margin-bottom: 18px;
-}
-
-.system-brand {
-  .brand-mark {
-    border: 1px solid rgba(94, 234, 212, 0.28);
-    border-radius: 9px;
-    background: linear-gradient(145deg, #14b8a6, #0f5f66);
-    box-shadow: 0 10px 30px rgba(13, 148, 136, 0.24);
-  }
-
-  strong { color: #edf5f7; font-weight: 720; letter-spacing: 0.02em; }
-  small { color: #7f98a6; letter-spacing: 0.16em; }
-}
-
-.top-visitor-entry {
-  border-color: rgba(146, 176, 190, 0.22);
-  border-radius: 9px;
-  color: #c8d9df;
-  background: rgba(14, 35, 46, 0.72);
-  box-shadow: none;
-  backdrop-filter: blur(18px);
-
-  &:hover {
-    border-color: rgba(45, 212, 191, 0.46);
-    color: #ffffff;
-    background: rgba(16, 55, 72, 0.88);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
-  }
-}
-
-.login-shell {
-  grid-template-columns: minmax(500px, 1.05fr) minmax(430px, 0.78fr);
-  max-width: 1400px;
-  min-height: calc(100vh - 132px);
-  border: 1px solid rgba(154, 181, 194, 0.2);
-  border-radius: 22px;
-  background: #0b202b;
-  box-shadow: 0 42px 110px rgba(0, 0, 0, 0.38);
-  backdrop-filter: none;
-
-  &::before {
-    opacity: 0.26;
-    background: linear-gradient(108deg, transparent 24%, rgba(45, 212, 191, 0.12) 46%, transparent 64%);
-  }
-
-  &::after {
-    opacity: 0.22;
-    background: linear-gradient(112deg, transparent 24%, rgba(113, 147, 166, 0.12) 46%, transparent 65%);
-  }
-}
-
-.brand-panel {
-  padding: 68px 64px;
-  color: #d9e7eb;
-  background:
-    radial-gradient(circle at 74% 26%, rgba(20, 184, 166, 0.18), transparent 24rem),
-    radial-gradient(circle at 16% 82%, rgba(59, 83, 126, 0.16), transparent 22rem),
-    linear-gradient(145deg, #0b202b 0%, #0d2d39 54%, #0b2431 100%);
-
-  &::before {
-    opacity: 0.34;
-    background:
-      linear-gradient(115deg, transparent 14%, rgba(45, 212, 191, 0.12) 38%, transparent 56%),
-      radial-gradient(circle at 58% 48%, rgba(20, 184, 166, 0.1), transparent 34%);
-  }
-
-  &::after {
-    border-color: rgba(94, 234, 212, 0.12);
-    box-shadow: 0 0 0 86px rgba(94, 234, 212, 0.025), 0 0 120px rgba(13, 148, 136, 0.12);
-  }
-}
-
-.signal-field { opacity: 0.3; }
-.signal-line { background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.28), rgba(150, 175, 190, 0.16), transparent); }
-.signal-node { border-color: rgba(205, 236, 235, 0.72); background: #14b8a6; box-shadow: 0 0 0 7px rgba(20, 184, 166, 0.08), 0 0 26px rgba(45, 212, 191, 0.32); }
-.scan-ribbon { background: linear-gradient(180deg, transparent, rgba(45, 212, 191, 0.08), transparent); }
-
-.brand-badge {
-  border-color: rgba(94, 234, 212, 0.2);
-  color: #80dace;
-  background: rgba(8, 30, 39, 0.5);
-  box-shadow: none;
-
-  i { background: #2dd4bf; box-shadow: 0 0 0 5px rgba(45, 212, 191, 0.1); }
-}
-
-.brand-content h1 {
-  color: #f1f7f8;
-  background: linear-gradient(110deg, #f1f7f8 0%, #f1f7f8 36%, #6ee7d8 50%, #f1f7f8 64%, #f1f7f8 100%);
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 760;
-  letter-spacing: -0.03em;
-}
-
-.brand-content p { color: #a9bbc4; line-height: 1.9; }
-
-.brand-highlights span {
-  border-color: rgba(132, 173, 187, 0.17);
-  color: #b8cbd2;
-  background: rgba(7, 25, 35, 0.34);
-  box-shadow: none;
-  font-weight: 620;
-}
-
-.brand-summary div {
-  border-color: rgba(139, 173, 186, 0.16);
-  border-radius: 10px;
-  background: rgba(7, 25, 35, 0.32);
-  box-shadow: none;
-  backdrop-filter: blur(12px);
-}
-.brand-summary strong { color: #6ee7d8; font-size: 22px; }
-.brand-summary span { color: #8fa7b2; font-weight: 560; }
-
-.motion-console {
-  border-color: rgba(132, 173, 187, 0.16);
-  border-radius: 14px;
-  background: rgba(6, 22, 30, 0.44);
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.035);
-}
-.motion-console::before { background: linear-gradient(100deg, transparent, rgba(45, 212, 191, 0.1), transparent); }
-.console-head { color: #9bb3bc; }
-.console-head i { background: linear-gradient(90deg, #14b8a6, #4b7180); box-shadow: 0 0 18px rgba(20, 184, 166, 0.2); }
-.flow-card { border-color: rgba(132, 173, 187, 0.15); color: #d9e7eb; background: rgba(13, 42, 53, 0.72); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18); }
-.flow-card em { color: #5eead4; }
-.waveform i { background: linear-gradient(180deg, #2dd4bf, #315565); }
-
-.access-panel {
-  padding: 56px 64px;
-  background:
-    radial-gradient(circle at 76% 18%, rgba(20, 184, 166, 0.075), transparent 22rem),
-    linear-gradient(rgba(15, 95, 102, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 95, 102, 0.022) 1px, transparent 1px),
-    #f3f5f6;
-  background-size: auto, 42px 42px, 42px 42px, auto;
-}
-
-.access-halo {
-  border-color: rgba(15, 95, 102, 0.1);
-  border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
-  box-shadow: 0 0 0 28px rgba(255, 255, 255, 0.12), 0 0 80px rgba(13, 148, 136, 0.06);
-}
-
-.access-card {
-  width: min(100%, 430px);
-  padding: 42px 40px;
-  border-color: #dde4e8;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 24px 70px rgba(7, 25, 35, 0.12), inset 0 1px 0 #fff;
-  animation: cardEnter 0.82s 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-
-  &::before { opacity: 0.22; background: linear-gradient(120deg, transparent, rgba(20, 184, 166, 0.12), transparent); }
-  &::after { border-color: rgba(13, 148, 136, 0.08); }
-}
-
-.access-heading span { color: #0d9488; letter-spacing: 0.14em; }
-.access-heading h2 { color: #101c2b; font-weight: 760; letter-spacing: -0.02em; }
-.access-heading p { color: #748290; }
-.access-card :deep(.el-form-item__label) { color: #344456; }
-.access-card :deep(.el-input__wrapper) { border-radius: 9px; background: #f7f9fa; }
-.access-card :deep(.el-input__wrapper.is-focus) { background: #fff; box-shadow: 0 0 0 1px #0d9488 inset, 0 10px 24px rgba(13, 148, 136, 0.08) !important; }
-.form-options button { color: #0f5f66; }
-.login-btn { border-radius: 9px; background: linear-gradient(135deg, #0d9488, #0f5f66); box-shadow: 0 12px 26px rgba(13, 148, 136, 0.2); }
-.access-status { border-top-color: #e8edf1; color: #748290; }
-.login-footer { max-width: 1400px; color: #607985; }
-
-@media (max-width: 960px) {
-  .login-page { padding: 18px; }
-  .access-panel { min-height: calc(100vh - 120px); padding: 26px; }
-  .access-card { padding: 34px 28px; }
-}
-
-/* 2026 showcase skin — editorial AI laboratory */
-.login-page {
-  padding: 26px 42px 20px;
-  color: #eef1ff;
-  background:
-    radial-gradient(circle at 17% 28%, rgba(59, 91, 255, .34), transparent 25rem),
-    radial-gradient(circle at 72% 4%, rgba(119, 91, 255, .16), transparent 30rem),
-    radial-gradient(circle at 88% 84%, rgba(67, 211, 255, .12), transparent 24rem),
-    #090b12;
-}
-
-.login-page::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: .22;
-  background-image:
-    linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(135deg, #000, transparent 78%);
-}
-
-.ambient-layer::before {
-  opacity: .7;
-  filter: blur(48px);
-  background: linear-gradient(100deg, transparent 6%, rgba(62, 93, 255, .6), rgba(86, 214, 255, .18), transparent 72%);
-}
-.ambient-layer::after {
-  opacity: .42;
-  filter: blur(62px);
-  background: linear-gradient(112deg, transparent 20%, rgba(133, 93, 255, .38), transparent 76%);
-}
-.ambient-curtain { opacity: .2; filter: saturate(1.25); }
-.ambient-wave { opacity: .32; background: linear-gradient(90deg, transparent, rgba(69, 100, 255, .42), rgba(84, 216, 255, .16), transparent); }
-.ambient-line { opacity: .28; background: linear-gradient(90deg, transparent, #7890ff, transparent); }
-
-.login-topbar { max-width: 1480px; margin-bottom: 18px; }
-.system-brand .brand-mark {
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 12px;
-  background: #3b5bff;
-  box-shadow: 0 16px 40px rgba(59,91,255,.34);
-}
-.system-brand strong { color: #fff; font-weight: 720; }
-.system-brand small { color: #7f89a5; }
-.top-visitor-entry {
-  border-color: rgba(255,255,255,.12);
-  border-radius: 999px;
-  color: #dfe4f7;
-  background: rgba(255,255,255,.055);
-  backdrop-filter: blur(18px);
-}
-.top-visitor-entry:hover { border-color: rgba(120,144,255,.7); background: rgba(59,91,255,.2); }
-
-.login-shell {
-  grid-template-columns: minmax(560px, 1.18fr) minmax(430px, .72fr);
-  max-width: 1480px;
-  min-height: calc(100vh - 142px);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 30px;
-  background: rgba(12,15,25,.62);
-  box-shadow: 0 44px 120px rgba(0,0,0,.42);
-  backdrop-filter: blur(28px);
-}
-.login-shell::before { opacity: .22; background: linear-gradient(110deg, transparent 20%, rgba(77,109,255,.35), transparent 62%); }
-.login-shell::after { opacity: .16; background: linear-gradient(108deg, transparent 34%, rgba(79,219,255,.24), transparent 70%); }
-
-.brand-panel {
-  padding: 72px 68px;
-  color: #f1f3ff;
-  background:
-    radial-gradient(circle at 76% 32%, rgba(65,96,255,.27), transparent 22rem),
-    linear-gradient(145deg, rgba(13,17,31,.88), rgba(16,21,39,.72));
-}
-.brand-panel::before { opacity: .3; background: linear-gradient(118deg, transparent 12%, rgba(82,111,255,.26) 38%, transparent 58%); }
-.brand-panel::after { border-color: rgba(119,140,255,.18); box-shadow: 0 0 0 90px rgba(83,104,255,.025), 0 0 150px rgba(59,91,255,.16); }
-.signal-field { opacity: .4; }
-.signal-line { background: linear-gradient(90deg, transparent, rgba(111,137,255,.5), rgba(81,216,255,.18), transparent); }
-.signal-node { border-color: #d9e0ff; background: #5570ff; box-shadow: 0 0 0 7px rgba(85,112,255,.11), 0 0 32px rgba(85,112,255,.5); }
-.scan-ribbon { background: linear-gradient(180deg, transparent, rgba(78,108,255,.13), transparent); }
-.brand-badge { border-color: rgba(135,153,255,.28); color: #aebcff; background: rgba(59,91,255,.1); }
-.brand-badge i { background: #6f87ff; box-shadow: 0 0 0 5px rgba(111,135,255,.12); }
-.brand-content h1 {
-  max-width: 620px;
-  color: #fff;
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  font-size: clamp(42px, 4vw, 66px);
-  font-weight: 760;
-  letter-spacing: -.055em;
-  line-height: 1.06;
-}
-.brand-content p { max-width: 580px; color: #aeb6cc; font-size: 16px; line-height: 1.9; }
-.brand-highlights span { border-color: transparent; color: #929bb5; background: transparent; padding-left: 0; }
-.brand-highlights span::before { content: '—'; margin-right: 8px; color: #617bff; }
-.brand-summary { gap: 10px; }
-.brand-summary div { border-color: rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.045); }
-.brand-summary strong { color: #8fa2ff; }
-.brand-summary span { color: #8992aa; }
-.motion-console { border-color: rgba(255,255,255,.09); border-radius: 18px; background: rgba(3,5,12,.28); box-shadow: none; }
-.console-head { color: #8993ad; }
-.console-head i { background: linear-gradient(90deg,#5270ff,#54d8ff); }
-.flow-card { border-color: rgba(255,255,255,.08); color: #dfe4f5; background: rgba(255,255,255,.045); box-shadow: none; }
-.flow-card em { color: #91a3ff; }
-.waveform i { background: linear-gradient(180deg,#6b84ff,#50d4ff); }
-
-.access-panel {
-  padding: 58px 64px;
-  background:
-    radial-gradient(circle at 82% 14%, rgba(59,91,255,.08), transparent 20rem),
-    #f7f8fc;
-}
-.access-halo { border: 0; background: none; box-shadow: none; }
-.access-card {
-  width: min(100%, 440px);
-  padding: 44px 42px;
-  border: 1px solid rgba(18,26,54,.08);
-  border-radius: 22px;
-  background: rgba(255,255,255,.92);
-  box-shadow: 0 32px 80px rgba(28,36,70,.14);
-  backdrop-filter: blur(20px);
-}
-.access-card::before { opacity: .2; background: linear-gradient(120deg, transparent, rgba(59,91,255,.14), transparent); }
-.access-card::after { border-color: rgba(59,91,255,.08); }
-.access-heading span { color: #3b5bff; }
-.access-heading h2 { color: #121622; font-size: 28px; }
-.access-heading p { color: #7d8496; }
-.access-card :deep(.el-form-item__label) { color: #3b4254; }
-.access-card :deep(.el-input__wrapper) { min-height: 46px; border-radius: 12px; background: #f6f7fb; }
-.access-card :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #3b5bff inset, 0 8px 24px rgba(59,91,255,.1) !important; }
-.form-options button { color: #3b5bff; }
-.login-btn { height: 50px; border-radius: 12px; background: #151925; box-shadow: 0 14px 30px rgba(12,16,31,.2); }
-.login-btn:hover { background: #3b5bff; box-shadow: 0 16px 34px rgba(59,91,255,.28); }
-.access-status { color: #858c9e; }
-.login-footer { color: #69728a; }
-
-@media (max-width: 960px) {
-  .login-page { padding: 16px; }
-  .access-panel { padding: 24px; }
-  .access-card { padding: 34px 28px; }
-}
-
-/* Motion v2 — orbital intelligence field */
-.login-page { animation: none; }
-.ambient-curtain,
-.ambient-wave,
-.ambient-line { display: none; }
-.ambient-layer::before,
-.ambient-layer::after {
-  width: 40rem;
-  height: 40rem;
-  border: 1px solid rgba(120,140,255,.1);
-  border-radius: 50%;
-  opacity: .54;
-  filter: none;
-  mix-blend-mode: screen;
-  background:
-    repeating-conic-gradient(from 0deg, rgba(112,135,255,.18) 0deg 1deg, transparent 1deg 15deg),
-    radial-gradient(circle, rgba(59,91,255,.08), transparent 66%);
-}
-.ambient-layer::before {
-  top: -19rem;
-  left: -15rem;
-  animation: orbitalFieldRotate 44s linear infinite;
-}
-.ambient-layer::after {
-  right: -18rem;
-  bottom: -21rem;
-  animation: orbitalFieldRotate 58s linear infinite reverse;
-}
-.orbit-system {
-  position: absolute;
-  top: 50%;
-  left: 34%;
-  width: min(48vw, 720px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  opacity: .78;
-}
-.orbit-ring {
-  position: absolute;
-  inset: 50%;
-  border: 1px solid rgba(125,145,255,.16);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-}
-.orbit-ring::before,
-.orbit-ring::after {
-  content: '';
-  position: absolute;
+  min-height: 36px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid #edf0f6;
+  color: #7c889b;
+  font-size: 13px;
+}
+.entry-status i {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8fa2ff;
-  box-shadow: 0 0 0 5px rgba(111,135,255,.08), 0 0 20px rgba(111,135,255,.5);
+  background: #a4aab7;
 }
-.orbit-ring::before { top: 12%; left: 18%; }
-.orbit-ring::after { right: 10%; bottom: 23%; width: 4px; height: 4px; background: #55d9ff; }
-.orbit-ring-a { width: 92%; height: 52%; animation: orbitRingA 28s linear infinite; }
-.orbit-ring-b { width: 68%; height: 68%; animation: orbitRingB 34s linear infinite reverse; }
-.orbit-ring-c { width: 42%; height: 86%; animation: orbitRingC 24s linear infinite; }
-.orbit-core {
+.entry-status.ready i {
+  background: #6cac9c;
+}
+.entry-status.offline {
+  color: #a96d54;
+}
+.entry-status.offline i {
+  background: #dba37a;
+}
+.entry-status.checking i {
+  animation: entry-star-breathe 1.4s ease-in-out infinite;
+}
+.entry-switch-enter-active,
+.entry-switch-leave-active {
+  transition:
+    opacity 0.18s,
+    transform 0.18s;
+}
+.entry-switch-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.entry-switch-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+@keyframes entry-light-drift {
+  from {
+    transform: translate3d(-10%, -8%, 0) scale(0.88);
+  }
+  to {
+    transform: translate3d(24%, 18%, 0) scale(1.2);
+  }
+}
+@keyframes entry-landscape-drift {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 34px -22px;
+  }
+}
+@keyframes entry-ripple-drift {
+  from {
+    transform: translateX(-45px);
+  }
+  to {
+    transform: translateX(45px);
+  }
+}
+@keyframes entry-orbit-breathe {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+@keyframes entry-pin-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes entry-star-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    scale: 0.94;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.08;
+  }
+}
+@keyframes entry-trail-flow {
+  to {
+    stroke-dashoffset: -66;
+  }
+}
+@keyframes entry-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Decorative motion stays behind the stable, readable access panel. */
+.entry-atmosphere {
+  inset: -32px;
+  transform: translate(var(--pointer-x, 0px), var(--pointer-y, 0px));
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.glow-purple {
+  animation-duration: 8s;
+  background: radial-gradient(circle, #b8aef4 0, #dcd7fc 38%, transparent 70%);
+}
+.glow-blue {
+  animation-duration: 11s;
+  animation-delay: -4s;
+  background: radial-gradient(circle, #a5d3ee 0, #d2e7f6 40%, transparent 70%);
+}
+.glow-mint {
+  animation-duration: 13s;
+  animation-delay: -6s;
+}
+.entry-contour {
+  animation-duration: 10s;
+}
+.lake-ripples {
+  opacity: 0.4;
+  animation-duration: 5s;
+}
+.entry-aurora {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 94px;
-  height: 94px;
-  border: 1px solid rgba(144,161,255,.26);
+  inset: -30%;
+  opacity: 0.44;
+  background: conic-gradient(
+    from 40deg at 50% 50%,
+    transparent 0 15%,
+    rgba(169, 155, 243, 0.28) 24%,
+    transparent 38% 60%,
+    rgba(136, 211, 225, 0.24) 75%,
+    transparent 88%
+  );
+  filter: blur(48px);
+  animation: entry-aurora-turn 28s linear infinite;
+}
+.entry-flow-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.65;
+}
+.flow-track {
+  stroke: #a4abc9;
+  stroke-width: 1;
+  opacity: 0.18;
+}
+.flow-stream {
+  stroke-width: 2.5;
+  stroke-dasharray: 75 1125;
+  animation: entry-route-travel 7s linear infinite;
+}
+.stream-purple {
+  stroke: #9b8ce8;
+  filter: drop-shadow(0 0 5px #b8a7f1);
+}
+.stream-blue {
+  stroke: #69b9d5;
+  animation-delay: -3.5s;
+  animation-duration: 9s;
+  filter: drop-shadow(0 0 5px #9ed9e9);
+}
+.entry-motes {
+  position: absolute;
+  inset: 0;
+}
+.entry-motes i {
+  position: absolute;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(93,118,255,.34), rgba(59,91,255,.04) 48%, transparent 70%);
-  box-shadow: 0 0 90px rgba(59,91,255,.18);
-  transform: translate(-50%,-50%);
-  animation: orbitCorePulse 5s ease-in-out infinite;
+  background: #a69ae7;
+  box-shadow: 0 0 10px rgba(153, 133, 230, 0.4);
+  animation: entry-mote-rise var(--mote-duration) var(--mote-delay) ease-in-out infinite;
 }
-.orbit-core::before,
-.orbit-core::after {
-  content: '';
-  position: absolute;
-  inset: 20px;
-  border: 1px solid rgba(113,216,255,.3);
-  border-radius: 50%;
-}
-.orbit-core::after { inset: 38px; border: 0; background: #8ba0ff; box-shadow: 0 0 24px #617bff; }
-.orbit-particle {
-  position: absolute;
+.entry-motes i:nth-child(even) {
   width: 3px;
   height: 3px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 14px #91a3ff;
+  background: #83bbc6;
 }
-.particle-a { top: 12%; left: 50%; animation: particleDrift 7s ease-in-out infinite; }
-.particle-b { right: 8%; top: 48%; animation: particleDrift 9s -2s ease-in-out infinite; }
-.particle-c { left: 14%; bottom: 18%; animation: particleDrift 8s -5s ease-in-out infinite; }
-.data-stars { position: absolute; inset: 0; }
-.data-stars i {
+.orbit-one {
+  animation: entry-aurora-turn 20s linear infinite;
+}
+.orbit-two {
+  animation: entry-aurora-turn 15s linear infinite reverse;
+}
+.orbit-one::after,
+.orbit-two::after {
+  content: '';
   position: absolute;
-  width: 2px;
-  height: 2px;
+  top: 50%;
+  right: -5px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: rgba(190,201,255,.85);
-  box-shadow: 0 0 10px rgba(120,145,255,.8);
-  animation: starBlink 4s ease-in-out infinite;
+  background: #aea3ee;
+  box-shadow:
+    0 0 0 7px rgba(174, 163, 238, 0.1),
+    0 0 20px rgba(156, 142, 228, 0.3);
 }
-.data-stars i:nth-child(1) { left: 8%; top: 18%; }
-.data-stars i:nth-child(2) { left: 21%; top: 72%; animation-delay: -1s; }
-.data-stars i:nth-child(3) { left: 45%; top: 12%; animation-delay: -2.6s; }
-.data-stars i:nth-child(4) { left: 62%; top: 64%; animation-delay: -.8s; }
-.data-stars i:nth-child(5) { left: 78%; top: 22%; animation-delay: -3.1s; }
-.data-stars i:nth-child(6) { left: 91%; top: 74%; animation-delay: -1.7s; }
-.data-stars i:nth-child(7) { left: 54%; top: 88%; animation-delay: -2.2s; }
-.data-stars i:nth-child(8) { left: 31%; top: 38%; animation-delay: -3.7s; }
-.data-stars i:nth-child(9) { left: 72%; top: 46%; animation-delay: -.4s; }
-
-.scan-ribbon {
-  top: auto;
-  right: 10%;
-  bottom: 8%;
-  left: 10%;
-  width: auto;
-  height: 1px;
-  opacity: .58;
-  background: linear-gradient(90deg, transparent, rgba(109,134,255,.55), transparent);
-  animation: dataSweep 6s ease-in-out infinite;
+.orbit-two::after {
+  background: #94c4d2;
 }
-.signal-line { animation: signalBreath 6s ease-in-out infinite; }
-.signal-node { animation: nodeOrbitPulse 4.8s ease-in-out infinite; }
-
-@keyframes orbitalFieldRotate { to { transform: rotate(360deg); } }
-@keyframes orbitRingA {
-  from { transform: translate(-50%,-50%) rotate(9deg); }
-  to { transform: translate(-50%,-50%) rotate(369deg); }
+.scene-pin {
+  animation-duration: 3s;
 }
-@keyframes orbitRingB {
-  from { transform: translate(-50%,-50%) rotate(42deg); }
-  to { transform: translate(-50%,-50%) rotate(402deg); }
+.scene-trail {
+  animation-duration: 3s;
 }
-@keyframes orbitRingC {
-  from { transform: translate(-50%,-50%) rotate(-28deg); }
-  to { transform: translate(-50%,-50%) rotate(332deg); }
+.entry-primary.el-button {
+  position: relative;
+  overflow: hidden;
 }
-@keyframes orbitCorePulse {
-  0%,100% { transform: translate(-50%,-50%) scale(.96); opacity: .65; }
-  50% { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+.entry-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.2) 49%,
+    transparent 68%
+  );
+  transform: translateX(-130%);
+  animation: entry-button-light 5s 1s ease-in-out infinite;
 }
-@keyframes particleDrift {
-  0%,100% { transform: translate3d(0,0,0); opacity: .25; }
-  50% { transform: translate3d(16px,-18px,0); opacity: 1; }
+@keyframes entry-aurora-turn {
+  to {
+    transform: rotate(360deg);
+  }
 }
-@keyframes starBlink { 0%,100% { opacity: .18; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.7); } }
-@keyframes dataSweep { 0%,100% { transform: scaleX(.18); opacity: .08; } 50% { transform: scaleX(1); opacity: .6; } }
-@keyframes signalBreath { 0%,100% { opacity: .12; } 50% { opacity: .62; } }
-@keyframes nodeOrbitPulse { 0%,100% { transform: scale(.8); opacity: .45; } 50% { transform: scale(1.25); opacity: 1; } }
-
-@media (max-width: 960px) {
-  .orbit-system { left: 50%; width: 92vw; opacity: .28; }
+@keyframes entry-route-travel {
+  from {
+    stroke-dashoffset: 75;
+  }
+  to {
+    stroke-dashoffset: -1125;
+  }
 }
-
-/* Keep the complete stage visible on common 1366×768 laptops. */
-@media (min-width: 961px) and (max-height: 820px) {
-  .login-page { height: 100dvh; min-height: 620px; padding: 14px 30px 8px; }
-  .login-topbar { min-height: 44px; margin-bottom: 8px; }
-  .system-brand .brand-mark { width: 40px; height: 40px; }
-  .top-visitor-entry { min-height: 38px; padding: 0 17px; }
-  .login-shell {
-    min-height: 0;
-    height: calc(100dvh - 82px);
-    max-height: 704px;
+@keyframes entry-mote-rise {
+  0%,
+  100% {
+    transform: translate(0, 22px) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.6;
+  }
+  75% {
+    opacity: 0.35;
+  }
+  95% {
+    transform: translate(22px, -48px) scale(1.2);
+    opacity: 0;
+  }
+}
+@keyframes entry-button-light {
+  0%,
+  55% {
+    transform: translateX(-130%);
+  }
+  85%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+@media (max-width: 600px) {
+  .entry-aurora {
+    opacity: 0.28;
+  }
+  .entry-motes i:nth-child(n + 6) {
+    display: none;
+  }
+  .entry-flow-map {
+    opacity: 0.4;
+  }
+  .entry-page {
+    padding: 20px 16px;
+  }
+  .entry-center {
+    padding: 24px 0;
+  }
+  .entry-card {
+    padding: 20px 22px 16px;
     border-radius: 24px;
   }
-  .brand-panel { padding: 30px 50px; }
-  .brand-content { max-width: 520px; }
-  .brand-badge { margin-bottom: 10px; padding: 6px 10px; }
-  .brand-content h1 { margin-bottom: 10px; font-size: clamp(38px, 3.6vw, 52px); }
-  .brand-content p { font-size: 13px; line-height: 1.65; }
-  .brand-highlights { gap: 8px 14px; margin-top: 12px; }
-  .brand-highlights span { padding: 4px 0; font-size: 11px; }
-  .brand-summary { gap: 8px; margin-top: 10px; }
-  .brand-summary div { padding: 10px 12px; border-radius: 11px; }
-  .brand-summary strong { font-size: 19px; }
-  .brand-summary span { margin-top: 4px; font-size: 10px; }
-  .motion-console { margin-top: 10px; padding: 11px 13px; border-radius: 13px; }
-  .console-head { font-size: 10px; }
-  .console-head i { height: 5px; }
-  .console-visual { min-height: 82px; margin-top: 8px; }
-  .flow-card { min-width: 170px; padding: 6px 10px; border-radius: 9px; }
-  .flow-card b,.flow-card em { font-size: 10px; }
-  .flow-card-b { top: 27px; }
-  .flow-card-c { top: 54px; }
-  .waveform { height: 34px; gap: 4px; }
-  .waveform i { width: 5px; }
-  .access-panel { padding: 28px 54px; }
-  .access-card { width: min(100%, 420px); padding: 30px 36px; border-radius: 18px; }
-  .access-heading { margin-bottom: 20px; }
-  .access-heading h2 { margin: 6px 0; font-size: 25px; }
-  .access-heading p { font-size: 12px; }
-  .access-card :deep(.el-form-item) { margin-bottom: 16px; }
-  .access-card :deep(.el-input__wrapper) { min-height: 42px; }
-  .login-btn { height: 46px; }
-  .access-status { margin-top: 14px; padding-top: 14px; }
-  .login-footer { min-height: 14px; margin-top: 4px; font-size: 9px; line-height: 12px; }
-  .orbit-system { width: min(44vw, 600px); }
+  .entry-content {
+    padding-top: 24px;
+    min-height: 400px;
+  }
+  .entry-heading h1 {
+    font-size: 25px;
+  }
+  .entry-glow {
+    width: 120vw;
+  }
+  .glow-purple {
+    left: -65%;
+    top: -15%;
+  }
+  .glow-blue {
+    right: -65%;
+    top: 15%;
+  }
+  .glow-mint {
+    bottom: -25%;
+  }
+  .entry-contour {
+    width: 520px;
+    height: 340px;
+    opacity: 0.1;
+  }
+  .contour-left {
+    left: -200px;
+    bottom: 0;
+  }
+  .contour-right {
+    right: -330px;
+    top: 80px;
+  }
+  .entry-features {
+    gap: 6px;
+  }
+  .entry-features span {
+    font-size: 13px;
+    gap: 4px;
+  }
 }
-
-@media (min-width: 961px) and (max-height: 700px) {
-  .login-page { min-height: 560px; }
-  .login-shell { height: calc(100dvh - 74px); }
-  .brand-panel { padding: 22px 46px; }
-  .brand-content h1 { font-size: 38px; }
-  .motion-console { margin-top: 7px; }
-  .access-card { padding: 24px 34px; }
-  .access-heading { margin-bottom: 14px; }
-  .access-card :deep(.el-form-item) { margin-bottom: 12px; }
-  .form-options { margin-bottom: 14px; }
+@media (max-width: 360px) {
+  .entry-card {
+    padding: 18px 18px 16px;
+  }
+  .entry-tabs button {
+    font-size: 16px;
+    gap: 6px;
+  }
+  .entry-features {
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: 14px;
+    row-gap: 10px;
+    padding-bottom: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-atmosphere {
+    transform: none !important;
+  }
+  .flow-stream,
+  .entry-motes,
+  .entry-primary::after {
+    display: none;
+  }
+  .entry-page *,
+  .entry-page *::before,
+  .entry-page *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 </style>
-

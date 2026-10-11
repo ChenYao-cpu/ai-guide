@@ -50,7 +50,7 @@ const props = defineProps({
           <!-- 内容 -->
           <template v-if="props.role === 'streamer'">
             <MdPreview
-              style="background-color: aquamarine"
+              style="background-color: var(--glass)"
               editorId="preview-SalesDoc"
               :modelValue="props.message"
             />
@@ -70,7 +70,7 @@ const props = defineProps({
 }
 
 .message-content {
-  background-color: aquamarine;
+  background-color: var(--glass);
   border-radius: 20px;
   padding: 15px;
   width: 600px; // 聊天信息的宽度

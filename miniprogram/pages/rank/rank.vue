@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    
+
     <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
 
     <view class="nav">
@@ -47,7 +47,7 @@
             <text>{{ liked[detailSpot.spot_id]?'已收藏':'收藏' }}</text>
           </view>
           <view class="dpl-btn-star" @tap="toggleLike(detailSpot.spot_id)">
-            <text>{{ liked[detailSpot.spot_id]?'★ 已收藏':'☆ 收藏景点' }}</text>
+            <text>{{ liked[detailSpot.spot_id]?' 已收藏':' 收藏景点' }}</text>
           </view>
         </view>
       </view>
@@ -82,28 +82,28 @@ export default {
 </script>
 
 <style scoped>
-.page{min-height:100vh;background-color:#f2f5fa;position:relative;overflow:hidden}
-.ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mt{position:absolute;left:0;right:0;background:#172033;border-radius:55% 75% 0 0}.ink-mt-1{bottom:20%;height:220rpx;opacity:.04;transform:scaleX(1.3)}.ink-mt-2{bottom:25%;height:160rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
+.page{min-height:100vh;background-color:var(--ng-surface);position:relative;overflow:hidden}
+.ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mt{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:55% 75% 0 0}.ink-mt-1{bottom:20%;height:220rpx;opacity:.04;transform:scaleX(1.3)}.ink-mt-2{bottom:25%;height:160rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 .nav{position:relative;z-index:1;display:flex;align-items:center;padding:50rpx 24rpx 16rpx;gap:16rpx}
-.nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(59,91,255,.15);font-size:40rpx;color:#7b8599;flex-shrink:0}
-.nav-title{flex:1;font-size:34rpx;font-weight:600;color:#172033;letter-spacing:0;font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;text-align:center}
-.main{position:relative;z-index:1;padding:0 24rpx;height:calc(100vh - 130rpx);box-sizing:border-box;width:100%}.load{text-align:center;padding:80rpx;color:#7b8599}
+.nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
+.nav-title{flex:1;font-size:34rpx;font-weight:600;color:var(--ng-text);letter-spacing:0;font-family:var(--app-font-family);text-align:center}
+.main{position:relative;z-index:1;padding:0 24rpx;height:calc(100vh - 130rpx);box-sizing:border-box;width:100%}.load{text-align:center;padding:80rpx;color:var(--ng-secondary)}
 .card-grid{display:flex;flex-wrap:wrap;gap:14rpx;justify-content:space-between}
-.card{width:calc(50% - 7rpx);height:280rpx;padding:16rpx;background-color:#edf4f8;background-size:cover;background-position:center;border-radius:18rpx;box-sizing:border-box;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.card{width:calc(50% - 7rpx);height:280rpx;padding:16rpx;background-color:var(--ng-surface);background-size:cover;background-position:center;border-radius:18rpx;box-sizing:border-box;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
 .card-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 0%,rgba(0,0,0,.25) 50%,rgba(0,0,0,.65) 100%);z-index:1;border-radius:18rpx}
-.c-rank{position:absolute;top:12rpx;left:12rpx;width:44rpx;height:44rpx;border-radius:12rpx;display:flex;align-items:center;justify-content:center;font-size:22rpx;font-weight:600;color:#f6f7fa;background:rgba(255,255,255,.15);z-index:2}
-.c-rank.r1{background:linear-gradient(135deg,#3b5bff,#617bff)}
-.c-rank.r2{background:rgba(59,91,255,.7)}
-.c-rank.r3{background:rgba(116,125,145,.6)}
-.c-info{z-index:2;position:relative}.c-name{font-size:26rpx;font-weight:600;color:#ffffff;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 2rpx 6rpx rgba(0,0,0,.4)}.c-desc{font-size:20rpx;color:rgba(255,255,255,.8);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2rpx}
+.c-rank{position:absolute;top:12rpx;left:12rpx;width:44rpx;height:44rpx;border-radius:12rpx;display:flex;align-items:center;justify-content:center;font-size:22rpx;font-weight:600;color:var(--ng-text);background:var(--ng-surface);z-index:2}
+.c-rank.r1{background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18))}
+.c-rank.r2{background:rgba(99,102,241,0.18)}
+.c-rank.r3{background:rgba(99,102,241,0.12)}
+.c-info{z-index:2;position:relative}.c-name{font-size:26rpx;font-weight:600;color:var(--ng-text);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 2rpx 6rpx rgba(0,0,0,.4)}.c-desc{font-size:20rpx;color:var(--ng-text);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2rpx}
 .dp-body{padding:0 28rpx 16rpx;max-height:50vh;box-sizing:border-box}
 .dp-body .dp-hero{width:100%;box-sizing:border-box}
 .dp-body .dp-desc,.dp-body .dp-row{padding-right:0}
 
-.drawer-overlay{position:fixed;inset:0;z-index:1000}.drawer-mask{position:absolute;inset:0;background:rgba(23,32,51,.4)}.drawer-panel{position:absolute;bottom:0;left:0;right:0;max-height:75vh;background:#ffffff;border-radius:28rpx 28rpx 0 0;overflow:hidden}.dp-handle{width:56rpx;height:5rpx;border-radius:3rpx;background:rgba(89,100,123,.2);margin:14rpx auto 8rpx}.dp-hd{display:flex;justify-content:space-between;padding:8rpx 28rpx 14rpx}.dp-title{font-size:30rpx;font-weight:600;color:#172033}.dp-close{font-size:32rpx;color:#7b8599}.dp-body{padding:0 28rpx 16rpx;max-height:50vh}.dp-hero{width:100%;height:260rpx;border-radius:14rpx;margin-bottom:16rpx}.dp-desc{font-size:24rpx;color:#3f4657;line-height:1.7;display:block;margin-bottom:18rpx}.dp-row{display:flex;padding:14rpx 0;border-top:1rpx solid rgba(89,100,123,.08)}.dp-row text:first-child{font-size:22rpx;color:#7b8599;width:80rpx;flex-shrink:0}.dp-row text:last-child{font-size:22rpx;color:#172033;flex:1}
+.drawer-overlay{position:fixed;inset:0;z-index:1000}.drawer-mask{position:absolute;inset:0;background:rgba(30,41,59,0.28)}.drawer-panel{position:absolute;bottom:0;left:0;right:0;max-height:75vh;background:var(--ng-surface);border-radius:28rpx 28rpx 0 0;overflow:hidden}.dp-handle{width:56rpx;height:5rpx;border-radius:3rpx;background:rgba(99,102,241,0.12);margin:14rpx auto 8rpx}.dp-hd{display:flex;justify-content:space-between;padding:8rpx 28rpx 14rpx}.dp-title{font-size:30rpx;font-weight:600;color:var(--ng-text)}.dp-close{font-size:32rpx;color:var(--ng-secondary)}.dp-body{padding:0 28rpx 16rpx;max-height:50vh}.dp-hero{width:100%;height:260rpx;border-radius:14rpx;margin-bottom:16rpx}.dp-desc{font-size:24rpx;color:var(--ng-text);line-height:1.7;display:block;margin-bottom:18rpx}.dp-row{display:flex;padding:14rpx 0;border-top:1rpx solid var(--ng-border)}.dp-row text:first-child{font-size:22rpx;color:var(--ng-secondary);width:80rpx;flex-shrink:0}.dp-row text:last-child{font-size:22rpx;color:var(--ng-text);flex:1}
 .dp-like-bar{display:flex;gap:12rpx;padding:12rpx 28rpx 20rpx;padding-bottom:calc(20rpx + env(safe-area-inset-bottom))}
-.dpl-btn-star{flex:1;padding:18rpx;text-align:center;border-radius:14rpx;background:linear-gradient(135deg,#3b5bff,#617bff);color:#f6f7fa;font-size:26rpx;font-weight:700}
-.c-like-count{position:absolute;bottom:10rpx;right:10rpx;display:flex;align-items:center;gap:4rpx;font-size:18rpx;color:rgba(255,255,255,.7);z-index:2}.c-like-count .iconfont{font-size:22rpx}
-.c-badge{position:absolute;top:10rpx;right:10rpx;z-index:2;padding:4rpx 12rpx;border-radius:8rpx;background:linear-gradient(135deg,#3b5bff,#617bff);color:#f6f7fa;font-size:18rpx;font-weight:600}
+.dpl-btn-star{flex:1;padding:18rpx;text-align:center;border-radius:14rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:26rpx;font-weight:700}
+.c-like-count{position:absolute;bottom:10rpx;right:10rpx;display:flex;align-items:center;gap:4rpx;font-size:18rpx;color:var(--ng-text);z-index:2}.c-like-count .iconfont{font-size:22rpx}
+.c-badge{position:absolute;top:10rpx;right:10rpx;z-index:2;padding:4rpx 12rpx;border-radius:8rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:18rpx;font-weight:600}
 </style>

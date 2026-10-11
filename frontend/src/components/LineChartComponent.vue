@@ -20,7 +20,7 @@ const props = defineProps({
 })
 
 const initChart = () => {
-  const chart = echarts.init(chartRef.value)
+  const chart = echarts.init(chartRef.value, 'soft-ui')
 
   const option = {
     title: {
@@ -31,7 +31,7 @@ const initChart = () => {
       axisPointer: {
         type: 'cross',
         label: {
-          backgroundColor: '#6a7985'
+          backgroundColor: '#6366f1'
         }
       }
     },

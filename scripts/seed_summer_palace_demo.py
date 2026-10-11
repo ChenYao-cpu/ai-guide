@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -49,8 +50,8 @@ SPOTS = [
         "category": "historical",
         "tags": "历史;宫廷建筑;古建筑;政务空间",
         "location": "东宫门内西侧",
-        "latitude": 39.99932,
-        "longitude": 116.27388,
+        "latitude": 39.996511125,
+        "longitude": 116.27399545,
         "trigger_radius": 65.0,
         "visit_duration": 18,
         "best_season": "四季皆宜",
@@ -66,8 +67,8 @@ SPOTS = [
         "category": "cultural",
         "tags": "园林;彩画;古建筑;摄影;亲子",
         "location": "昆明湖北岸、万寿山南麓",
-        "latitude": 39.99940,
-        "longitude": 116.26910,
+        "latitude": 39.996653912179916,
+        "longitude": 116.26594003180881,
         "trigger_radius": 80.0,
         "visit_duration": 25,
         "best_season": "春季、秋季",
@@ -83,8 +84,8 @@ SPOTS = [
         "category": "historical",
         "tags": "地标;佛教建筑;万寿山;观景;摄影",
         "location": "万寿山前山中部",
-        "latitude": 39.99962,
-        "longitude": 116.26634,
+        "latitude": 39.9978267875,
+        "longitude": 116.26798205,
         "trigger_radius": 70.0,
         "visit_duration": 30,
         "best_season": "春季、秋季",
@@ -100,8 +101,8 @@ SPOTS = [
         "category": "natural",
         "tags": "湖景;自然;园林;摄影;休闲;亲子",
         "location": "颐和园中南部",
-        "latitude": 39.99246,
-        "longitude": 116.26888,
+        "latitude": 39.9954065,
+        "longitude": 116.27336795,
         "trigger_radius": 120.0,
         "visit_duration": 35,
         "best_season": "春季、秋季",
@@ -117,8 +118,8 @@ SPOTS = [
         "category": "cultural",
         "tags": "石桥;湖景;摄影;建筑;地标",
         "location": "昆明湖东南部，连接东堤与南湖岛",
-        "latitude": 39.98640,
-        "longitude": 116.27392,
+        "latitude": 39.9894892,
+        "longitude": 116.2714667,
         "trigger_radius": 85.0,
         "visit_duration": 20,
         "best_season": "四季皆宜，傍晚适合摄影",
@@ -134,8 +135,8 @@ SPOTS = [
         "category": "cultural",
         "tags": "水街;江南风格;体验;亲子;摄影",
         "location": "万寿山后山后湖区域",
-        "latitude": 40.00599,
-        "longitude": 116.26525,
+        "latitude": 40.00083990174717,
+        "longitude": 116.26792322723945,
         "trigger_radius": 75.0,
         "visit_duration": 28,
         "best_season": "春季、夏季、秋季",
@@ -147,6 +148,12 @@ SPOTS = [
         "instruction": "tour_files/knowledge_base/summer_palace_route.md",
     },
 ]
+
+# 与已有数据库修正使用同一份可溯源的 WGS84 点位，避免重新导入退回近似坐标。
+_locations = json.loads((ROOT / "data/summer_palace_locations.json").read_text(encoding="utf-8"))["spots"]
+for _spot in SPOTS:
+    for _key in ("latitude", "longitude", "location"):
+        _spot[_key] = _locations[_spot["spot_name"]][_key]
 
 ROUTES = [
     ("皇家园林经典文化线", "history", 98, "从宫廷区进入山水园林，串联仁寿殿、长廊与佛香阁。", ["仁寿殿", "长廊", "佛香阁", "昆明湖"]),

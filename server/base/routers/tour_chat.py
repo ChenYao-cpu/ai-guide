@@ -269,8 +269,6 @@ async def visitor_create_session(
             selected_city=route_city([db.get(ScenicSpotInfo,i) for i in selected_ids])
         except ValueError as exc:
             return make_return_data(False,ResultCode.FAIL,str(exc),'')
-    if not any(p.strip() for p in visitor_preferences.split(",")):
-        return make_return_data(False, ResultCode.FAIL, "请选择游览偏好", "")
     owner_id = None
     if authorization:
         scheme, _, token = authorization.partition(' ')
@@ -279,14 +277,14 @@ async def visitor_create_session(
         owner_id = get_current_user_info(token)
     # 打包偏好和自选景点
     prefs_data = {
-        "preferences": visitor_preferences.split(",") if visitor_preferences else [],
+        "preferences": [p.strip() for p in visitor_preferences.split(",") if p.strip()],
         "spot_ids": selected_ids,
         "city": selected_city,
         "owner_user_id": owner_id,
     }
     session = await create_tour_session(
         name=name or f"游客导览_{uuid.uuid4().hex[:8]}",
-        route_id=route_id or 1,  # route_id=0 违反外键，默认用 1
+        route_id=route_id or None,  # 未选择路线时不绑定，景点已存在 visitor_preferences 中
         guide_id=guide_id,
         user_id=owner_id,  # 登录导览归属本人，匿名导览不挂到其他账号
         visitor_preferences=json.dumps(prefs_data, ensure_ascii=False),
@@ -306,13 +304,14 @@ async def begin_tour(sessionId: int):
 async def get_visitor_spots():
     """游客端获取所有可用景点（免登录）"""
     from ..modules.route_city import spot_city
+    from ..modules.route_recommender import get_spot_profile
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo, TourRoute, TourRouteSpot
 
     with Session(DB_ENGINE) as session:
         spots = session.exec(
-            select(ScenicSpotInfo).where(and_(ScenicSpotInfo.delete == False))
+            select(ScenicSpotInfo).where(and_(ScenicSpotInfo.delete == False)).order_by(ScenicSpotInfo.spot_id)
         ).all()
 
     with Session(DB_ENGINE) as session:
@@ -323,6 +322,7 @@ async def get_visitor_spots():
     for s in (spots or []):
         spot_list.append({
             "spot_id": s.spot_id,
+            "preference_profile": get_spot_profile(s),
             "route_cover_image": covers.get(s.spot_id, ""),
             "spot_name": s.spot_name,
             "city": spot_city(s),
@@ -368,189 +368,62 @@ async def set_random_durations():
     return make_return_data(True, ResultCode.SUCCESS, f"已为 {updated} 个景点设置随机游览时长", {"updated": updated})
 
 
-@router.post("/ai-chat-recommend", summary="AI对话式景点推荐（LLM驱动）")
-async def ai_chat_recommend(
-    message: str = "",
-    city: str = "",
-):
-    """游客用自然语言描述需求 → LLM 理解并推荐景点
-
-    LLM 会综合考虑：
-    1. 游览时长偏好（从消息中提取）
-    2. 兴趣偏好（历史/自然/拍照/亲子等）
-    3. 景点时长适配（总时长尽量接近期望）
-    """
+@router.post("/ai-chat-recommend", summary="自然语言个性化路线推荐")
+async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minutes: int = 120,
+                            pace: str = "standard", start_area: str = "auto"):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
-    from ..routers.llm import get_llm_res
-    from ..modules.route_recommender import (
-        parse_preferences_from_message,
-        parse_time_budget_from_message,
-        recommend_route,
-    )
-
-    if not message or not message.strip():
-        return make_return_data(False, ResultCode.FAIL, "请输入您的游览需求", "")
-
-    # 获取所有可用景点
-    with Session(DB_ENGINE) as session:
-        spots = session.exec(
-            select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)
-        ).all()
-
-    if not spots:
-        return make_return_data(False, ResultCode.FAIL, "暂无可用景点", "")
-
-    preferences = parse_preferences_from_message(message)
-    requested_budget = parse_time_budget_from_message(message) or 60
+    from ..modules.route_recommender import parse_preferences_from_message, parse_time_budget_from_message, recommend_route
     from ..modules.route_city import spot_city, normalize_city
-    known_cities={spot_city(s) for s in spots if spot_city(s)}
-    requested_city=normalize_city(city) or next((c for c in sorted(known_cities) if c in message),'')
-    algorithm_result = await recommend_route(preferences, spots, requested_budget,requested_city)
-    selected_city=algorithm_result['city']
-    spots=[s for s in spots if spot_city(s)==selected_city and selected_city]
-    if not algorithm_result['spot_ids']:
-        return make_return_data(False,ResultCode.FAIL,'该城市暂无满足时长要求的可用路线，请调整城市或时长','')
-
-    # 没有真实模型密钥时，使用可解释推荐算法完成整条演示链路。
-    if not _llm_is_configured():
-        preference_labels = {
-            "history": "历史文化",
-            "nature": "自然风光",
-            "photography": "摄影打卡",
-            "family": "亲子体验",
-            "comprehensive": "综合游览",
-        }
-        readable_preferences = "、".join(preference_labels.get(item, item) for item in preferences)
-        result = algorithm_result
-        result.update({
-            "ai_response": (
-                f"按你的 {requested_budget} 分钟时间和{readable_preferences}偏好，"
-                f"我从 {len(spots)} 个景点中精选了 {result['spot_count']} 个："
-                f"{'、'.join(result['spot_names'])}。预计游览 {result['estimated_time_minutes']} 分钟，"
-                "选择依据包括兴趣匹配、停留时长、类型多样性和景点间距离，并非把全部景点简单勾选。"
-            ),
-            "answer_mode": "local_explainable_recommendation",
-            "model": "",
-            "total_duration": result["estimated_time_minutes"],
-        })
-        return make_return_data(True, ResultCode.SUCCESS, "推荐完成", result)
-
-    # 构建景点清单给 LLM
-    spot_lines = []
-    for s in spots:
-        cat_label = {"natural": "自然风光", "historical": "历史遗迹", "cultural": "文化古迹",
-                     "modern": "现代景观", "comprehensive": "综合景点"}.get(s.category, s.category)
-        spot_lines.append(
-            f"  [{s.spot_id}] {s.spot_name} | {cat_label} | "
-            f"约{s.visit_duration or 20}分钟 | {s.description[:60] if s.description else '景区特色景点'}"
-        )
-
-    spot_catalog = "\n".join(spot_lines)
-
-    prompt = [
-        {
-            "role": "system",
-            "content": (
-                "你是一个景区智能导览系统的AI助手，帮助游客从景点列表中选择最适合的游览方案。\n\n"
-                "## 你的任务\n"
-                "1. 理解游客的自然语言需求，提取：游览时长、兴趣偏好（历史/自然/拍照/亲子/综合等）\n"
-                "2. 从景点列表中选出最合适的景点组合，确保总游览时长尽量接近但不超过游客期望时间\n"
-                "3. 先给游客一段友好、自然的回复（2-4句话），说明为什么选这些景点\n"
-                "4. 最后以JSON格式给出选中的景点ID列表\n\n"
-                "## 回复格式要求\n"
-                "你的回复必须分两部分，用 `---JSON---` 分隔：\n"
-                "第一部分：给游客看的自然语言回复（友好、热情的口吻，像导游一样）\n"
-                "第二部分：`---JSON---` 标记后的纯 JSON，格式为 {\"spot_ids\": [1,2,3], \"reason\": \"简短理由\"}\n\n"
-                "## 注意事项\n"
-                f"- 本次路线仅限{selected_city}，不得加入其他城市或列表外景点\n"
-                f"- 本次总时长预算为{requested_budget}分钟，不得超过该预算\n"
-                "- 尽量覆盖不同分类的景点，避免全选同一类\n"
-                "- 最少选2个，最多选8个景点\n"
-                "- 优先选有明确描述和分类的景点"
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"## 可用景点列表\n{spot_catalog}\n\n"
-                f"## 游客需求\n{message.strip()}\n\n"
-                f"请根据游客需求推荐合适的景点组合。"
-            ),
-        },
-    ]
-
-    try:
-        logger.info(f"[AI-Chat-Recommend] User message: {message[:100]}...")
-        response = await get_llm_res(prompt)
-        logger.info(f"[AI-Chat-Recommend] LLM response length: {len(response)}")
-    except Exception as e:
-        logger.error(f"[AI-Chat-Recommend] LLM call failed: {e}")
-        return make_return_data(False, ResultCode.FAIL, f"AI服务调用失败: {str(e)}", "")
-
-    # 解析 LLM 回复
-    ai_reply = response
-    spot_ids = []
-
-    if "---JSON---" in response:
-        parts = response.split("---JSON---", 1)
-        ai_reply = parts[0].strip()
-        json_part = parts[1].strip()
-        # 提取 JSON
-        try:
-            import re
-            json_match = re.search(r'\{[^{}]*"spot_ids"\s*:\s*\[[^\]]*\][^{}]*\}', json_part, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                spot_ids = data.get("spot_ids", [])
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"[AI-Chat-Recommend] JSON parse failed: {e}, raw: {json_part[:200]}")
-            # fallback: 用括号计数器提取
-            json_str = _extract_json_from_response(json_part)
-            try:
-                data = json.loads(json_str)
-                spot_ids = data.get("spot_ids", [])
-            except Exception:
-                spot_ids = []
-
-    # 验证 spot_ids 有效性
-    valid_ids = {s.spot_id for s in spots}
-    spot_ids = [sid for sid in spot_ids if sid in valid_ids]
-
-    # 即使模型返回过多景点，也由确定性预算规则进行最终校验，避免“全量勾选”。
-    id_to_spot = {s.spot_id: s for s in spots}
-    max_spots = min(6, max(1, requested_budget // 30))
-    filtered_ids: list[int] = []
-    running_duration = 0
-    for sid in spot_ids:
-        duration = id_to_spot[sid].visit_duration or 20
-        if len(filtered_ids) >= max_spots or running_duration + duration > requested_budget:
-            continue
-        filtered_ids.append(sid)
-        running_duration += duration
-    if not filtered_ids:
-        filtered_ids = algorithm_result["spot_ids"]
-    spot_ids = filtered_ids
-
-    # 计算总时长
-    total_duration = sum(id_to_spot[sid].visit_duration or 20 for sid in spot_ids)
-    spot_names = [id_to_spot[sid].spot_name for sid in spot_ids]
-
-    logger.info(f"[AI-Chat-Recommend] → {len(spot_ids)} spots, {total_duration}min: {spot_names}")
-
-    return make_return_data(True, ResultCode.SUCCESS, "AI推荐完成", {
-        "city": selected_city,
-        "ai_response": ai_reply,
-        "spot_ids": spot_ids,
-        "spot_names": spot_names,
-        "total_duration": total_duration,
-        "requested_time_minutes": requested_budget,
-        "excluded_spot_count": max(0, len(spots) - len(spot_ids)),
-        "spot_count": len(spot_ids),
-        "answer_mode": "llm_with_budget_guardrail",
-        "model": os.getenv("LLM_MODEL_NAME", "deepseek-flash"),
+    if not message.strip():
+        return make_return_data(False, ResultCode.FAIL, "请输入游览需求", "")
+    with Session(DB_ENGINE) as session:
+        spots = session.exec(select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)).all()
+    preferences = parse_preferences_from_message(message)
+    budget = parse_time_budget_from_message(message) or time_budget_minutes
+    if any(word in message for word in ("轻松", "慢走", "少走", "不爬", "老人", "推车")):
+        pace = "relaxed"
+    for word, area in (("东宫门", "east"), ("北宫门", "north"), ("新建宫门", "south")):
+        if word in message: start_area = area
+    known_cities = {spot_city(s) for s in spots if spot_city(s)}
+    requested_city = normalize_city(city) or next((c for c in sorted(known_cities) if c in message), "")
+    # The same engine owns both recommendation entrances. Models cannot replace
+    # its final IDs/order with a plan that ignores walking time or stairs.
+    result = await recommend_route(preferences, spots, budget, requested_city, pace, start_area)
+    if not result["spot_ids"]:
+        return make_return_data(False, ResultCode.FAIL, "当前时长下暂无匹配路线，请增加时长或调整偏好、出发区域", "")
+    reasons = "；".join(f"{d['spot_name']}：{d['reason']}" for d in result["score_details"][:3])
+    result.update({
+        "ai_response": f"{result['recommendation_explanation']}\n{result['start_label']}，按顺序游览：{' → '.join(result['spot_names'])}。\n{reasons}。",
+        "answer_mode": "local_explainable_recommendation",
+        "model": "",
+        "total_duration": result["estimated_time_minutes"],
     })
+    # Preserve configured model support for wording; verified IDs, order and
+    # budget remain owned by the planner. Unavailable models fall back locally.
+    if _llm_is_configured():
+        import asyncio
+        from ..routers.llm import get_llm_res
+        from ..modules.route_recommender import verified_model_summary
+        prompt = [{"role": "system", "content": (
+            "仅用给定行程和推荐理由写一段简短中文说明，不改变景点、顺序或时间，不添加天气、开放、票务等信息。"
+            "只输出JSON：{\"spot_ids\":原列表,\"estimated_time_minutes\":原值,\"summary\":\"不超过150字的说明\"}。"
+        )}, {"role": "user", "content": json.dumps({
+            "spot_ids": result["spot_ids"], "estimated_time_minutes": result["estimated_time_minutes"],
+            "reasons": result["score_details"], "preferences": preferences,
+        }, ensure_ascii=False)}]
+        try:
+            response = await asyncio.wait_for(get_llm_res(prompt), timeout=12)
+            summary = verified_model_summary(result, json.loads(_extract_json_from_response(response)),
+                                             [s.spot_name for s in spots])
+            if summary:
+                result["ai_response"] = summary + "\n" + result["ai_response"]
+                result["answer_mode"] = "llm_with_budget_guardrail"
+                result["model"] = os.getenv("LLM_MODEL_NAME", "")
+        except Exception as error:
+            logger.warning(f"Recommendation explanation fallback: {type(error).__name__}")
+    return make_return_data(True, ResultCode.SUCCESS, "推荐完成", result)
 
 
 @router.get("/routes", summary="获取游览路线列表（游客公开接口）")
@@ -1035,6 +908,54 @@ async def analyze_tour_session(sessionId: int):
         return make_return_data(True, ResultCode.SUCCESS, "AI服务暂不可用，已完成会话规则分析", result)
 
 
+@router.post("/quiz/{sessionId}", summary="生成导览知识问答")
+async def generate_tour_quiz(sessionId: int):
+    """根据导览对话记录生成2-3道知识问答题"""
+    from ..database.tour_session_db import get_conversation_history
+    from ..routers.llm import get_llm_res
+
+    conversation_list = await get_conversation_history(sessionId)
+    if not conversation_list or len(conversation_list) < 2:
+        return make_return_data(False, ResultCode.FAIL, "对话记录不足，无法生成问答", "")
+
+    dialog_text = ""
+    for msg in conversation_list[-30:]:
+        role = "游客" if msg.get("role") == "user" else "导游"
+        dialog_text += f"[{role}]: {msg.get('message', '')}\n"
+
+    quiz_prompt = [
+        {"role": "system", "content": (
+            "你是一个景区知识问答出题专家。根据游客与AI导游的对话记录，生成2道趣味知识问答题。\n"
+            "题目应基于对话中导游讲解的知识点，考察游客是否掌握了这些内容。\n"
+            "回复格式为JSON：\n"
+            '{\n'
+            '  "questions": [\n'
+            '    {\n'
+            '      "question": "问题文本",\n'
+            '      "options": ["选项A", "选项B", "选项C", "选项D"],\n'
+            '      "answer": 0,\n'
+            '      "explanation": "正确答案的简要解释"\n'
+            '    }\n'
+            '  ]\n'
+            '}\n'
+            "answer是正确选项的索引（0-3）。只输出JSON，不要其他内容。"
+        )},
+        {"role": "user", "content": f"对话记录：\n{dialog_text}\n\n请生成2道知识问答题。"},
+    ]
+
+    try:
+        response = await get_llm_res(quiz_prompt, json_mode=True)
+        import json
+        result = extract_json_object(response)
+        questions = result.get("questions", [])
+        if not questions:
+            return make_return_data(False, ResultCode.FAIL, "未能生成问答题", "")
+        return make_return_data(True, ResultCode.SUCCESS, "问答生成成功", {"questions": questions})
+    except Exception as e:
+        logger.error(f"[Quiz] Failed: {type(e).__name__}: {e}")
+        return make_return_data(False, ResultCode.FAIL, "问答生成失败", "")
+
+
 @router.get("/detail/{sessionId}", summary="获取导览会话详情")
 async def get_session_detail(sessionId: int):
     """获取会话完整信息：对话记录+元数据+情感分析"""
@@ -1290,7 +1211,7 @@ async def get_spots_with_coords():
 
     with Session(DB_ENGINE) as session:
         spots = session.exec(
-            select(ScenicSpotInfo).where(and_(ScenicSpotInfo.delete == False))
+            select(ScenicSpotInfo).where(and_(ScenicSpotInfo.delete == False)).order_by(ScenicSpotInfo.spot_id)
         ).all()
 
     spot_list = []

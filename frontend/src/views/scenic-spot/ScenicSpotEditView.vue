@@ -279,7 +279,7 @@ onMounted(async () => {
 
           <div class="bottom-gen-btn">
             <el-button type="success" :loading="aiGenerating" @click="handleAiGenerate">
-              🤖 AI 生成
+               AI 生成
             </el-button>
             <span class="gen-hint">根据"游览说明"文件夹中的 .md 文档自动填充景点描述和历史详情</span>
           </div>
@@ -340,7 +340,7 @@ onMounted(async () => {
 
   .gen-hint {
     font-size: 11px;
-    color: #9ca3af;
+    color: var(--text-muted);
   }
 }
 </style>

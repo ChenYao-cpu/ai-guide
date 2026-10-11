@@ -21,7 +21,7 @@
       <el-tab-pane label="对话记录" name="chat">
         <div class="chat-log">
           <div v-for="(msg, i) in detail?.conversation" :key="i" class="chat-item" :class="msg.role === 'user' ? 'user' : 'guide'">
-            <div class="chat-role">{{ msg.role === 'user' ? '🧑 游客' : '🤖 AI导游' }}</div>
+            <div class="chat-role">{{ msg.role === 'user' ? ' 游客' : ' AI导游' }}</div>
             <div class="chat-bubble">{{ msg.message }}</div>
             <div class="chat-time">{{ msg.send_time }}</div>
           </div>
@@ -35,10 +35,10 @@
           <!-- 分析操作按钮 -->
           <div class="analysis-actions">
             <el-button type="primary" :loading="analyzing" @click="runQuestionAnalysis">
-              🔍 逐题深度分析
+               逐题深度分析
             </el-button>
             <el-button type="success" :loading="reportGenerating" @click="runReportGeneration">
-              📊 生成综合报告
+               生成综合报告
             </el-button>
             <el-button v-if="questionAnalysis || sessionReport" size="small" @click="clearAnalysis">
               清空结果
@@ -79,7 +79,7 @@
                   <p>{{ questionAnalysis.summary_stats.overall_assessment }}</p>
                 </div>
                 <div class="knowledge-gaps-card" v-if="questionAnalysis.summary_stats?.knowledge_gaps?.length">
-                  <h4>⚠️ 知识盲区</h4>
+                  <h4> 知识盲区</h4>
                   <div class="gap-tags">
                     <el-tag v-for="(gap, i) in questionAnalysis.summary_stats.knowledge_gaps" :key="i" type="danger" effect="plain" size="small">{{ gap }}</el-tag>
                   </div>
@@ -125,12 +125,12 @@
             <div class="report-header">
               <el-tag size="large" :type="reportScoreType">{{ sessionReport.report?.quality_level || '未知' }}</el-tag>
               <span class="report-score">综合评分: {{ sessionReport.report?.session_quality_score ?? '-' }} / 100</span>
-              <el-button size="small" type="primary" plain @click="copyReport">📋 复制报告</el-button>
+              <el-button size="small" type="primary" plain @click="copyReport"> 复制报告</el-button>
             </div>
 
             <!-- 游客画像 -->
             <div class="report-section" v-if="sessionReport.report?.visitor_profile">
-              <h4>👤 游客画像</h4>
+              <h4> 游客画像</h4>
               <div class="visitor-profile-cards">
                 <div class="profile-card">
                   <span class="profile-label">兴趣标签</span>
@@ -157,13 +157,13 @@
             <el-row :gutter="16" v-if="sessionReport.report">
               <el-col :span="12">
                 <div class="report-section">
-                  <h4>✨ 服务亮点</h4>
+                  <h4> 服务亮点</h4>
                   <ul><li v-for="(h, i) in (sessionReport.report.service_highlights || [])" :key="i">{{ h }}</li></ul>
                 </div>
               </el-col>
               <el-col :span="12">
                 <div class="report-section">
-                  <h4>🔍 知识盲区</h4>
+                  <h4> 知识盲区</h4>
                   <ul><li v-for="(g, i) in (sessionReport.report.knowledge_gaps || [])" :key="i">{{ g }}</li></ul>
                 </div>
               </el-col>
@@ -171,7 +171,7 @@
 
             <!-- 改进建议 -->
             <div class="report-section" v-if="sessionReport.report.improvement_suggestions?.length">
-              <h4>💡 改进建议</h4>
+              <h4> 改进建议</h4>
               <div v-for="(sug, i) in sessionReport.report.improvement_suggestions" :key="i" class="suggestion-item">
                 <el-tag :type="sug.priority === '高' ? 'danger' : sug.priority === '中' ? 'warning' : 'info'" size="small" effect="dark">
                   {{ sug.priority }}优先级
@@ -183,7 +183,7 @@
 
             <!-- 总结 -->
             <div class="report-section summary-box" v-if="sessionReport.report?.executive_summary">
-              <h4>📝 总结</h4>
+              <h4> 总结</h4>
               <p>{{ sessionReport.report.executive_summary }}</p>
             </div>
           </div>
@@ -210,32 +210,32 @@
             </div>
             <!-- 知识库盲区 -->
             <div class="analysis-section" v-if="issueResult.knowledge_gaps?.length">
-              <h4>🔍 知识库盲区</h4>
+              <h4> 知识库盲区</h4>
               <ul><li v-for="(g,i) in issueResult.knowledge_gaps" :key="i">{{ g }}</li></ul>
             </div>
             <!-- 游客常见困惑 -->
             <div class="analysis-section" v-if="issueResult.common_confusions?.length">
-              <h4>❓ 游客常见困惑</h4>
+              <h4> 游客常见困惑</h4>
               <ul><li v-for="(c,i) in issueResult.common_confusions" :key="i">{{ c }}</li></ul>
             </div>
             <!-- 服务缺口 -->
             <div class="analysis-section" v-if="issueResult.service_gaps?.length">
-              <h4>🚧 服务缺口</h4>
+              <h4> 服务缺口</h4>
               <ul><li v-for="(g,i) in issueResult.service_gaps" :key="i">{{ g }}</li></ul>
             </div>
             <!-- 改进措施 -->
             <div class="analysis-section" v-if="issueResult.improvement_actions?.length">
-              <h4>💡 改进措施</h4>
+              <h4> 改进措施</h4>
               <ol><li v-for="(a,i) in issueResult.improvement_actions" :key="i">{{ a }}</li></ol>
             </div>
             <!-- 热门话题 -->
             <div class="analysis-section" v-if="issueResult.hot_topics?.length">
-              <h4>🔥 热门话题</h4>
+              <h4> 热门话题</h4>
               <div class="gap-tags"><el-tag v-for="(t,i) in issueResult.hot_topics" :key="i" type="success" effect="plain" size="small">{{ t }}</el-tag></div>
             </div>
             <!-- 总结 -->
             <div class="analysis-section summary-box" v-if="issueResult.summary">
-              <h4>📝 总结</h4>
+              <h4> 总结</h4>
               <p>{{ issueResult.summary }}</p>
             </div>
           </div>
@@ -289,7 +289,7 @@ const typeDistributionData = computed(() => {
   return Object.entries(dist).map(([name, value]) => ({ name, value: value as number }))
 })
 
-const pieColors = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#b37feb', '#36cfc9', '#ff85c0', '#909399']
+const pieColors = ['#4f46e5', '#818cf8', '#6366f1', '#10b981', '#ec4899', '#f59e0b', '#d15d1a', '#64748b']
 
 // 报告评分类型
 const reportScoreType = computed(() => {
@@ -306,9 +306,9 @@ function questionTypeTag(type: string): string {
 }
 
 function qualityColor(q: string): string {
-  if (q === '深度') return '#67c23a'
-  if (q === '中等') return '#409eff'
-  return '#909399'
+  if (q === '深度') return 'var(--success)'
+  if (q === '中等') return 'var(--champagne-text)'
+  return 'var(--text-muted)'
 }
 
 function engagementType(level: string): string {
@@ -386,17 +386,17 @@ function copyReport() {
   const text = `【${report.title || '会话分析报告'}】
 综合评分: ${report.session_quality_score}/100 (${report.quality_level})
 
-📝 总结: ${report.executive_summary}
+ 总结: ${report.executive_summary}
 
-👤 游客画像:
+ 游客画像:
 - 兴趣: ${report.visitor_profile?.interests?.join('、') || '-'}
 - 参与度: ${report.visitor_profile?.engagement_level || '-'}
 
-✨ 服务亮点: ${report.service_highlights?.join('；') || '-'}
+ 服务亮点: ${report.service_highlights?.join('；') || '-'}
 
-🔍 知识盲区: ${report.knowledge_gaps?.join('；') || '-'}
+ 知识盲区: ${report.knowledge_gaps?.join('；') || '-'}
 
-💡 改进建议: ${report.improvement_suggestions?.map(s => `【${s.priority}】${s.area}: ${s.suggestion}`).join('\n') || '-'}`
+ 改进建议: ${report.improvement_suggestions?.map(s => `【${s.priority}】${s.area}: ${s.suggestion}`).join('\n') || '-'}`
   navigator.clipboard.writeText(text).then(() => ElMessage.success('报告已复制'))
 }
 
@@ -427,39 +427,39 @@ async function runIssueAnalysis() {
 .detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .detail-header h3 { margin: 0; font-size: 20px; }
 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-.stat-card { padding: 16px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb; text-align: center; }
-.stat-num { display: block; font-size: 28px; font-weight: 800; color: #1e40af; }
-.stat-label { font-size: 12px; color: #6b7280; }
+.stat-card { padding: 16px; background: var(--glass); border-radius: 10px; border: 1px solid var(--glass-line); text-align: center; }
+.stat-num { display: block; font-size: 28px; font-weight: 800; color: var(--champagne-text); }
+.stat-label { font-size: 12px; color: var(--text-secondary); }
 
 /* 对话记录 */
 .chat-log { max-height: 60vh; overflow-y: auto; padding: 8px; }
 .chat-item { margin-bottom: 16px; }
-.chat-item.user .chat-bubble { background: #eff6ff; border-color: #93c5fd; }
-.chat-item.guide .chat-bubble { background: #f0fdf4; border-color: #86efac; }
-.chat-role { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+.chat-item.user .chat-bubble { background: var(--glass); border-color: var(--glass-line); }
+.chat-item.guide .chat-bubble { background: var(--glass); border-color: var(--glass-line); }
+.chat-role { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
 .chat-bubble { padding: 10px 14px; border-radius: 10px; border: 1px solid; font-size: 13px; line-height: 1.6; }
-.chat-time { font-size: 10px; color: #9ca3af; text-align: right; margin-top: 2px; }
+.chat-time { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 2px; }
 
 /* 分析面板 */
 .analysis-panel { min-height: 300px; }
 .analysis-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
 .analysis-result { display: flex; flex-direction: column; gap: 16px; }
-.issue-analysis-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border: 1px solid #d9e7ee; border-radius: 8px; background: #f4f9fb; color: #718096; font-size: 12px; }
-.analysis-source { display: inline-flex; align-items: center; color: #286478; font-weight: 650; }
-.analysis-source i { width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #2dbb9a; box-shadow: 0 0 0 3px rgba(45, 187, 154, 0.13); }
+.issue-analysis-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border: 1px solid var(--glass-line); border-radius: 8px; background: var(--glass); color: var(--text-muted); font-size: 12px; }
+.analysis-source { display: inline-flex; align-items: center; color: var(--champagne-text); font-weight: 650; }
+.analysis-source i { width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--glass); box-shadow: var(--glass-shadow); }
 
 /* 汇总统计 */
 .summary-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.mini-stat { padding: 14px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center; }
-.mini-num { display: block; font-size: 24px; font-weight: 700; color: #1e40af; }
-.mini-label { font-size: 12px; color: #6b7280; }
+.mini-stat { padding: 14px; background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); text-align: center; }
+.mini-num { display: block; font-size: 24px; font-weight: 700; color: var(--champagne-text); }
+.mini-label { font-size: 12px; color: var(--text-secondary); }
 
 /* 图表行 */
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0; }
-.chart-half { background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; padding: 12px; }
+.chart-half { background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); padding: 12px; }
 
-.overall-assessment h4, .knowledge-gaps-card h4 { margin: 0 0 8px; font-size: 14px; color: #303133; }
-.overall-assessment p { font-size: 13px; color: #4b5563; line-height: 1.6; }
+.overall-assessment h4, .knowledge-gaps-card h4 { margin: 0 0 8px; font-size: 14px; color: var(--text); }
+.overall-assessment p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
 .gap-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .question-table-section { margin-top: 8px; }
@@ -467,31 +467,31 @@ async function runIssueAnalysis() {
 
 /* 报告结果 */
 .report-result { display: flex; flex-direction: column; gap: 16px; }
-.report-header { display: flex; align-items: center; gap: 16px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
-.report-score { font-size: 18px; font-weight: 700; color: #1e40af; }
+.report-header { display: flex; align-items: center; gap: 16px; padding: 12px; background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); }
+.report-score { font-size: 18px; font-weight: 700; color: var(--champagne-text); }
 
-.report-section { padding: 14px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
-.report-section h4 { margin: 0 0 8px; font-size: 14px; color: #303133; }
-.report-section p, .report-section li { font-size: 13px; color: #4b5563; line-height: 1.7; margin: 2px 0; }
+.report-section { padding: 14px; background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); }
+.report-section h4 { margin: 0 0 8px; font-size: 14px; color: var(--text); }
+.report-section p, .report-section li { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin: 2px 0; }
 .report-section ul { padding-left: 18px; }
 
 .visitor-profile-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.profile-card { padding: 10px; background: #fff; border-radius: 6px; border: 1px solid #e5e7eb; }
-.profile-label { display: block; font-size: 11px; color: #909399; margin-bottom: 6px; }
+.profile-card { padding: 10px; background: var(--glass); border-radius: 6px; border: 1px solid var(--glass-line); }
+.profile-label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
 
 .tag-group { display: flex; flex-wrap: wrap; gap: 4px; }
 
 .suggestion-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
-.suggestion-item + .suggestion-item { border-top: 1px dashed #e5e7eb; }
-.sug-area { font-size: 12px; color: #6b7280; white-space: nowrap; }
-.sug-text { font-size: 13px; color: #303133; line-height: 1.5; }
+.suggestion-item + .suggestion-item { border-top: 1px dashed var(--glass-line); }
+.sug-area { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.sug-text { font-size: 13px; color: var(--text); line-height: 1.5; }
 
-.summary-box { background: #f0f9ff; border-color: #bae6fd; }
-.summary-box h4 { color: #0369a1; }
+.summary-box { background: var(--glass); border-color: var(--glass-line); }
+.summary-box h4 { color: var(--champagne-text); }
 
 /* 旧样式保持兼容 */
-.analysis-section { padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
-.analysis-section h4 { margin: 0 0 6px; font-size: 14px; color: #111827; }
-.analysis-section p, .analysis-section li { font-size: 13px; color: #4b5563; line-height: 1.6; margin: 2px 0; }
+.analysis-section { padding: 12px; background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); }
+.analysis-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--text); }
+.analysis-section p, .analysis-section li { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 2px 0; }
 .analysis-section ol, .analysis-section ul { padding-left: 20px; }
 </style>

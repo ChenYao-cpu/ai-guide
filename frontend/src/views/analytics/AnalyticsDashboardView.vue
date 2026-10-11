@@ -5,13 +5,13 @@
       <el-col :span="4" v-for="card in statCards" :key="card.title">
         <div class="stat-card" :style="{ backgroundColor: card.bgColor }">
           <div class="stat-card-body">
-            <span class="stat-icon">{{ card.icon }}</span>
+
             <div>
               <div class="stat-value" :style="{ color: card.color }">{{ card.value }}</div>
               <div class="stat-title">{{ card.title }}</div>
             </div>
           </div>
-          <div class="stat-sub" v-if="card.sub">{{ card.sub }}</div>
+
         </div>
       </el-col>
     </el-row>
@@ -20,13 +20,13 @@
     <el-row :gutter="16" class="chart-row">
       <el-col :span="14">
         <el-card shadow="never" class="chart-card">
-          <template #header><span class="card-title">📈 近30天服务趋势</span></template>
+          <template #header><span class="card-title"> 近30天服务趋势</span></template>
           <div ref="trendChartRef" style="height: 360px" />
         </el-card>
       </el-col>
       <el-col :span="10">
         <el-card shadow="never" class="chart-card">
-          <template #header><span class="card-title">🏔️ 热门景点TOP10</span></template>
+          <template #header><span class="card-title"> 热门景点TOP10</span></template>
           <div ref="spotChartRef" style="height: 360px" />
         </el-card>
       </el-col>
@@ -36,11 +36,11 @@
     <el-row :gutter="16" class="chart-row">
       <el-col :span="10">
         <el-card shadow="never" class="chart-card">
-          <template #header><span class="card-title">💬 问题类型分布</span></template>
+          <template #header><span class="card-title"> 问题类型分布</span></template>
           <PieChartComponent
             v-if="questionTypeData.length"
             :data="questionTypeData"
-            :colors="['#409eff','#67c23a','#e6a23c','#f56c6c','#b37feb','#36cfc9','#ff85c0']"
+            :colors="['#4f46e5','#818cf8','#6366f1','#10b981','#ec4899','#f59e0b','#d15d1a']"
             height="340px"
           />
           <el-empty v-else description="暂无数据" :image-size="80" />
@@ -48,7 +48,7 @@
       </el-col>
       <el-col :span="14">
         <el-card shadow="never" class="chart-card">
-          <template #header><span class="card-title">🔥 游客活跃时段分布（近7天）</span></template>
+          <template #header><span class="card-title"> 游客活跃时段分布（近7天）</span></template>
           <HeatmapComponent
             v-if="hourlyData.length"
             :data="hourlyData"
@@ -65,7 +65,7 @@
         <el-card shadow="never" class="chart-card">
           <template #header>
             <div class="card-header-row">
-              <span class="card-title">🔍 知识盲区分析</span>
+              <span class="card-title"> 知识盲区分析</span>
               <el-button size="small" type="primary" :loading="gapsLoading" @click="loadKnowledgeGaps">刷新</el-button>
             </div>
           </template>
@@ -94,7 +94,7 @@
       </el-col>
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
-          <template #header><span class="card-title">😊 游客情感分布</span></template>
+          <template #header><span class="card-title"> 游客情感分布</span></template>
           <div v-if="emotionStats" class="emotion-section">
             <div class="emotion-bars">
               <div class="emotion-bar-item">
@@ -126,7 +126,7 @@
         <el-card shadow="never" class="chart-card">
           <template #header>
             <div class="card-header-row">
-              <span class="card-title">📊 AI 分析报告</span>
+              <span class="card-title"> AI 分析报告</span>
               <div class="report-actions">
                 <el-button size="small" type="primary" :loading="reportLoading === 'daily'" @click="generateReport('daily')">
                   生成日报
@@ -149,7 +149,7 @@
               <div class="key-metrics">
                 <div v-for="(m, i) in currentReport.report.key_metrics" :key="i" class="metric-item">
                   <span class="metric-name">{{ m.name }}</span>
-                  <span class="metric-value" :style="{ color: m.trend === 'up' ? '#67c23a' : m.trend === 'down' ? '#f56c6c' : '#409eff' }">
+                  <span class="metric-value" :style="{ color: m.trend === 'up' ? '#059669' : m.trend === 'down' ? '#e11d48' : '#818cf8' }">
                     {{ m.value }} {{ m.trend === 'up' ? '↑' : m.trend === 'down' ? '↓' : '→' }}
                   </span>
                   <span class="metric-comment">{{ m.comment }}</span>
@@ -207,12 +207,12 @@ const statCards = computed(() => {
   const stats = comprehensive.value?.service_stats
   const emotion = comprehensive.value?.emotion_stats
   return [
-    { title: '总交互数', value: emotion?.total || 0, icon: '💬', color: '#409eff', bgColor: '#ecf5ff', sub: '全局交互次数' },
-    { title: '好评率', value: (emotion?.positive_rate || 0) + '%', icon: '😊', color: '#67c23a', bgColor: '#f0f9eb', sub: '正面情绪占比' },
-    { title: '今日提问', value: stats?.today_questions || 0, icon: '❓', color: '#e6a23c', bgColor: '#fdf6ec', sub: '今日游客提问' },
-    { title: '负面率', value: (emotion?.negative_rate || 0) + '%', icon: '⚠️', color: '#f56c6c', bgColor: '#fef0f0', sub: '负面情绪占比' },
-    { title: '本周服务', value: stats?.week_sessions || 0, icon: '👥', color: '#b37feb', bgColor: '#f5f0ff', sub: '本周会话数' },
-    { title: '知识覆盖', value: knowledgeGaps.value ? Math.max(0, 100 - knowledgeGaps.value.uncertain_answers_count * 2) + '%' : 'N/A', icon: '📚', color: '#36cfc9', bgColor: '#f0fdfa', sub: '知识响应率' },
+    { title: '总交互数', value: emotion?.total || 0, color: '#818cf8', bgColor: 'rgba(99,102,241,0.08)', sub: '全局交互次数' },
+    { title: '好评率', value: (emotion?.positive_rate || 0) + '%', color: '#059669', bgColor: 'rgba(99,102,241,0.08)', sub: '正面情绪占比' },
+    { title: '今日提问', value: stats?.today_questions || 0, color: '#4f46e5', bgColor: 'rgba(99,102,241,0.08)', sub: '今日游客提问' },
+    { title: '负面率', value: (emotion?.negative_rate || 0) + '%', color: '#e11d48', bgColor: 'rgba(99,102,241,0.08)', sub: '负面情绪占比' },
+    { title: '本周服务', value: stats?.week_sessions || 0, color: '#6366f1', bgColor: 'rgba(99,102,241,0.08)', sub: '本周会话数' },
+    { title: '知识覆盖', value: knowledgeGaps.value ? Math.max(0, 100 - knowledgeGaps.value.uncertain_answers_count * 2) + '%' : 'N/A', color: '#818cf8', bgColor: 'rgba(99,102,241,0.08)', sub: '知识响应率' },
   ]
 })
 
@@ -234,7 +234,7 @@ const hourlyData = computed(() => comprehensive.value?.hourly_distribution || []
 function initTrendChart() {
   if (!trendChartRef.value || !comprehensive.value?.daily_trend) return
   if (trendChart) trendChart.dispose()
-  trendChart = echarts.init(trendChartRef.value)
+  trendChart = echarts.init(trendChartRef.value, 'soft-ui')
 
   const trend = comprehensive.value.daily_trend
   const option: echarts.EChartsOption = {
@@ -259,7 +259,7 @@ function initTrendChart() {
 function initSpotChart() {
   if (!spotChartRef.value || !comprehensive.value?.spot_ranking) return
   if (spotChart) spotChart.dispose()
-  spotChart = echarts.init(spotChartRef.value)
+  spotChart = echarts.init(spotChartRef.value, 'soft-ui')
 
   const spots = comprehensive.value.spot_ranking.slice(0, 10).reverse()
   const option: echarts.EChartsOption = {
@@ -273,7 +273,7 @@ function initSpotChart() {
         value: s.session_count,
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#409eff' }, { offset: 1, color: '#67c23a' },
+            { offset: 0, color: '#818cf8' }, { offset: 1, color: '#4f46e5' },
           ]),
           borderRadius: [0, 6, 6, 0],
         },
@@ -339,8 +339,8 @@ onMounted(async () => {
 .stat-card-body { display: flex; align-items: center; gap: 12px; }
 .stat-icon { font-size: 28px; }
 .stat-value { font-size: 24px; font-weight: 700; }
-.stat-title { font-size: 12px; color: #909399; }
-.stat-sub { margin-top: 4px; font-size: 11px; color: #c0c4cc; }
+.stat-title { font-size: 12px; color: var(--text-muted); }
+.stat-sub { margin-top: 4px; font-size: 11px; color: var(--text-muted); }
 
 // 图表卡片
 .chart-row { margin-bottom: 16px; }
@@ -350,10 +350,10 @@ onMounted(async () => {
 
 // 知识盲区
 .gap-summary { margin-bottom: 12px; }
-.gap-count { font-size: 18px; font-weight: 700; color: #f56c6c; }
-.gap-total { font-size: 12px; color: #909399; }
-.gap-sample-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
-.gap-text { font-size: 12px; color: #606266; line-height: 1.5; }
+.gap-count { font-size: 18px; font-weight: 700; color: var(--danger); }
+.gap-total { font-size: 12px; color: var(--text-muted); }
+.gap-sample-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--glass-line); }
+.gap-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 .gap-entities { margin-top: 12px; }
 .gap-entities h4 { font-size: 13px; margin: 0 0 6px; }
 .entity-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -361,28 +361,28 @@ onMounted(async () => {
 // 情感分布
 .emotion-bars { display: flex; flex-direction: column; gap: 14px; }
 .emotion-bar-item { display: flex; align-items: center; gap: 10px; }
-.emotion-label { width: 40px; font-size: 12px; color: #606266; }
-.emotion-track { flex: 1; height: 24px; background: #f0f2f5; border-radius: 6px; overflow: hidden; }
-.emotion-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #fff; transition: width .6s ease; }
-.emotion-fill.positive { background: #67c23a; }
-.emotion-fill.neutral { background: #e6a23c; }
-.emotion-fill.negative { background: #f56c6c; }
-.emotion-count { width: 35px; font-size: 12px; color: #909399; text-align: right; }
-.emotion-total { margin-top: 10px; font-size: 12px; color: #909399; text-align: center; }
+.emotion-label { width: 40px; font-size: 12px; color: var(--text-secondary); }
+.emotion-track { flex: 1; height: 24px; background: var(--glass); border-radius: 6px; overflow: hidden; }
+.emotion-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text); transition: width .6s ease; }
+.emotion-fill.positive { background: var(--success); }
+.emotion-fill.neutral { background: var(--champagne); }
+.emotion-fill.negative { background: var(--danger); }
+.emotion-count { width: 35px; font-size: 12px; color: var(--text-muted); text-align: right; }
+.emotion-total { margin-top: 10px; font-size: 12px; color: var(--text-muted); text-align: center; }
 
 // 报告区
 .report-actions { display: flex; gap: 8px; }
 .report-display { display: flex; flex-direction: column; gap: 12px; }
 .report-meta { display: flex; align-items: center; gap: 16px; }
-.report-period { font-size: 13px; color: #606266; }
-.report-time { font-size: 12px; color: #c0c4cc; margin-left: auto; }
-.report-summary { font-size: 14px; color: #303133; line-height: 1.7; padding: 12px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #409eff; }
+.report-period { font-size: 13px; color: var(--text-secondary); }
+.report-time { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.report-summary { font-size: 14px; color: var(--text); line-height: 1.7; padding: 12px; background: var(--glass); border-radius: 8px; border-left: 4px solid var(--glass-line); }
 .key-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.metric-item { padding: 10px; background: #f9fafb; border-radius: 8px; }
-.metric-name { display: block; font-size: 11px; color: #909399; }
+.metric-item { padding: 10px; background: var(--glass); border-radius: 8px; }
+.metric-name { display: block; font-size: 11px; color: var(--text-muted); }
 .metric-value { display: block; font-size: 18px; font-weight: 700; margin: 4px 0; }
-.metric-comment { display: block; font-size: 11px; color: #c0c4cc; }
+.metric-comment { display: block; font-size: 11px; color: var(--text-muted); }
 .report-recommendations h4 { margin: 0 0 8px; font-size: 14px; }
-.rec-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: #303133; }
-.rec-item + .rec-item { border-top: 1px dashed #e5e7eb; }
+.rec-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--text); }
+.rec-item + .rec-item { border-top: 1px dashed var(--glass-line); }
 </style>

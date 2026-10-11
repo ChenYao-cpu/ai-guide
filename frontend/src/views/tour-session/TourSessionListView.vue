@@ -419,9 +419,9 @@ onMounted(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #f5f7fa;
+  background: var(--glass);
   padding: 10px 0;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .page-title {
@@ -467,7 +467,7 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 16px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--glass);
   border-radius: 8px;
 }
 
@@ -479,12 +479,12 @@ onMounted(() => {
 }
 
 .info-label {
-  color: #909399;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .info-value {
-  color: #303133;
+  color: var(--text);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -501,15 +501,15 @@ onMounted(() => {
 
 .not-live-hint {
   font-size: 13px;
-  color: #c0c4cc;
+  color: var(--text-muted);
 }
 .analysis-content { display: flex; flex-direction: column; gap: 16px; }
-.analysis-section h4 { margin: 0 0 6px; font-size: 14px; color: #303133; }
-.analysis-desc { margin: 6px 0 0; font-size: 13px; color: #606266; line-height: 1.6; }
+.analysis-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--text); }
+.analysis-desc { margin: 6px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
 .tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
-.question-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: #606266; line-height: 1.8; }
-.summary-box { padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd; }
-.summary-box h4 { color: #0369a1; }
+.question-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
+.summary-box { padding: 12px; background: var(--glass); border-radius: 8px; border: 1px solid var(--glass-line); }
+.summary-box h4 { color: var(--champagne-text); }
 
 /* ======================== 删除模式 ======================== */
 
@@ -518,8 +518,8 @@ onMounted(() => {
   position: relative;
 
   &.is-selected {
-    border: 2px solid #e74c3c;
-    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.15);
+    border: 2px solid var(--glass-line);
+    box-shadow: var(--glass-shadow);
   }
 }
 
@@ -538,12 +538,12 @@ onMounted(() => {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    border: 2px solid #c0c4cc;
-    background: rgba(255, 255, 255, 0.7);
+    border: 2px solid var(--glass-line);
+    background: var(--glass);
     transition: border-color 0.2s;
 
     &:hover {
-      border-color: #e74c3c;
+      border-color: var(--glass-line);
     }
   }
 
@@ -551,14 +551,14 @@ onMounted(() => {
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #e74c3c;
+    background: var(--glass);
     display: flex;
     align-items: center;
     justify-content: center;
 
     .el-icon {
       font-size: 14px;
-      color: #fff;
+      color: var(--text);
       font-weight: 700;
     }
   }

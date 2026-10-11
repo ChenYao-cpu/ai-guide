@@ -156,7 +156,7 @@ const handleUploadProgress = (evt: UploadProgressEvent) => {
 
 .el-icon.avatar-uploader-icon {
   font-size: 28px;
-  color: #8c939d;
+  color: var(--text-muted);
   width: 178px;
   height: 178px;
   text-align: center;

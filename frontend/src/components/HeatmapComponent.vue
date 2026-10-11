@@ -13,7 +13,7 @@ const props = defineProps<{
 
 function initChart() {
   if (!chartRef.value || !props.data.length) return
-  chartInstance = echarts.init(chartRef.value)
+  chartInstance = echarts.init(chartRef.value, 'soft-ui')
 
   const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
@@ -71,7 +71,7 @@ function initChart() {
       left: 'center',
       bottom: 0,
       inRange: {
-        color: ['#f0f9ff', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1'],
+        color: ['#eef2ff', '#e0e7ff', '#c7d2fe', '#a5b4fc', '#818cf8', '#6366f1', '#4338ca'],
       },
       textStyle: { fontSize: 11 },
     },

@@ -57,6 +57,6 @@ export default {
 .guide3d-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .guide3d-img{width:80%;height:80%;border-radius:24rpx;animation:breathe 4s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
-.guide3d-img-df{width:200rpx;height:200rpx;border-radius:50%;background:linear-gradient(135deg,#f3f5ff,#dfe3ff);display:flex;align-items:center;justify-content:center;font-size:36rpx;color:#747d91;font-weight:900}
-.guide3d-loading{position:absolute;z-index:5;padding:12rpx 24rpx;border-radius:12rpx;background:rgba(0,0,0,.4);color:#fff;font-size:24rpx}
+.guide3d-img-df{width:200rpx;height:200rpx;border-radius:50%;background:linear-gradient(135deg,var(--ng-surface),var(--ng-surface));display:flex;align-items:center;justify-content:center;font-size:36rpx;color:var(--ng-secondary);font-weight:900}
+.guide3d-loading{position:absolute;z-index:5;padding:12rpx 24rpx;border-radius:12rpx;background:rgba(0,0,0,.4);color:var(--ng-text);font-size:24rpx}
 </style>

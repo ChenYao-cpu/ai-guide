@@ -2,21 +2,21 @@
   <div class="qr-float">
     <!-- 悬浮按钮 -->
     <button class="qr-fab" @click="show = !show" :title="show ? '关闭' : '扫码体验手机版'">
-      {{ show ? '✕' : '📱' }}
+      {{ show ? '✕' : '扫码' }}
     </button>
 
     <!-- 弹出面板 -->
     <Transition name="slide-up">
       <div v-if="show" class="qr-panel">
-        <h3>📱 手机扫码体验</h3>
-        <p v-if="autoDetected" style="color:#16a34a;">✅ 已自动检测局域网地址</p>
-        <p v-else>⚠️ 请手动修改下方地址中的IP</p>
+        <h3> 手机扫码</h3>
+
+        <p v-if="!autoDetected">填写局域网地址</p>
         <el-input v-model="editUrl" size="small" placeholder="http://x.x.x.x:5173/m/home" style="margin-bottom:8px;" />
         <div class="qr-img-wrap">
           <img :src="qrUrl" alt="扫码打开" />
         </div>
         <div class="qr-url" @click="copyUrl">{{ mobileUrl }}</div>
-        <span class="qr-hint">扫码直接进入手机APP界面</span>
+
       </div>
     </Transition>
   </div>
@@ -66,11 +66,11 @@ function copyUrl() {
   height: 52px;
   border: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0284c7, #38bdf8);
-  color: #fff;
+  background: var(--glass);
+  color: var(--text);
   font-size: 22px;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35);
+  box-shadow: var(--glass-shadow);
   transition: transform 0.2s;
   display: grid;
   place-items: center;
@@ -83,18 +83,18 @@ function copyUrl() {
   right: 0;
   width: 280px;
   padding: 20px 18px 16px;
-  background: #fff;
+  background: var(--glass);
   border-radius: 20px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--glass-shadow);
   text-align: center;
 }
-.qr-panel h3 { margin: 0; font-size: 16px; color: #0f172a; }
-.qr-panel > p { margin: 4px 0 10px; font-size: 12px; color: #94a3b8; }
+.qr-panel h3 { margin: 0; font-size: 16px; color: var(--text); }
+.qr-panel > p { margin: 4px 0 10px; font-size: 12px; color: var(--text-muted); }
 
 .qr-img-wrap {
   padding: 10px;
-  background: #fff;
-  border: 2px solid #e2e8f0;
+  background: var(--glass);
+  border: 2px solid var(--glass-line);
   border-radius: 14px;
   display: inline-block;
 }
@@ -103,15 +103,15 @@ function copyUrl() {
 .qr-url {
   margin-top: 10px;
   padding: 8px 12px;
-  background: #f1f5f9;
+  background: var(--glass);
   border-radius: 8px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
   word-break: break-all;
   line-height: 1.4;
 }
-.qr-hint { display: block; margin-top: 4px; font-size: 10px; color: #c0c4cc; }
+.qr-hint { display: block; margin-top: 4px; font-size: 10px; color: var(--text-muted); }
 
 .slide-up-enter-active { transition: all 0.25s ease-out; }
 .slide-up-leave-active { transition: all 0.15s ease-in; }

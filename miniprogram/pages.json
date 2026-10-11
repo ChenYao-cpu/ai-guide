@@ -11,10 +11,10 @@
       "style": {
         "navigationStyle": "custom",
         "navigationBarTitleText": "",
-        "navigationBarBackgroundColor": "#12172f",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#12172f",
-        "backgroundTextStyle": "light",
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark",
         "disableScroll": false
       }
     },
@@ -25,14 +25,22 @@
           "tour-avatar-3d": "/wxcomponents/tour-avatar-3d/index"
         },
         "navigationStyle": "custom",
-        "disableScroll": true
+        "disableScroll": true,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
       "path": "pages/ai-chat/ai-chat",
       "style": {
         "navigationStyle": "custom",
-        "disableScroll": false
+        "disableScroll": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
@@ -40,47 +48,86 @@
       "style": {
         "navigationStyle": "custom",
         "disableScroll": false,
-        "homeButton": false
+        "homeButton": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
       "path": "pages/mine/mine",
       "style": {
         "navigationStyle": "custom",
-        "disableScroll": false
+        "disableScroll": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
       "path": "pages/mine/history",
       "style": {
         "navigationStyle": "custom",
-        "disableScroll": false
+        "disableScroll": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
       "path": "pages/favorites/favorites",
       "style": {
         "navigationStyle": "custom",
-        "disableScroll": false
+        "disableScroll": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     },
     {
       "path": "pages/xingyun/xingyun",
-      "style": { "navigationBarTitleText": "星云数字人导览", "navigationStyle": "default" }
+      "style": {
+        "navigationBarTitleText": "星云数字人导览",
+        "navigationStyle": "default",
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
+      }
     },
     {
       "path": "pages/rank/rank",
       "style": {
         "navigationStyle": "custom",
-        "disableScroll": false
+        "disableScroll": false,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
+      }
+    },
+    {
+      "path": "pages/tour-summary/tour-summary",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": true,
+        "navigationBarBackgroundColor": "#f8fafc",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "backgroundTextStyle": "dark"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "",
-    "navigationBarBackgroundColor": "#f6f7fa",
-    "backgroundColor": "#f6f7fa",
-    "navigationStyle": "custom"
+    "navigationBarBackgroundColor": "#f8fafc",
+    "backgroundColor": "#f8fafc",
+    "navigationStyle": "custom",
+    "backgroundTextStyle": "dark"
   }
 }
