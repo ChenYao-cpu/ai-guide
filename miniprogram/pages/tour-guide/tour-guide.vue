@@ -158,11 +158,11 @@
     <!-- 景点详情 -->
     <view class="drawer-overlay" v-if="detailSpot" @tap="detailSpot=null">
       <view class="drawer-mask"></view>
-      <view class="drawer-panel" @tap.stop="">
+      <view class="drawer-panel spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path}" @tap.stop="">
+        <view v-if="detailSpot.image_path" class="scenic-fade"><image :src="fixImg(detailSpot.image_path)" class="scenic-clear" mode="aspectFill" /><image :src="fixImg(detailSpot.image_path)" class="scenic-blur" mode="aspectFill" /><view class="scenic-veil"></view></view>
         <view class="dp-handle"></view>
         <view class="dp-hd"><text class="dp-title">景点详情</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
         <scroll-view scroll-y class="dp-body"><view class="dp-content">
-          <view v-if="detailSpot.image_path" class="scenic-fade"><image :src="fixImg(detailSpot.image_path)" class="scenic-clear" mode="aspectFill" /><image :src="fixImg(detailSpot.image_path)" class="scenic-blur" mode="aspectFill" /><view class="scenic-veil"></view></view>
           <text class="dp-name">{{ detailSpot.spot_name }}</text>
           <text class="dp-desc">{{ detailSpot.description||'暂无简介' }}</text>
           <view class="dp-row"><text>位置</text><text>{{ detailSpot.city ? detailSpot.city+' · ' : '' }}{{ detailSpot.location||'暂无' }}</text></view>
@@ -450,5 +450,13 @@ export default {
 .hrc-name{font-size:29.9rpx;font-weight:600;color:#fff;margin-top:2rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hrc-arrow{font-size:32rpx;color:#1f2937}
 .planner-note{display:block;font-size:26rpx;line-height:1.7;color:var(--ng-secondary);margin-top:14rpx}.planner-control{margin-top:18rpx;padding:20rpx;border-radius:16rpx;background:#f7f8fc;color:var(--ng-text);font-size:29rpx}.planner-generate{margin-top:22rpx;padding:22rpx;text-align:center;background:#5447db;border-radius:18rpx;color:#fff;font-size:30rpx}.planner-result{margin-top:28rpx;font-size:30rpx;color:var(--ng-text)}.planner-stop{padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}
+
+.spot-detail-panel>.scenic-fade{position:absolute;inset:0 0 auto;height:440rpx;width:100%;pointer-events:none;}
+.spot-detail-panel>.dp-handle,.spot-detail-panel>.dp-hd,.spot-detail-panel>.dp-body,.spot-detail-panel>.dp-btn{position:relative;z-index:1;}
+.spot-detail-panel.has-photo .dp-title{color:#fff;text-shadow:0 2rpx 12rpx rgba(0,0,0,.65);}
+.spot-detail-panel.has-photo .dp-close{background:rgba(255,255,255,.9);color:#475569;}
+.spot-detail-panel.has-photo .dp-handle{background:rgba(255,255,255,.8);}
+.spot-detail-panel.has-photo .dp-content{padding-top:300rpx;}
+.spot-detail-panel .scenic-veil{background:linear-gradient(to bottom,rgba(15,23,42,.25),transparent 35%,rgba(255,255,255,.8) 72%,#fff 100%)!important;}
 </style>
 
