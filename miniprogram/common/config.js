@@ -1,5 +1,5 @@
 // 本地开发地址由 scripts/configure_miniprogram.ps1 更新；正式部署改为 HTTPS。
-export const LAN_SERVER_ORIGIN = 'http://172.27.36.186:8000'
+export const LAN_SERVER_ORIGIN = 'http://172.27.73.187:8000'
 
 // 模拟器直连本机；真机使用编译时检测到的局域网地址。
 const runtimePlatform = typeof wx !== 'undefined'

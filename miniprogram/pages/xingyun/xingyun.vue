@@ -31,5 +31,7 @@ export default {
 }
 </script>
 <style scoped>
-.notice{padding:60rpx 40rpx;display:flex;flex-direction:column;gap:28rpx;line-height:1.8;color:var(--ng-secondary)}
+.notice{margin:calc(100rpx + env(safe-area-inset-top)) 32rpx 32rpx;padding:40rpx 32rpx;display:flex;flex-direction:column;gap:28rpx;line-height:1.8;color:var(--ng-secondary);background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:32rpx;box-shadow:var(--ng-glass-shadow)}
+.notice button{width:100%;margin:0;border-radius:20rpx;font-size:28rpx;background:var(--ng-raised);color:var(--ng-accent-text)}
+.notice button:first-of-type{background:var(--ng-accent);color:#fff}
 </style>

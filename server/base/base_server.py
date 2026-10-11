@@ -81,6 +81,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("Step 2/3: 检查默认数据...")
     gen_default_data()
+    from .database.default_xingyun import initialize_default_xingyun
+    initialize_default_xingyun()
 
     logger.info("Step 3/3: 完成，准备就绪")
     if WEB_CONFIGS.ENABLE_RAG:
