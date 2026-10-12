@@ -3,7 +3,7 @@ defineProps<{src:string;alt?:string}>()
 </script>
 <template>
   <div class="scenic-photo">
-    <img :src="src" :alt="alt || '景点照片'" loading="lazy" class="photo-clear" />
+    <img :src="src" :alt="$t(alt || '景点照片')" loading="lazy" class="photo-clear" />
     <img :src="src" alt="" aria-hidden="true" loading="lazy" class="photo-blur" />
   </div>
 </template>

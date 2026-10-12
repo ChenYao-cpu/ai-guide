@@ -87,6 +87,18 @@ class KnowledgeDocument(SQLModel, table=True):
     user_id: int | None = Field(default=None, foreign_key="user_info.user_id")
 
 
+class KnowledgeReview(SQLModel, table=True):
+    """Append-only review history; retained even after document deletion."""
+    review_id: int | None = Field(default=None, primary_key=True)
+    doc_id: int = Field(index=True)
+    reviewer_id: int
+    previous_status: str
+    status: str
+    content_hash: str
+    note: str
+    reviewed_at: datetime = Field(default_factory=datetime.now)
+
+
 # =======================================================
 #                    游览路线数据库模型
 # =======================================================
@@ -210,6 +222,7 @@ class TourSessionInfo(SQLModel, table=True):
 
     name: str = ""  # 会话名称
     visitor_preferences: str = ""  # 游客偏好，JSON格式存储
+    dialogue_context: str = "{}"  # 当前景点问答记忆，与路线偏好分开
 
     delete: bool = False
 
@@ -261,6 +274,7 @@ class VisitorInteraction(SQLModel, table=True):
 
     role: str  # "guide" 或 "user"
     message: str
+    answer_metadata: str = "{}"  # 问答来源与意图，刷新后仍可追溯
     send_time: datetime | None = None
 
     # 情感分析结果
@@ -332,6 +346,10 @@ class TourChatItem(BaseModel):
     currentSpotId: int | None = None
     nextSpotId: int | None = None
     avatarMode: str = "audio"  # audio / realistic，未就绪时返回真实原因
+    language: Literal['zh', 'en'] = 'zh'
+    explanation_mode: Literal['standard', 'child', 'deep'] = 'standard'
+    speech_rate: Literal[0.8, 1.0] = 1.0
+    text_only: bool = False
 
 
 class PreferenceItem(BaseModel):
@@ -345,3 +363,6 @@ class RouteRecommendRequest(BaseModel):
     time_budget_minutes: int = PydanticField(default=120, ge=15, le=480)
     pace: Literal['standard', 'relaxed'] = 'standard'
     start_area: Literal['auto', 'east', 'north', 'south'] = 'auto'
+    end_area: Literal['auto', 'east', 'north', 'south'] = 'auto'
+    queue_reserve_minutes: int = PydanticField(default=0, ge=0, le=120)
+    excluded_spot_ids: List[int] = PydanticField(default_factory=list, max_length=100)

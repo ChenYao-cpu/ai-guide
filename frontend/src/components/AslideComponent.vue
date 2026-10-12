@@ -34,33 +34,33 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
       class="enterprise-menu"
     >
       <el-menu-item index="/home">
-        <el-icon><House /></el-icon><span>综合看板</span>
+        <el-icon><House /></el-icon><span>{{ $t("综合看板") }}</span>
       </el-menu-item>
 
-      <div v-show="!isCollapse" class="menu-caption secondary">管理模块</div>
+      <div v-show="!isCollapse" class="menu-caption secondary">{{ $t("管理模块") }}</div>
       <el-sub-menu index="/scenic-spot">
         <template #title>
-          <el-icon><Picture /></el-icon><span>知识库管理</span>
+          <el-icon><Picture /></el-icon><span>{{ $t("知识库管理") }}</span>
         </template>
-        <el-menu-item index="/scenic-spot/list"><span>景点档案</span></el-menu-item>
-        <el-menu-item index="/knowledge/list"><span>景区知识</span></el-menu-item>
+        <el-menu-item index="/scenic-spot/list"><span>{{ $t("景点档案") }}</span></el-menu-item>
+        <el-menu-item index="/knowledge/list"><span>{{ $t("景区知识") }}</span></el-menu-item>
       </el-sub-menu>
 
       <el-sub-menu index="/personalization">
         <template #title>
-          <el-icon><Guide /></el-icon><span>个性化导览管理</span>
+          <el-icon><Guide /></el-icon><span>{{ $t("个性化导览管理") }}</span>
         </template>
-        <el-menu-item index="/tour-route/list"><span>默认路线管理</span></el-menu-item>
-        <el-menu-item index="/digital-guide/list"><span>数字人形象管理</span></el-menu-item>
+        <el-menu-item index="/tour-route/list"><span>{{ $t("默认路线管理") }}</span></el-menu-item>
+        <el-menu-item index="/digital-guide/list"><span>{{ $t("数字人形象管理") }}</span></el-menu-item>
       </el-sub-menu>
 
-      <div v-show="!isCollapse" class="menu-caption secondary">洞察中心</div>
+      <div v-show="!isCollapse" class="menu-caption secondary">{{ $t("洞察中心") }}</div>
       <el-sub-menu index="/analytics">
         <template #title>
-          <el-icon><DataAnalysis /></el-icon><span>感受度分析</span>
+          <el-icon><DataAnalysis /></el-icon><span>{{ $t("感受度分析") }}</span>
         </template>
-        <el-menu-item index="/tour-session/overview"><span>游览AI分析</span></el-menu-item>
-        <el-menu-item index="/analytics/feedback"><span>游客反馈分析</span></el-menu-item>
+        <el-menu-item index="/tour-session/overview"><span>{{ $t("游览AI分析") }}</span></el-menu-item>
+        <el-menu-item index="/analytics/feedback"><span>{{ $t("游客反馈分析") }}</span></el-menu-item>
       </el-sub-menu>
     </el-menu>
 

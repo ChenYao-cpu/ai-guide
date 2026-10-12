@@ -1,6 +1,9 @@
 import os
 import re
 import shutil
+import hashlib
+import math
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +22,7 @@ TOUR_GENERATE_TEMPLATE = (
     "【景区知识库资料】\n{}\n\n"
     "【游客问题】\n{}\n\n"
     "请根据以上景区资料回答游客的问题。要求：\n"
-    "1. 资料中有的信息请准确引用，简洁作答（控制在3-5句话内）；\n"
+    "1. 第一段先直接回答问题；默认2-3句，明确要求详细时才展开；\n"
     "2. 资料中可能包含表格数据（用 | 分隔），请提取关键信息作答，不要原样输出管道符；\n"
     "3. 只使用与本轮景点和问题有关的资料；资料未记载的纹样、典故、年代、设施位置不得补写。"
     "缺少某项资料时只说明该项缺失，不要转去讲其他景区；\n"
@@ -32,7 +35,7 @@ TOUR_RAG_RETRIEVER = None  # 景区知识库 RAG 实例
 
 
 class LightweightTourRetriever:
-    """面向中小型景区知识库的轻量级字符 TF-IDF 检索器。
+    """景点/主题过滤后的 BM25 + 字符 TF-IDF，使用 RRF 合并排名。
 
     不依赖常驻的大型 embedding/reranker 模型，适合比赛现场和普通笔记本；
     检索到的原文仍会进入大模型上下文，因此保持完整 RAG 工作流。
@@ -42,41 +45,88 @@ class LightweightTourRetriever:
         from sklearn.feature_extraction.text import TfidfVectorizer
 
         self.records: list[tuple[str, str]] = []
+        self.metadata: list[dict] = []
+        from ..tour_knowledge import load_book
+        names = set(load_book()["spots"])
         for source, text in records:
-            paragraphs = [part.strip() for part in re.split(r"\n\s*\n|(?<=[。！？])", text) if part.strip()]
-            buffer = ""
-            for paragraph in paragraphs:
-                buffer = f"{buffer}\n{paragraph}".strip()
-                if len(buffer) >= 180:
-                    self.records.append((source, buffer))
-                    buffer = ""
-            if buffer:
-                self.records.append((source, buffer))
+            # Keep entity and topic boundaries intact. Legacy documents with
+            # named headings are supported, but unscoped fragments are never
+            # allowed to answer a specific scenic-site question.
+            spot, topic, buffer = "", "", []
+            def flush():
+                body="\n".join(buffer).strip()
+                if body:
+                    self.records.append((source,body))
+                    self.metadata.append(dict(spot=spot,topic=topic))
+                buffer.clear()
+            for line in text.splitlines():
+                marker=re.match(r"<!--\s*spot:(.+?);topic:(\w+)\s*-->",line)
+                heading=re.match(r"^#{1,3}\s+(.+)",line)
+                if marker:
+                    flush()
+                    spot,topic=marker.groups()
+                    continue
+                if heading:
+                    flush()
+                    title=heading[1].strip()
+                    if title in names: spot,topic=title,""
+                    if title=="资料来源": spot,topic="","sources"
+                buffer.append(line)
+                if len("\n".join(buffer))>=650 and re.search(r"[。！？]$",line): flush()
+            flush()
 
         if not self.records:
             raise RuntimeError("景区知识库中没有可检索文本")
 
         self.vectorizer = TfidfVectorizer(analyzer="char", ngram_range=(1, 3), sublinear_tf=True)
         self.matrix = self.vectorizer.fit_transform([text for _, text in self.records])
+        self.term_counts=[Counter(self._tokens(text)) for _,text in self.records]
+        self.lengths=[sum(c.values()) for c in self.term_counts]
+        self.average_length=sum(self.lengths)/len(self.lengths)
+        frequencies=Counter(term for counts in self.term_counts for term in counts)
+        self.idf={term:math.log(1+(len(self.records)-count+0.5)/(count+0.5)) for term,count in frequencies.items()}
+        self.source_versions={source:hashlib.sha256(text.encode()).hexdigest()[:16] for source,text in records}
+        self.index_version=hashlib.sha256(repr(sorted(self.source_versions.items())).encode()).hexdigest()[:16]
+
+    @staticmethod
+    def _tokens(text):
+        tokens=[]
+        for word in re.findall(r'[\u4e00-\u9fff]+|[A-Za-z0-9]+',text.lower()):
+            tokens.extend([word[i:i+2] for i in range(len(word)-1)] if re.search(r'[\u4e00-\u9fff]',word) and len(word)>1 else [word])
+        return tokens
+
+    def search_evidence(self, question, spot_name='', topics=None, limit=5):
+        scores=(self.matrix @ self.vectorizer.transform([question]).T).toarray().ravel()
+        eligible=[i for i,meta in enumerate(self.metadata) if meta['topic']!='sources'
+                  and (not spot_name or meta['spot']==spot_name) and (not topics or meta['topic'] in topics)]
+        terms=set(self._tokens(question))
+        bm25={i:sum(self.idf.get(term,0)*self.term_counts[i].get(term,0)*2.5 /
+                    (self.term_counts[i].get(term,0)+1.5*(0.25+0.75*self.lengths[i]/self.average_length)) for term in terms)
+              for i in eligible}
+        sparse=sorted((i for i in eligible if bm25[i]>0),key=lambda i:(-bm25[i],i))[:20]
+        character=sorted((i for i in eligible if scores[i]>0.03),key=lambda i:(-scores[i],i))[:20]
+        fusion=Counter()
+        for ranking in (sparse,character):
+            for rank,i in enumerate(ranking,1): fusion[i]+=1/(60+rank)
+        selected=sorted(fusion,key=lambda i:(-fusion[i],i))[:limit]
+        return [dict(id=hashlib.sha256((self.records[i][0]+'\n'+self.records[i][1]).encode()).hexdigest()[:16],
+                     document=self.records[i][0],spot=self.metadata[i]['spot'],topic=self.metadata[i]['topic'],
+                     excerpt=self.records[i][1],version=self.source_versions[self.records[i][0]],
+                     retrieval_method='bm25-char-tfidf-rrf',rank=rank)
+                for rank,i in enumerate(selected,1)]
 
     def get(self, fs_id: str = "tour_default", **_: Any):
         return self
 
-    def query(self, question: str, context_max_length: int = TOUR_CONTEXT_MAX_LENGTH):
-        import numpy as np
-
-        query_vector = self.vectorizer.transform([question])
-        scores = (self.matrix @ query_vector.T).toarray().ravel()
-        ranked = np.argsort(scores)[::-1]
-        selected = [int(index) for index in ranked[:5] if scores[index] > 0.01]
-        if not selected and len(ranked):
-            selected = [int(ranked[0])]
+    def query(self, question: str, context_max_length: int = TOUR_CONTEXT_MAX_LENGTH,
+              spot_name: str = "", topics=None):
+        selected=self.search_evidence(question,spot_name,topics)
 
         chunks: list[str] = []
         references: list[str] = []
         context = ""
-        for index in selected:
-            source, text = self.records[index]
+        for item in selected:
+            source,text=item['document'],item['excerpt']
             remaining = context_max_length - len(context)
             if remaining <= 0:
                 break
@@ -88,13 +138,13 @@ class LightweightTourRetriever:
         return "\n".join(chunks), context[:context_max_length], references
 
 
-async def _load_lightweight_tour_retriever(user_id: int) -> LightweightTourRetriever:
+async def _load_lightweight_tour_retriever(user_id: int, file_paths=None) -> LightweightTourRetriever:
     from ...database.knowledge_doc_db import get_all_knowledge_file_paths
     from .file_operation import FileOperation
 
     records: list[tuple[str, str]] = []
     file_operator = FileOperation()
-    for file_path in await get_all_knowledge_file_paths(user_id):
+    for file_path in (await get_all_knowledge_file_paths(user_id) if file_paths is None else file_paths):
         source_path = Path(WEB_CONFIGS.SERVER_FILE_ROOT) / file_path
         if not source_path.exists():
             logger.warning(f"Knowledge file not found: {source_path}")
@@ -139,7 +189,7 @@ def build_rag_prompt(rag_retriever: Any, product_name, prompt):
     return prompt_rag
 
 
-def build_tour_rag_prompt(rag_retriever: Any, spot_name: str, prompt: str) -> tuple:
+def build_tour_rag_prompt(rag_retriever: Any, spot_name: str, prompt: str, topics=None) -> tuple:
     """构建景区导览 RAG prompt
 
     Args:
@@ -157,13 +207,13 @@ def build_tour_rag_prompt(rag_retriever: Any, spot_name: str, prompt: str) -> tu
         return prompt, []
 
     query_text = f"景点：{spot_name}。游客问题：{prompt}"
-    chunk, db_context, references = real_retriever.query(
-        query_text, context_max_length=TOUR_CONTEXT_MAX_LENGTH - len(TOUR_GENERATE_TEMPLATE)
-    )
+    kwargs=dict(context_max_length=TOUR_CONTEXT_MAX_LENGTH-len(TOUR_GENERATE_TEMPLATE))
+    if isinstance(real_retriever,LightweightTourRetriever): kwargs.update(spot_name=spot_name,topics=topics)
+    chunk, db_context, references = real_retriever.query(query_text, **kwargs)
     logger.info(f"Tour db_context length: {len(db_context) if db_context else 0}")
 
     # A shared index must not override the active dossier with another park.
-    if spot_name and db_context and spot_name not in db_context:
+    if not isinstance(real_retriever,LightweightTourRetriever) and spot_name and db_context and spot_name not in db_context:
         return prompt, []
     if db_context is not None and len(db_context) > 1:
         prompt_rag = TOUR_GENERATE_TEMPLATE.format(db_context, prompt)
@@ -356,7 +406,10 @@ async def rebuild_tour_rag_db(user_id, db_name="tour_default"):
     global TOUR_RAG_RETRIEVER
 
     if os.getenv("TOUR_RAG_BACKEND", "lightweight").strip().lower() != "vector":
-        TOUR_RAG_RETRIEVER = await _load_lightweight_tour_retriever(user_id)
+        prepared = await _load_lightweight_tour_retriever(user_id)
+        # Public visitor sessions use park owner 1. A private admin's rebuild
+        # must not replace the shared public knowledge base.
+        if user_id == 1: TOUR_RAG_RETRIEVER = prepared
         logger.info("Lightweight tour RAG index refreshed")
         return
 

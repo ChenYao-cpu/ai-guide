@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus/es'
 import { Plus, Delete } from '@element-plus/icons-vue'
@@ -16,27 +17,27 @@ import { AxiosError } from 'axios'
 const streamerNameOptions = ref([] as StreamerInfo[])
 
 const DeleteDigitalHuman = async (id: number, name: string) => {
-  ElMessageBox.confirm(`确定要删除 "${name}" 吗？`, '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定要删除 \"{p0}\" 吗？", {p0: name}), t("警告"), {
+    confirmButtonText: t("确定"),
+    cancelButtonText: t("取消"),
     type: 'warning'
   })
     .then(async () => {
       const { data } = await deleteStreamerByIdRequest(id)
       if (data.code === 0) {
-        ElMessage.success('删除成功')
+        ElMessage.success(t("删除成功"))
         // 获取主播信息
         const { data } = await streamerInfoListRequest()
         if (data.code === 0) {
           streamerNameOptions.value = data.data
-          ElMessage.success('获取主播信息成功')
+          ElMessage.success(t("获取主播信息成功"))
         }
       } else {
-        ElMessage.error('删除失败')
+        ElMessage.error(t("删除失败"))
       }
     })
     .catch((error) => {
-      ElMessage.error('删除失败: ' + error.message)
+      ElMessage.error(t("删除失败: ") + error.message)
     })
 }
 
@@ -46,15 +47,15 @@ onMounted(async () => {
     const { data } = await streamerInfoListRequest()
     if (data.code === 0) {
       streamerNameOptions.value = data.data
-      ElMessage.success('获取主播信息成功')
+      ElMessage.success(t("获取主播信息成功"))
     } else {
-      ElMessage.error('获取主播信息失败：' + data.message)
+      ElMessage.error(t("获取主播信息失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取主播信息失败：' + error.message)
+      ElMessage.error(t("获取主播信息失败：") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 })
@@ -85,9 +86,7 @@ const ShowItemInfo = ref()
       >
         <el-icon style="margin-right: 5px">
           <Plus />
-        </el-icon>
-        新增主播
-      </el-button>
+        </el-icon>{{ $t("新增主播") }}</el-button>
     </div>
     <div v-for="(row, rowIndex) in chunkedArray" :key="rowIndex" class="row">
       <el-row :gutter="20">
@@ -95,15 +94,13 @@ const ShowItemInfo = ref()
           <el-card style="max-width: 500px">
             <img :src="item.poster_image" style="width: 100%" />
             <div class="streamer-info">
-              <p class="title">{{ item.name }}</p>
+              <p class="title">{{ $t(item.name) }}</p>
               <p class="content">
-                {{ item.character }}
+                {{ $t(item.character) }}
               </p>
             </div>
             <div class="bottom-button">
-              <el-button type="primary" @click="ShowItemInfo.showItemInfoDialog(item.streamer_id)">
-                详情
-              </el-button>
+              <el-button type="primary" @click="ShowItemInfo.showItemInfoDialog(item.streamer_id)">{{ $t("详情") }}</el-button>
               <el-button
                 type="danger"
                 @click="DeleteDigitalHuman(item.streamer_id, item.name)"

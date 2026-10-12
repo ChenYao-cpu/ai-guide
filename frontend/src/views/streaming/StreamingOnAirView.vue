@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChatDotRound, Microphone, VideoPause } from '@element-plus/icons-vue'
@@ -39,13 +40,13 @@ const getUserInfo = async () => {
     if (data.code === 0) {
       userInfoItem.value = data.data
     } else {
-      ElMessage.error('获取用户信息失败: ' + data.message)
+      ElMessage.error(t("获取用户信息失败: ") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取用户信息失败: ' + error.message)
+      ElMessage.error(t("获取用户信息失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -67,13 +68,13 @@ const getRoomInfo = async () => {
       currentStatus.value = data.data
       console.info(currentStatus.value)
     } else {
-      ElMessage.error('获取直播间信息失败' + data.message)
+      ElMessage.error(t("获取直播间信息失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取直播间信息失败' + error.message)
+      ElMessage.error(t("获取直播间信息失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -112,13 +113,13 @@ const handelSendClick = async () => {
       // 更新 list
       await getRoomInfo()
     } else {
-      ElMessage.error('更新对话信息失败' + data.message)
+      ElMessage.error(t("更新对话信息失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('更新对话信息失败' + error.message)
+      ElMessage.error(t("更新对话信息失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 
@@ -148,43 +149,43 @@ const handleNextProductClick = async () => {
       console.info('Next Product')
       await getRoomInfo()
     } else {
-      ElMessage.error('失败' + data.message)
+      ElMessage.error(t("失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('失败' + error.message)
+      ElMessage.error(t("失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
 
 // 结束直播按钮
 const handleOffLineClick = async () => {
-  ElMessageBox.confirm(`确定要下播吗？`, '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定要下播吗？"), t("警告"), {
+    confirmButtonText: t("确定"),
+    cancelButtonText: t("取消"),
     type: 'warning'
   })
     .then(async () => {
       try {
         const { data } = await streamRoomOffline(Number(props.roomId))
         if (data.code === 0) {
-          ElMessage.success('下播成功')
+          ElMessage.success(t("下播成功"))
           router.push({ name: 'StreamingOverview' })
         } else {
-          ElMessage.error('下播失败' + data.message)
+          ElMessage.error(t("下播失败") + data.message)
         }
       } catch (error: unknown) {
         if (error instanceof AxiosError) {
-          ElMessage.error('失败' + error.message)
+          ElMessage.error(t("失败") + error.message)
         } else {
-          ElMessage.error('未知错误：' + error)
+          ElMessage.error(t("未知错误：") + error)
         }
       }
     })
     .catch((error) => {
-      ElMessage.error('下播失败: ' + error.message)
+      ElMessage.error(t("下播失败: ") + error.message)
     })
 }
 
@@ -215,7 +216,7 @@ const startRecording = () => {
       mediaRecorder.addEventListener('stop', handleStop)
     })
     .catch((err) => {
-      ElMessage.error('无法访问麦克风: ' + err.message)
+      ElMessage.error(t("无法访问麦克风: ") + err.message)
     })
 }
 
@@ -251,12 +252,12 @@ const handleStop = async () => {
     // 将 asr 文件发送到服务器
     const { data } = await sendAudioToServer(blob)
     if (data.code === 0) {
-      ElMessage.success('正在进行语音转文字，请稍候！')
+      ElMessage.success(t("正在进行语音转文字，请稍候！"))
       // 调取接口开始进行 asr 识别
 
       console.info(data)
       const { data: asr_data } = await genAsrResult(Number(props.roomId), data.data)
-      ElMessage.success('语音转文字成功！')
+      ElMessage.success(t("语音转文字成功！"))
 
       // 自动进行对话
       if (asr_data.code === 0) {
@@ -266,9 +267,9 @@ const handleStop = async () => {
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('语音转文字失败: ' + error.message)
+      ElMessage.error(t("语音转文字失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
   chunks = []
@@ -312,7 +313,7 @@ const handleStop = async () => {
           <div class="floating-card">
             <el-card shadow="never">
               <div class="product-info">
-                <p class="title">当前商品</p>
+                <p class="title">{{ $t("当前商品") }}</p>
 
                 <!-- 商品图片 -->
                 <el-image
@@ -322,9 +323,9 @@ const handleStop = async () => {
                 />
 
                 <!-- 商品信息 -->
-                <p class="title">{{ currentStatus.currentProductInfo.product_name }}</p>
-                <p class="content">{{ currentStatus.currentProductInfo.heighlights }}</p>
-                <p class="price">¥ {{ currentStatus.currentProductInfo.selling_price }}</p>
+                <p class="title">{{ $t(currentStatus.currentProductInfo.product_name) }}</p>
+                <p class="content">{{ $t(currentStatus.currentProductInfo.heighlights) }}</p>
+                <p class="price">¥ {{ $t(currentStatus.currentProductInfo.selling_price) }}</p>
               </div>
             </el-card>
           </div>
@@ -349,7 +350,7 @@ const handleStop = async () => {
               style="width: 100%; border-radius: 8px; margin: 0px 10px 0px 10px"
               :autosize="{ minRows: 2, maxRows: 12 }"
               type="textarea"
-              placeholder="向主播提问"
+              :placeholder='$t("向主播提问")'
               :disabled="disableInput"
               size="large"
             />
@@ -366,10 +367,8 @@ const handleStop = async () => {
                 type="primary"
                 @click="handleNextProductClick"
                 v-show="!currentStatus.finalProduct"
-              >
-                下一个商品
-              </el-button>
-              <el-button type="danger" @click="handleOffLineClick">下播</el-button>
+              >{{ $t("下一个商品") }}</el-button>
+              <el-button type="danger" @click="handleOffLineClick">{{ $t("下播") }}</el-button>
             </div>
           </div>
         </div>

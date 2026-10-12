@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTableCell } from '@/i18n'
 import { ref, computed } from 'vue'
 
 // 搜索关键词
@@ -64,17 +65,17 @@ const handleSearch = () => {
         <div class="card-header">
           <div>
             <el-form :inline="true">
-              <el-form-item label="搜索">
+              <el-form-item :label='$t("搜索")'>
                 <el-input
                   v-model="searchQuery"
                   style="width: 240px"
-                  placeholder="商品名称"
+                  :placeholder='$t("商品名称")'
                   clearable
                   @keyup.enter="handleSearch"
                 />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" @click="handleSearch"> 查询 </el-button>
+                <el-button type="primary" @click="handleSearch">{{ $t("查询") }}</el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -82,13 +83,13 @@ const handleSearch = () => {
       </template>
 
       <el-table :data="tableData" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="50" />
-        <el-table-column prop="name" label="商品名称" />
-        <el-table-column prop="amount" label="数量" />
-        <el-table-column prop="date" label="下单时间" />
-        <el-table-column prop="address" label="地址" />
-        <el-table-column label="订单状态" v-slot="{ row }" align="center" width="250px">
-          <el-tag :type="row.status === '已完成' ? 'success' : 'warning'">{{ row.status }}</el-tag>
+        <el-table-column :formatter="formatTableCell" prop="id" label="ID" width="50" />
+        <el-table-column :formatter="formatTableCell" prop="name" :label='$t("商品名称")' />
+        <el-table-column :formatter="formatTableCell" prop="amount" :label='$t("数量")' />
+        <el-table-column :formatter="formatTableCell" prop="date" :label='$t("下单时间")' />
+        <el-table-column :formatter="formatTableCell" prop="address" :label='$t("地址")' />
+        <el-table-column :label='$t("订单状态")' v-slot="{ row }" align="center" width="250px">
+          <el-tag :type="row.status === '已完成' ? 'success' : 'warning'">{{ $t(row.status) }}</el-tag>
         </el-table-column>
       </el-table>
     </el-card>

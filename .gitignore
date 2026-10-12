@@ -25,5 +25,12 @@ project.private.config.json
 /static/digital_human/
 /static/product_files/
 /static/tour_files/
+!/static/tour_files/
+/static/tour_files/*
+!/static/tour_files/knowledge_base/
+/static/tour_files/knowledge_base/*
+!/static/tour_files/knowledge_base/dossiers/
+/static/tour_files/knowledge_base/dossiers/*
+!/static/tour_files/knowledge_base/dossiers/*.md
 /static/user/
 /static/user_avatars/

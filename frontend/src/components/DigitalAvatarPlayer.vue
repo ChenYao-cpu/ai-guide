@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { request_handler } from '@/api/base'
 import TourAvatar3D from './TourAvatar3D.vue'
@@ -27,13 +28,14 @@ async function acceptPerformance(data?:Performance|null){
 }
 const mode = ref('audio')
 const state = ref<Capability | null>(null)
+const capabilityLoading = ref(true)
 const message = ref('语音导览 · 提问后播放本轮讲解')
 const videoUrl = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
 let version = 0
 let capabilityReady: Promise<void> = Promise.resolve()
 function stop() { xingyunRef.value?.stop(); version++; if(timer)clearTimeout(timer);timer=undefined;videoUrl.value='';readyResolve?.(false);readyResolve=undefined;sceneUrl.value=''; props.audioElement?.pause();emit('playing',false) }
-function updateMessage() { message.value = mode.value==='3d' ? state.value?.threeD?.message||'正在准备3D模型' : mode.value === 'audio' ? '语音导览 · 提问后播放本轮讲解' : state.value?.[mode.value as 'realistic'|'cartoon']?.message || '正在查询数字人状态' }
+function updateMessage() { message.value = mode.value==='3d' ? state.value?.threeD?.message||t("正在准备3D模型") : mode.value === 'audio' ? t("语音导览 · 提问后播放本轮讲解") : state.value?.[mode.value as 'realistic'|'cartoon']?.message || t("正在查询数字人状态") }
 function choose(value: string) { stop();mode.value=value;updateMessage() }
 async function poll(job: AvatarJob, current: number) {
   if(current!==version)return
@@ -42,15 +44,15 @@ async function poll(job: AvatarJob, current: number) {
     if(current!==version)return
     const data=response.data.data
     if(data.status==='completed'){videoUrl.value=data.video_url;message.value='视频已生成';return}
-    if(data.status==='failed'){message.value=data.message||'视频生成失败';return}
-    message.value=data.status==='processing'?'正在生成口型视频…':'视频生成排队中'
+    if(data.status==='failed'){message.value=data.message||t("视频生成失败");return}
+    message.value=data.status==='processing'?t("正在生成口型视频…"):t("视频生成排队中")
     timer=setTimeout(()=>poll(job,current),1500)
   }catch{if(current===version)message.value='获取视频状态失败，请重新提问'}
 }
 function acceptJob(job?: AvatarJob | null) { if(job?.job_id){poll(job,version);return true} if(job?.message)message.value=job.message;return false }
 watch(()=>props.guideId,(id)=>{
-  stop();state.value=null
-  capabilityReady=(async()=>{if(!id)return;try{const response=await request_handler.get('/avatar/capabilities/'+id);if(props.guideId===id){state.value=response.data.data;mode.value=state.value?.preferredMode==='xingyun'?'audio':state.value?.preferredMode==='3d'&&state.value.threeD?.ready?'3d':state.value?.realistic.ready?'realistic':'audio';updateMessage()}}catch{message.value='数字人状态查询失败'}})()
+  stop();state.value=null;capabilityLoading.value=true
+  capabilityReady=(async()=>{if(!id)return;try{const response=await request_handler.get('/avatar/capabilities/'+id);if(props.guideId===id){state.value=response.data.data;mode.value=state.value?.preferredMode==='xingyun'?'audio':state.value?.preferredMode==='3d'&&state.value.threeD?.ready?'3d':state.value?.realistic.ready?'realistic':'audio';updateMessage()}}catch{if(props.guideId===id)message.value='数字人状态查询失败，请刷新重试'}finally{if(props.guideId===id)capabilityLoading.value=false}})()
 },{immediate:true})
 onBeforeUnmount(stop)
 watch(()=>props.speaking,value=>{if(!value&&props.audioElement?.ended&&mode.value==='3d'){sceneUrl.value='';updateMessage()}})
@@ -59,15 +61,17 @@ defineExpose({getMode:async()=>{await capabilityReady;return xingyunRef.value?.i
 <template>
   <div class="digital-avatar" :style="{maxWidth:(width||360)+'px'}">
     <div class="viewport" :style="{minHeight:0+'px'}">
-      <XingyunGuide ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :poster-image="posterUrl" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
+      <div v-if="!state" class="avatar-loading" role="status">{{ $t(capabilityLoading ? '数字人正在加载中' : message) }}</div>
+      <XingyunGuide v-show="state?.preferredMode === 'xingyun'" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
       <TourAvatar3D v-show="!xingyunConnected" :natural-standing="true" v-if="mode==='3d'&&state?.threeD?.modelUrl" :model-url="sceneUrl||state.threeD.modelUrl" :audio-element="audioElement" :width="Math.max(200,(width||360)-30)" :height="height||440" @ready="sceneReady" @error="sceneError" />
       <video v-show="!xingyunConnected" v-else-if="videoUrl" :key="'speech-'+videoUrl" :muted="false" :loop="false" playsinline :src="videoUrl" controls autoplay @play="emit('playing',true)" @pause="emit('playing',false)" @ended="emit('playing',false)" @error="message='视频播放失败，请检查网络';emit('playing',false)" />
-      <img v-show="!xingyunConnected" v-else-if="posterUrl && state?.preferredMode !== 'xingyun'" :src="posterUrl" alt="所选数字人全身形象" style="width:100%;height:100%;min-height:0;object-fit:contain" />
-      <div v-show="!xingyunConnected" v-else-if="state?.preferredMode !== 'xingyun'" class="placeholder"><strong>待开发：请上传数字人形象素材</strong></div>
+      <img v-show="!xingyunConnected" v-else-if="posterUrl && state && state.preferredMode !== 'xingyun'" :src="posterUrl" :alt='$t("所选数字人全身形象")' style="width:100%;height:100%;min-height:0;object-fit:contain" />
+      <div v-show="!xingyunConnected" v-else-if="state && state.preferredMode !== 'xingyun'" class="placeholder"><strong>{{ $t("待开发：请上传数字人形象素材") }}</strong></div>
     </div>
-    <p v-if="!xingyunConnected && state?.preferredMode !== 'xingyun'" class="playback-message" role="status">{{ message }}</p>
+    <p v-if="state && !xingyunConnected && state.preferredMode !== 'xingyun'" class="playback-message" role="status">{{ $t(message) }}</p>
   </div>
 </template>
 <style scoped>
+.avatar-loading{display:flex;align-items:center;justify-content:center;flex:1;padding:24px;font-size:18px;line-height:1.6;color:var(--text-secondary)}
 .digital-avatar{height:100%;max-height:100%;display:flex;flex-direction:column;width:100%;margin:auto;padding:14px;box-sizing:border-box}.modes{display:flex;gap:8px;justify-content:center;margin-bottom:16px}.modes button{border: 1px solid var(--glass-line);border-radius:9px;padding:8px 20px;color: var(--text-secondary);background: var(--glass);cursor:pointer}.modes button.selected{color: var(--champagne-text);border-color: var(--glass-line);background: var(--glass)}.viewport{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;border: 1px solid var(--glass-line);background: var(--glass);border-radius:16px;overflow:hidden}.viewport video{width:100%;max-height:440px;object-fit:contain}.playback-message{font-size:12px;color: var(--text-secondary);line-height:1.6}.placeholder{padding:28px;text-align:center;display:flex;flex-direction:column;gap:18px;align-items:center}.placeholder span{width:74px;height:74px;border-radius:22px;line-height:74px;background: var(--glass);color: var(--champagne-text);font-size:30px}.placeholder strong{font-size:14px;line-height:1.8;color: var(--text-secondary)}.placeholder small{font-size:12px;line-height:1.7;color: var(--text-muted)}
 </style>

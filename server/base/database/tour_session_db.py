@@ -15,15 +15,59 @@ from sqlmodel import Session, and_, select
 
 from ..models.tour_models import (
     DigitalGuideInfo,
+    ScenicSpotInfo,
     SpotVisitRecord,
     TourRoute,
     TourSessionInfo,
     TourSessionStatus,
     VisitorInteraction,
 )
-from ..modules.guide_identity import SHOWCASE_GUIDE_NAME, resolve_model_path, resolve_voice_style
+from ..modules.guide_identity import SHOWCASE_GUIDE_NAME, resolve_model_path, resolve_guide_voice
 from .digital_guide_db import _asset_url
 from .init_db import DB_ENGINE
+
+
+def _answer_metadata(raw: str) -> dict:
+    import json
+    try:
+        value=json.loads(raw or "{}")
+        return value if isinstance(value,dict) else {}
+    except (ValueError,TypeError):
+        return {}
+
+
+def _session_route_spots(session: Session, tour_session, route_info):
+    """Use the saved itinerary for visitor tours; legacy tours use route order."""
+    preferences = _answer_metadata(tour_session.visitor_preferences)
+    if "spot_ids" in preferences:
+        ids = preferences["spot_ids"]
+        if not isinstance(ids, list) or any(type(i) is not int for i in ids):
+            return [], "路线数据格式错误，请重新规划行程"
+        spots = [session.get(ScenicSpotInfo, sid) for sid in ids]
+    else:
+        spots = [rs.spot_info for rs in sorted(
+            route_info.route_spots if route_info else [], key=lambda rs: rs.spot_order
+        )]
+    if not spots:
+        return [], "本次导览没有景点，请重新规划行程"
+    if any(spot is None or spot.delete for spot in spots):
+        return [], "路线中的景点已不可用，请重新规划行程"
+    return spots, ""
+
+
+def _route_spot_data(spot):
+    if spot is None:
+        return None
+    from ...web_configs import API_CONFIG
+    fields = ("spot_id", "spot_name", "category", "description", "history_detail",
+              "location", "best_season", "visit_duration", "photo_tips",
+              "service_facilities", "tour_tips")
+    result = {key: getattr(spot, key) for key in fields}
+    result["image_path"] = (
+        API_CONFIG.REQUEST_FILES_URL.rstrip("/") + "/" + spot.image_path.lstrip("/")
+        if spot.image_path else ""
+    )
+    return result
 
 
 async def create_tour_session(
@@ -214,6 +258,7 @@ async def get_session_live_info(session_id: int):
                 "userName": "游客" if msg.role == "user" else (guide_info.name if guide_info else "导游"),
                 "avatar": guide_info.avatar if guide_info and msg.role == "guide" else "",
                 "message": msg.message,
+                "aiMeta": _answer_metadata(msg.answer_metadata),
                 "send_time": str(msg.send_time) if msg.send_time else "",
             })
 
@@ -221,21 +266,22 @@ async def get_session_live_info(session_id: int):
         current_spot = None
         next_spot = None
         current_spot_index = tour_session.status.current_spot_index if tour_session.status else 0
-        if route_info and route_info.route_spots:
-            spots = sorted(route_info.route_spots, key=lambda x: x.spot_order)
-            if current_spot_index < len(spots):
-                rs = spots[current_spot_index]
-                current_spot = rs.spot_info
+        spots, route_error = _session_route_spots(session, tour_session, route_info)
+        if spots and not 0 <= current_spot_index < len(spots):
+            route_error = "路线进度异常，请重新规划行程"
+        if not route_error:
+            current_spot = spots[current_spot_index]
             if current_spot_index + 1 < len(spots):
-                next_spot = spots[current_spot_index + 1].spot_info
+                next_spot = spots[current_spot_index + 1]
 
         guide_model_path = resolve_model_path(
             guide_info.voice_style if guide_info else "female_wenrou",
             guide_info.live2d_model_path if guide_info else "",
         )
-        guide_voice_style = resolve_voice_style(
+        guide_voice_style = resolve_guide_voice(
             guide_info.voice_style if guide_info else "female_wenrou",
             guide_model_path,
+            guide_info.render_mode if guide_info else "",
         )
 
         result = {
@@ -261,27 +307,6 @@ async def get_session_live_info(session_id: int):
                 "theme": route_info.theme if route_info else "",
                 "estimated_time": route_info.estimated_time_minutes if route_info else 0,
             } if route_info else None,
-            "current_spot_info": {
-                "spot_id": current_spot.spot_id if current_spot else 0,
-                "spot_name": current_spot.spot_name if current_spot else "",
-                "category": current_spot.category if current_spot else "",
-                "description": current_spot.description if current_spot else "",
-                "history_detail": current_spot.history_detail if current_spot else "",
-                "location": current_spot.location if current_spot else "",
-                "best_season": current_spot.best_season if current_spot else "",
-                "visit_duration": current_spot.visit_duration if current_spot else 20,
-                "photo_tips": current_spot.photo_tips if current_spot else "",
-                "service_facilities": current_spot.service_facilities if current_spot else "",
-                "tour_tips": current_spot.tour_tips if current_spot else "",
-                "image_path": API_CONFIG.REQUEST_FILES_URL + "/" + current_spot.image_path.lstrip("/") if current_spot and current_spot.image_path else "",
-            } if current_spot else None,
-            "next_spot_info": {
-                "spot_id": next_spot.spot_id,
-                "spot_name": next_spot.spot_name,
-                "description": next_spot.description,
-                "location": next_spot.location,
-                "visit_duration": next_spot.visit_duration,
-            } if next_spot else None,
             "current_spot_index": current_spot_index,
             "current_streamer_video": API_CONFIG.REQUEST_FILES_URL + tour_session.status.streaming_video_path if tour_session.status and tour_session.status.streaming_video_path else "",
             "live_status": tour_session.status.live_status if tour_session.status else 0,
@@ -290,10 +315,11 @@ async def get_session_live_info(session_id: int):
             "conversation": conversation_list,
         }
 
-        # 判断是否最后一个景点
-        if route_info and route_info.route_spots:
-            spots_sorted = sorted(route_info.route_spots, key=lambda x: x.spot_order)
-            result["final_spot"] = current_spot_index >= len(spots_sorted) - 1
+        result["current_spot_info"] = _route_spot_data(current_spot)
+        result["next_spot_info"] = _route_spot_data(next_spot)
+        result["route_spots"] = [_route_spot_data(spot) for spot in spots]
+        result["route_error"] = route_error
+        result["final_spot"] = bool(spots) and current_spot_index >= len(spots) - 1
 
         return result
 
@@ -314,6 +340,11 @@ async def next_spot_in_session(session_id: int) -> bool:
             ).one()
 
             if tour_session and tour_session.status:
+                route_info = session.get(TourRoute, tour_session.route_id) if tour_session.route_id else None
+                spots, route_error = _session_route_spots(session, tour_session, route_info)
+                index = tour_session.status.current_spot_index
+                if route_error or not 0 <= index < len(spots) - 1:
+                    return False
                 tour_session.status.current_spot_index += 1
                 session.add(tour_session.status)
                 session.commit()
@@ -375,6 +406,7 @@ async def get_conversation_history(session_id: int) -> List[dict]:
         {
             "role": msg.role,
             "message": msg.message,
+            "aiMeta": _answer_metadata(msg.answer_metadata),
             "send_time": str(msg.send_time) if msg.send_time else "",
         }
         for msg in messages
@@ -429,3 +461,28 @@ async def update_session_video_path(status_id: int, video_path: str) -> bool:
         return False
     except Exception:
         return False
+
+
+def get_dialogue_context(session_id: int) -> dict:
+    import json
+    with Session(DB_ENGINE) as db:
+        tour = db.get(TourSessionInfo, session_id)
+        try:
+            value = json.loads(tour.dialogue_context or "{}") if tour else {}
+            return value if isinstance(value, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+
+def save_dialogue_context(session_id: int, memory: dict, message_id: int, metadata: dict):
+    import json
+    with Session(DB_ENGINE) as db:
+        tour = db.get(TourSessionInfo, session_id)
+        message = db.get(VisitorInteraction, message_id)
+        if tour:
+            tour.dialogue_context = json.dumps(memory, ensure_ascii=False)
+            db.add(tour)
+        if message:
+            message.answer_metadata = json.dumps(metadata, ensure_ascii=False)
+            db.add(message)
+        db.commit()

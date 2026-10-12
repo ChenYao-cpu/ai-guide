@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { formatTourMessage } from '../tourPresentation'
+import { formatTourMessage, isKnowledgeSourceUrl } from '../tourPresentation'
 
 describe('tour message presentation', () => {
+  it('only links verified source hosts over https', () => {
+    expect(isKnowledgeSourceUrl('https://gygl.beijing.gov.cn/article')).toBe(true)
+    expect(isKnowledgeSourceUrl('https://whc.unesco.org/en/list/880/')).toBe(true)
+    expect(isKnowledgeSourceUrl('javascript:alert(1)')).toBe(false)
+    expect(isKnowledgeSourceUrl('https://gygl.beijing.gov.cn.evil.example/file')).toBe(false)
+    expect(isKnowledgeSourceUrl('http://gygl.beijing.gov.cn/file')).toBe(false)
+  })
   it('removes only the repeated footer while retaining the factual answer', () => {
     expect(formatTourMessage('请以现场公告为准。\n以上内容来自景区知识档案，你还可以继续询问更具体的问题。', true)).toBe('请以现场公告为准。')
   })

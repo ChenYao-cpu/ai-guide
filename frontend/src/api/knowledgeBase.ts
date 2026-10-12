@@ -18,7 +18,8 @@ interface KnowledgeDocItem {
   file_path: string
   chunk_count: number
   upload_time: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'rejected'
+  content_hash: string
 }
 
 interface KnowledgeDocListData {
@@ -120,6 +121,18 @@ const testAccuracy = () => {
     },
   })
 }
+
+export interface KnowledgePreview {
+  doc_id: number; title: string; status: string; text: string; truncated: boolean; file_url: string;
+  expected_hash: string; content_hash: string;
+  reviews: Array<{review_id: number; reviewer_id: number; status: string; note: string; reviewed_at: string; content_hash: string}>
+}
+export const previewDoc = (id: number) => request_handler<ResultPackage<KnowledgePreview>>({
+  method:'GET',url:`/knowledge-base/preview/${id}`,headers:{Authorization:header_authorization.value},
+})
+export const reviewDoc = (id: number,decision:'publish'|'reject'|'withdraw',note:string,expected_hash:string) => request_handler<ResultPackage<string>>({
+  method:'POST',url:`/knowledge-base/review/${id}`,data:{decision,note,expected_hash},headers:{Authorization:header_authorization.value},
+})
 
 export {
   type DocListParams,

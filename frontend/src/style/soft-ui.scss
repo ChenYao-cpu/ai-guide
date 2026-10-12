@@ -270,8 +270,8 @@ html[data-ui-theme='soft-ui'] {
   .mt-hero { background: radial-gradient(ellipse at center, rgba(99,102,241,0.12), transparent 70%) !important; }
   .mhb-info b { color: var(--champagne-text); }
   .qr-img-wrap { background: #fff !important; }
-  .spot-marker > div { background: var(--night) !important; border-color: var(--moonlight) !important; color: var(--text) !important; }
-  .spot-marker > div[style*='#3b5bff'] { background: var(--champagne) !important; color: var(--night) !important; border-color: var(--champagne-text) !important; }
+  .spot-marker > div > div { background: var(--night) !important; border-color: var(--moonlight) !important; color: var(--text) !important; }
+  .spot-marker > div > div[style*='#3b5bff'] { background: var(--champagne) !important; color: var(--night) !important; border-color: var(--champagne-text) !important; }
   .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-bar a { background: #ffffff; color: var(--text); border-color: var(--glass-line); }
   .leaflet-bar a:hover { background: #f1f5f9; }
   .md-editor[style] { background: transparent !important; }
@@ -354,8 +354,8 @@ html[data-ui-theme='soft-ui'] {
   .el-tag--danger { background: #fff1f2; color: #be123c; }
   .el-tag--warning { background: #fffbeb; color: #b45309; }
   .el-empty { --el-empty-fill-color-0: #fff; --el-empty-fill-color-1: #f1f5f9; --el-empty-fill-color-2: #e2e8f0; --el-empty-fill-color-3: #e2e8f0; --el-empty-fill-color-4: #cbd5e1; --el-empty-fill-color-5: #f8fafc; --el-empty-fill-color-6: #e2e8f0; --el-empty-fill-color-7: #f1f5f9; --el-empty-fill-color-8: #f1f5f9; --el-empty-fill-color-9: #cbd5e1; }
-  .spot-marker > div { background: #fff !important; color: #4f46e5 !important; border-color: #c7d2fe !important; }
-  .spot-marker > div[style*='#3b5bff'] { background: #4f46e5 !important; color: #fff !important; border-color: #fff !important; }
+  .spot-marker > div > div { background: #fff !important; color: #4f46e5 !important; border-color: #c7d2fe !important; }
+  .spot-marker > div > div[style*='#3b5bff'] { background: #4f46e5 !important; color: #fff !important; border-color: #fff !important; }
   .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-bar a { background: #fff; }
   .leaflet-bar { border: 0 !important; box-shadow: 0 6px 20px rgba(30,41,59,.15) !important; }
   .orbit-system, .data-stars, .scan-ribbon, .ambient-layer::before, .ambient-layer::after { display: none; }

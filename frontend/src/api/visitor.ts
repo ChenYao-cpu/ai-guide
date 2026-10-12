@@ -36,6 +36,9 @@ export interface TourSessionInfo {
     image_path: string
   } | null
   current_spot_index: number
+  route_spots?: Array<NonNullable<TourSessionInfo['current_spot_info']>>
+  route_error?: string
+  next_spot_info?: TourSessionInfo['current_spot_info']
   current_streamer_video: string
   live_status: number
   start_time: string
@@ -52,7 +55,20 @@ export interface MessageItem {
   send_time: string
   streamerVideo?: string
   aiMeta?: {
-    answerMode: 'llm_rag' | 'llm_context' | 'local_knowledge'
+    answerMode: 'llm_rag' | 'llm_context' | 'local_knowledge' | 'database'
+    sources?: Array<{ id: string; title: string; url: string }>
+    intents?: string[]
+    followUp?: boolean
+    verifiedOn?: string
+    language?: 'zh' | 'en'
+    explanationMode?: 'standard' | 'child' | 'deep'
+    speechRate?: number
+    textOnly?: boolean
+    numericGuard?: string
+    claimReview?: {status:string; checks:Array<{segment:number;supported:boolean;quotes:Array<{evidence_id:string;quote:string}>}>}
+    evidence?: Array<{ id: string; document: string; spot: string; topic: string; excerpt: string; version: string; retrieval_method: string }>
+    evidenceNote?: string
+    serviceActions?: Array<{label:string;url:string}>
     model?: string
     ragApplied?: boolean
     referenceCount?: number
@@ -81,6 +97,7 @@ export function getVisitorSpotList() {
   return request({
     url: '/tour-session/spots',
     method: 'get',
+    timeout: 15000,
   })
 }
 
@@ -135,21 +152,27 @@ export function getTourLiveInfo(sessionId: number) {
   return request({
     url: `/tour-session/live-info/${sessionId}`,
     method: 'get',
+    timeout: 15000,
   })
 }
 
 /** 发送聊天消息 */
-export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number }) {
+export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number; language?: 'zh' | 'en'; explanation_mode?: 'standard' | 'child' | 'deep'; speech_rate?: 0.8 | 1.0; text_only?: boolean }) {
+  const { language = 'zh', explanation_mode = 'standard', speech_rate = 1.0, text_only = false, ...requestOptions } = options || {}
   return request({
     url: '/tour-session/chat',
     method: 'put',
-    ...options,
+    ...requestOptions,
     data: {
       sessionId,
       message,
       currentSpotId,
       nextSpotId,
       avatarMode,
+      language,
+      explanation_mode,
+      speech_rate,
+      text_only,
     },
   })
 }
@@ -170,6 +193,11 @@ export interface RouteRecommendationResult {
   visit_time_minutes?: number
   walking_time_minutes?: number
   rest_time_minutes?: number
+  exit_time_minutes?: number
+  end_area?: 'auto' | 'east' | 'north' | 'south'
+  end_label?: string
+  queue_reserve_minutes?: number
+  accessibility_status?: string
   walking_distance_meters?: number
   candidate_count?: number
   catalog_count?: number
@@ -197,6 +225,9 @@ export interface PlanningOptions {
   time_budget_minutes: number
   pace: 'standard' | 'relaxed'
   start_area: 'auto' | 'east' | 'north' | 'south'
+  end_area?: 'auto' | 'east' | 'north' | 'south'
+  queue_reserve_minutes?: number
+  excluded_spot_ids?: number[]
 }
 export function getRouteRecommendation(preferences: string[], options?: PlanningOptions) {
   return request<{ code: number; success: boolean; data: RouteRecommendationResult; message: string }>({
@@ -227,7 +258,7 @@ export function aiChatRecommend(message: string, options?: PlanningOptions) {
   return request<{ code: number; data: AiChatRecommendResult; message: string }>({
     url: '/tour-session/ai-chat-recommend',
     method: 'post',
-    params: { message, ...options },
+    params: { message, ...options, excluded_spot_ids: options?.excluded_spot_ids?.join(',') },
   })
 }
 

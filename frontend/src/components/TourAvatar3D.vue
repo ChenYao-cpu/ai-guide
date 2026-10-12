@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -53,7 +54,7 @@ async function load(){
   mixer=new THREE.AnimationMixer(model);isIdle=gltf.animations[0]?.name==='idle';idleTime=0
   if(gltf.animations[0]){action=mixer.clipAction(gltf.animations[0]);action.setLoop(isIdle?THREE.LoopRepeat:THREE.LoopOnce,isIdle?Infinity:1);action.clampWhenFinished=true;action.play();mixer.setTime(0)}
   prepareStanding();fit();renderer.render(scene,camera);emit('ready')
- }catch{emit('error','3D模型加载失败，请检查网络与模型资源')}
+ }catch{emit('error',t("3D模型加载失败，请检查网络与模型资源"))}
 }
 function loop(time:number){request=window.requestAnimationFrame(loop);const dt=Math.min(.1,(time-last)/1000||0);last=time
  if(mixer){if(isIdle){idleTime+=dt;mixer.setTime(idleTime)}else mixer.setTime(props.audioElement?.currentTime||0)}
@@ -63,7 +64,7 @@ function loop(time:number){request=window.requestAnimationFrame(loop);const dt=M
 onMounted(()=>{try{scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xffffff,0xadb5c5,1.2));const light=new THREE.DirectionalLight(0xffffff,1.5);light.position.set(1,3,4);scene.add(light);const fill=new THREE.DirectionalLight(0xffffff,.8);fill.position.set(-2,1.5,3);scene.add(fill)
  camera=new THREE.PerspectiveCamera(30,(props.width||360)/(props.height||440),.01,100)
  renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));renderer.setSize(props.width||360,props.height||440);renderer.outputColorSpace=THREE.SRGBColorSpace;host.value?.appendChild(renderer.domElement);observer=new ResizeObserver(fit);if(host.value)observer.observe(host.value);load();request=window.requestAnimationFrame(loop)
- }catch{emit('error','设备无法启动3D渲染')}})
+ }catch{emit('error',t("设备无法启动3D渲染"))}})
 watch(()=>props.modelUrl,load)
 onBeforeUnmount(()=>{version++;observer?.disconnect();window.cancelAnimationFrame(request);disposeModel();renderer?.dispose()})
 </script>

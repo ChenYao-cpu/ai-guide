@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import VisitorHomeView from '../VisitorHomeView.vue'
+import { wgs84ToGcj02 } from '../../../../../shared/coordinates.js'
+import locations from '../../../../../data/summer_palace_locations.json'
 
 const api = vi.hoisted(() => ({
   spots: vi.fn(), guides: vi.fn(), routes: vi.fn(), recommend: vi.fn(), ai: vi.fn(), push: vi.fn(),
@@ -35,22 +37,100 @@ const Dialog = defineComponent({
 const response = (data: unknown) => ({ data: { code: 0, data } })
 let wrapper: VueWrapper
 let fetchMock: ReturnType<typeof vi.fn>
+let leaflet: any
+let mapMock: any
+let markers: any[]
+let resizeMap: () => void
 const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text)!
 const chooseGuide = async (name: string) => {
   await button('选择数字人').trigger('click')
   await wrapper.findAll('.model-card').find(item => item.text().includes(name))!.trigger('click')
 }
 
+describe('scenic map viewport and coordinate anchors', () => {
+  it('fits unpadded scenic points with fractional zoom and prevents a city-wide view', () => {
+    expect(leaflet.map.mock.calls[0][1]).toMatchObject({ zoomSnap: 0.25, zoomDelta: 0.5, maxBoundsViscosity: 1 })
+    const [bounds, options] = mapMock.fitBounds.mock.calls[0]
+    expect(bounds.points[0]).toEqual(wgs84ToGcj02(locations.spots['仁寿殿'].latitude,locations.spots['仁寿殿'].longitude))
+    expect(bounds.pad).toHaveBeenCalledWith(0.12)
+    expect(options).toEqual({ padding: [20,20], maxZoom: 16, animate: false })
+    expect(mapMock.setMinZoom).toHaveBeenCalledWith(15.75)
+  })
+  it('keeps the coordinate at the circle centre when selected and keeps the current viewport', async () => {
+    const point = [...markers[0].point]
+    expect(markers[0].options.icon.iconAnchor).toEqual([14,14])
+    await wrapper.find('.route-card').trigger('click')
+    await flushPromises()
+    expect(markers[0].point).toEqual(point)
+    expect(markers[0].options.icon.iconSize).toEqual([28,28])
+    expect(markers[0].options.icon.iconAnchor).toEqual([14,14])
+    expect(markers[0].options.icon.html).toContain('box-sizing:border-box')
+    expect(markers[0].options.icon.html).not.toContain('transition:all')
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1)
+  })
+  it('opens the exact stop at zoom 18 and refits the scenic overview after a narrow resize', async () => {
+    await wrapper.findAll('.map-spot-tag')[0].trigger('click')
+    expect(mapMock.setView).toHaveBeenCalledWith(markers[0].point,18,{ animate:false })
+    mapMock.getBoundsZoom.mockReturnValue(14.4)
+    resizeMap()
+    expect(mapMock.setMinZoom).toHaveBeenLastCalledWith(14.25)
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1)
+    await button('景区全景').trigger('click')
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(2)
+    resizeMap()
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(3)
+  })
+  it('does not compute a broken zoom limit when personalization hides the map', () => {
+    mapMock.getSize.mockReturnValue({ x:0,y:0 })
+    resizeMap()
+    expect(mapMock.getBoundsZoom).toHaveBeenCalledTimes(1)
+    expect(mapMock.setMinZoom).toHaveBeenCalledTimes(1)
+    mapMock.getSize.mockReturnValue({ x:320,y:280 })
+    resizeMap()
+    expect(mapMock.getBoundsZoom).toHaveBeenCalledTimes(2)
+  })
+})
+
 beforeEach(async () => {
   vi.clearAllMocks()
+  markers = []
+  mapMock = {
+    on: vi.fn(), fitBounds: vi.fn(), closePopup: vi.fn(), setView: vi.fn(),
+    setMinZoom: vi.fn(), setMaxBounds: vi.fn(), removeLayer: vi.fn(), remove: vi.fn(),
+    invalidateSize: vi.fn(), getBoundsZoom: vi.fn().mockReturnValue(15.9),
+    getSize: vi.fn().mockReturnValue({ x:900,y:350 }),
+  }
+  leaflet = {
+    map: vi.fn(() => mapMock), point: (x: number,y: number) => [x,y],
+    tileLayer: vi.fn(() => ({ addTo: vi.fn() })), divIcon: vi.fn(options => options),
+    latLngBounds: vi.fn(() => {
+      const points: number[][] = []
+      return { points, extend: (p: number[]) => points.push(p), isValid: () => points.length > 0,
+        pad: vi.fn((ratio: number) => ({ points, ratio })) }
+    }),
+    marker: vi.fn((point: number[], options: any) => {
+      const marker: any = { point, options, getLatLng: () => marker.point,
+        addTo: () => marker, bindPopup: vi.fn(), on: vi.fn(), openPopup: vi.fn(), remove: vi.fn(),
+        setIcon: vi.fn((icon: any) => { marker.options.icon = icon; return marker }),
+        setLatLng: vi.fn((p: number[]) => { marker.point = p; return marker }) }
+      markers.push(marker)
+      return marker
+    }),
+  }
+  vi.stubGlobal('L', leaflet)
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: () => void) { resizeMap = callback }
+    observe() {}
+    disconnect() {}
+  })
   api.spots.mockResolvedValue(response({ spot_list: [
-    { spot_id: 1, spot_name: '仁寿殿', category: 'historical', visit_duration: 20 },
-    { spot_id: 2, spot_name: '昆明湖', category: 'natural', visit_duration: 30 },
+    { ...locations.spots['仁寿殿'], spot_id: 1, spot_name: '仁寿殿', category: 'historical', visit_duration: 20 },
+    { ...locations.spots['昆明湖'], spot_id: 2, spot_name: '昆明湖', category: 'natural', visit_duration: 30 },
   ] }))
   api.guides.mockResolvedValue(response({ guide_list: [
     { guide_id: 11, name: '小颐' }, { guide_id: 12, name: '宫苑先生' },
   ] }))
-  api.routes.mockResolvedValue(response({ route_list: [{ route_id: 7, name: '经典路线', spot_ids: [1], spot_count: 1 }] }))
+  api.routes.mockResolvedValue(response({ route_list: [{ route_id: 7, name: '经典路线', spot_ids: [1], spot_count: 1, spot_names: ['仁寿殿'] }] }))
   api.recommend.mockResolvedValue(response({ name: '湖景路线', spot_ids: [2], spot_names: ['昆明湖'], spot_count: 1 }))
   api.ai.mockResolvedValue(response({ spot_ids: [2], spot_count: 1, ai_response: '推荐昆明湖', preferences: ['nature'] }))
   fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ data: { session_id: 90 } }) })
@@ -66,6 +146,20 @@ beforeEach(async () => {
 afterEach(() => { wrapper.unmount(); vi.unstubAllGlobals() })
 
 describe('independent visitor planning flows', () => {
+  it('switches the entire planner while preserving selected stop IDs and nickname', async () => {
+    await wrapper.find('.route-card').trigger('click')
+    await wrapper.find('input[aria-label="导览昵称"]').setValue('原始昵称')
+    await button('English').trigger('click')
+    expect(wrapper.find('.visitor-intro h2').text()).toBe('Plan your visit')
+    expect(wrapper.find('.route-card').text()).toContain('Hall of Benevolence and Longevity')
+    expect((wrapper.find('input[aria-label="Tour Nickname"]').element as HTMLInputElement).value).toBe('原始昵称')
+    expect(wrapper.find('button[aria-label="Deselect stop: Hall of Benevolence and Longevity"]').attributes('aria-pressed')).toBe('true')
+    expect(api.spots).toHaveBeenCalledTimes(1)
+    await button('中文').trigger('click')
+    expect(wrapper.find('button[aria-label="取消选择 仁寿殿"]').attributes('aria-pressed')).toBe('true')
+    expect((wrapper.find('input[aria-label="导览昵称"]').element as HTMLInputElement).value).toBe('原始昵称')
+  })
+
   it('uses the mobile tour destination when mounted by the mobile entry', async () => {
     await wrapper.setProps({ tourPathPrefix: '/m/tour/' })
     await wrapper.find('.route-card').trigger('click')
@@ -86,7 +180,7 @@ describe('independent visitor planning flows', () => {
     await wrapper.find('select[aria-label="出发区域"]').setValue('east')
     await button('生成个性化路线').trigger('click')
     await flushPromises()
-    expect(api.recommend).toHaveBeenCalledWith(['nature'], { time_budget_minutes: 90, pace: 'relaxed', start_area: 'east' })
+    expect(api.recommend).toHaveBeenCalledWith(['nature'], { time_budget_minutes: 90, pace: 'relaxed', start_area: 'east', end_area: 'east', queue_reserve_minutes: 10, excluded_spot_ids: [] })
     expect(wrapper.find('.plan-metrics').text()).toContain('步行 45 分钟')
     expect(wrapper.find('.itinerary-reason').text()).toBe('岸边观察湖面与水岸')
     await chooseGuide('小颐')

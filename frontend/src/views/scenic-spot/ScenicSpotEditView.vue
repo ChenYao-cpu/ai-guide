@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es'
@@ -65,7 +66,7 @@ const aiGenerating = ref(false)
 
 const handleAiGenerate = async () => {
   if (!spotInfo.value.spot_name?.trim()) {
-    ElMessage.warning('请先输入景点名称')
+    ElMessage.warning(t("请先输入景点名称"))
     return
   }
   aiGenerating.value = true
@@ -74,12 +75,12 @@ const handleAiGenerate = async () => {
     if (data.code === 0) {
       spotInfo.value.description = data.data.description || ''
       spotInfo.value.history_detail = data.data.history_detail || ''
-      ElMessage.success('AI 已根据游览说明文档自动生成景点描述和历史详情')
+      ElMessage.success(t("AI 已根据游览说明文档自动生成景点描述和历史详情"))
     } else {
-      ElMessage.error('AI生成失败：' + data.message)
+      ElMessage.error(t("AI生成失败：") + data.message)
     }
   } catch (e: any) {
-    ElMessage.error('AI服务请求失败：' + (e?.message || '未知错误'))
+    ElMessage.error(t("AI服务请求失败：") + (e?.message || t("未知错误")))
   } finally {
     aiGenerating.value = false
   }
@@ -87,7 +88,7 @@ const handleAiGenerate = async () => {
 
 // 表单提交
 const onSubmit = async () => {
-  const statusInfo = props.spotId ? '编辑景点' : '新建景点'
+  const statusInfo = props.spotId ? t("编辑景点") : t("新建景点")
 
   try {
     saveLoading.value = true
@@ -108,20 +109,20 @@ const onSubmit = async () => {
 
     const { data } = response
     if (data.code === 0) {
-      ElMessage.success(statusInfo + '成功!')
+      ElMessage.success(statusInfo + t("成功!"))
       saveLoading.value = false
       router.push({ name: 'ScenicSpotList' })
     } else {
       saveLoading.value = false
-      ElMessage.error(statusInfo + '失败, ' + data.message)
-      throw new Error(statusInfo + '失败, ' + data.message)
+      ElMessage.error(statusInfo + t("失败, ") + data.message)
+      throw new Error(statusInfo + t("失败, ") + data.message)
     }
   } catch (error: unknown) {
     saveLoading.value = false
     if (error instanceof AxiosError) {
-      ElMessage.error('失败:' + error.message)
+      ElMessage.error(t("失败:") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -136,15 +137,15 @@ onMounted(async () => {
         tagList.value = spotInfo.value.tags
           ? spotInfo.value.tags.split(';').filter(Boolean)
           : []
-        ElMessage.success('获取景点信息成功')
+        ElMessage.success(t("获取景点信息成功"))
       } else {
         ElMessage.error(data.message)
       }
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
-        ElMessage.error('失败:' + error.message)
+        ElMessage.error(t("失败:") + error.message)
       } else {
-        ElMessage.error('未知错误：' + error)
+        ElMessage.error(t("未知错误：") + error)
       }
     }
   }
@@ -154,18 +155,17 @@ onMounted(async () => {
 <template>
   <div>
     <!-- 返回栏 -->
-    <el-page-header @back="router.push({ name: 'ScenicSpotList' })" title="返回">
+    <el-page-header @back="router.push({ name: 'ScenicSpotList' })" :title='$t("返回")'>
       <template #content>
         <div class="flex items-center">
           <span class="text-large font-600 mr-3">
-            {{ props.spotId ? '编辑' : '新建' }}景点
-          </span>
+            {{ $t(props.spotId ? '编辑' : '新建') }} {{ $t("景点") }}</span>
         </div>
       </template>
       <template #extra>
         <div class="flex items-center">
           <el-button type="primary" class="ml-2" @click="onSubmit" :loading="saveLoading"
-            >保存</el-button
+            >{{ $t("保存") }}</el-button
           >
         </div>
       </template>
@@ -174,40 +174,40 @@ onMounted(async () => {
       <template #header>
         <!-- 步骤条 -->
         <el-steps :active="currentStep" finish-status="success" align-center>
-          <el-step title="头图 & 游览说明" @click="currentStep = 0" />
-          <el-step title="景点信息" @click="currentStep = 1" />
+          <el-step :title='$t("头图 & 游览说明")' @click="currentStep = 0" />
+          <el-step :title='$t("景点信息")' @click="currentStep = 1" />
         </el-steps>
       </template>
       <!-- 表单 -->
       <el-form :model="spotInfo" label-width="120" size="large">
         <div v-show="currentStep === 0">
           <!-- 景点头图 & 游览说明 -->
-          <el-form-item label="景点图片">
+          <el-form-item :label='$t("景点图片")'>
             <FileUpload v-model="spotInfo.image_path" file-type="image" />
           </el-form-item>
 
-          <el-form-item label="游览说明">
+          <el-form-item :label='$t("游览说明")'>
             <FileUpload v-model="spotInfo.instruction" file-type="doc" />
           </el-form-item>
         </div>
 
         <div v-show="currentStep === 1">
           <!-- 景点信息 -->
-          <el-form-item label="景点名称">
+          <el-form-item :label='$t("景点名称")'>
             <el-input v-model="spotInfo.spot_name" maxlength="50" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="景点分类">
-            <el-select v-model="spotInfo.category" placeholder="请选择景点分类">
-              <el-option label="自然景观" value="natural" />
-              <el-option label="历史古迹" value="historical" />
-              <el-option label="文化体验" value="cultural" />
-              <el-option label="现代建筑" value="modern" />
-              <el-option label="综合景区" value="comprehensive" />
+          <el-form-item :label='$t("景点分类")'>
+            <el-select v-model="spotInfo.category" :placeholder='$t("请选择景点分类")'>
+              <el-option :label='$t("自然景观")' value="natural" />
+              <el-option :label='$t("历史古迹")' value="historical" />
+              <el-option :label='$t("文化体验")' value="cultural" />
+              <el-option :label='$t("现代建筑")' value="modern" />
+              <el-option :label='$t("综合景区")' value="comprehensive" />
             </el-select>
           </el-form-item>
 
-          <el-form-item label="景点标签">
+          <el-form-item :label='$t("景点标签")'>
             <el-tag
               v-for="(tag, index) in tagList"
               :key="index"
@@ -218,7 +218,7 @@ onMounted(async () => {
               size="large"
               style="margin: 3px"
             >
-              {{ tag }}
+              {{ $t(tag) }}
             </el-tag>
 
             <el-input
@@ -243,21 +243,21 @@ onMounted(async () => {
             </el-button>
           </el-form-item>
 
-          <el-form-item label="所在位置">
+          <el-form-item :label='$t("所在位置")'>
             <el-input v-model="spotInfo.location" maxlength="200" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="最佳季节">
-            <el-select v-model="spotInfo.best_season" placeholder="请选择最佳游览季节">
-              <el-option label="春季" value="Spring" />
-              <el-option label="夏季" value="Summer" />
-              <el-option label="秋季" value="Autumn" />
-              <el-option label="冬季" value="Winter" />
-              <el-option label="全年" value="AllYear" />
+          <el-form-item :label='$t("最佳季节")'>
+            <el-select v-model="spotInfo.best_season" :placeholder='$t("请选择最佳游览季节")'>
+              <el-option :label='$t("春季")' value="Spring" />
+              <el-option :label='$t("夏季")' value="Summer" />
+              <el-option :label='$t("秋季")' value="Autumn" />
+              <el-option :label='$t("冬季")' value="Winter" />
+              <el-option :label='$t("全年")' value="AllYear" />
             </el-select>
           </el-form-item>
 
-          <el-form-item label="景点描述">
+          <el-form-item :label='$t("景点描述")'>
             <el-input
               v-model="spotInfo.description"
               type="textarea"
@@ -267,7 +267,7 @@ onMounted(async () => {
             />
           </el-form-item>
 
-          <el-form-item label="历史详情">
+          <el-form-item :label='$t("历史详情")'>
             <el-input
               v-model="spotInfo.history_detail"
               type="textarea"
@@ -278,10 +278,8 @@ onMounted(async () => {
           </el-form-item>
 
           <div class="bottom-gen-btn">
-            <el-button type="success" :loading="aiGenerating" @click="handleAiGenerate">
-               AI 生成
-            </el-button>
-            <span class="gen-hint">根据"游览说明"文件夹中的 .md 文档自动填充景点描述和历史详情</span>
+            <el-button type="success" :loading="aiGenerating" @click="handleAiGenerate">{{ $t("AI 生成") }}</el-button>
+            <span class="gen-hint">{{ $t("根据\"游览说明\"文件夹中的 .md 文档自动填充景点描述和历史详情") }}</span>
           </div>
         </div>
       </el-form>
@@ -289,15 +287,15 @@ onMounted(async () => {
       <template #footer>
         <div class="form-bottom-btn">
           <el-button v-show="currentStep > 0" @click="currentStep--" :disabled="saveLoading"
-            >上一步</el-button
+            >{{ $t("上一步") }}</el-button
           >
-          <el-button v-show="currentStep < 1" @click="currentStep++">下一步</el-button>
+          <el-button v-show="currentStep < 1" @click="currentStep++">{{ $t("下一步") }}</el-button>
           <el-button
             v-show="currentStep === 1"
             type="primary"
             @click="onSubmit"
             :loading="saveLoading"
-            >保存</el-button
+            >{{ $t("保存") }}</el-button
           >
         </div>
       </template>

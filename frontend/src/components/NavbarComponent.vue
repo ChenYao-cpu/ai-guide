@@ -1,4 +1,6 @@
-<script lang="ts" setup>
+<script lang="ts" setup>import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import { t } from '@/i18n'
+
 import { Fold, Expand, ArrowDown } from '@element-plus/icons-vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -15,10 +17,10 @@ const userInfoItem = ref({} as UserInfo)
 
 const roleLabel = computed(() => {
   const role = tokenStore.userInfo.role
-  return role === 'admin' ? '景区管理员' : role === 'guide' ? '数字导游' : '运营成员'
+  return role === 'admin' ? t("景区管理员") : role === 'guide' ? t("数字导游") : t("运营成员")
 })
 
-const displayName = computed(() => userInfoItem.value.username || tokenStore.userInfo.username || '运营用户')
+const displayName = computed(() => userInfoItem.value.username || tokenStore.userInfo.username || t("运营用户"))
 
 const handleLogout = () => {
   tokenStore.logout()
@@ -31,13 +33,13 @@ onMounted(async () => {
     if (data.code === 0) {
       userInfoItem.value = data.data
     } else {
-      ElMessage.error('获取用户信息失败: ' + data.message)
+      ElMessage.error(t("获取用户信息失败: ") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取用户信息失败: ' + error.message)
+      ElMessage.error(t("获取用户信息失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 })
@@ -45,27 +47,28 @@ onMounted(async () => {
 
 <template>
   <el-header class="topbar">
-    <button class="collapse-trigger" type="button" aria-label="切换侧边栏" @click="isCollapse = !isCollapse">
+    <button class="collapse-trigger" type="button" :aria-label='$t("切换侧边栏")' @click="isCollapse = !isCollapse">
       <el-icon><Fold v-show="isCollapse" /><Expand v-show="!isCollapse" /></el-icon>
     </button>
 
     <BreadCrumb class="breadcrumb" />
 
     <div class="topbar-actions">
+        <LanguageSwitch />
 
       <el-dropdown trigger="click" placement="bottom-end">
         <button class="user-trigger" type="button">
           <el-avatar :size="34" :src="userInfoItem.avatar" class="user-avatar">{{ displayName.slice(0, 1) }}</el-avatar>
           <span class="user-meta">
             <strong>{{ displayName }}</strong>
-            <small>{{ roleLabel }}</small>
+            <small>{{ $t(roleLabel) }}</small>
           </span>
           <el-icon class="arrow"><ArrowDown /></el-icon>
         </button>
         <template #dropdown>
           <el-dropdown-menu class="user-dropdown">
-            <el-dropdown-item disabled>{{ roleLabel }}</el-dropdown-item>
-            <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+            <el-dropdown-item disabled>{{ $t(roleLabel) }}</el-dropdown-item>
+            <el-dropdown-item divided @click="handleLogout">{{ $t("退出登录") }}</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>

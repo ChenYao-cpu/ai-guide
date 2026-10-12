@@ -1,4 +1,4 @@
-"""修正六个演示景点；保留 ID、路线、讲解与其他数据，修改前保存坐标备份。"""
+"""同步颐和园景点坐标；保留 ID、路线、讲解与其他数据，修改前保存坐标备份。"""
 import json
 import argparse
 from datetime import datetime
@@ -10,7 +10,7 @@ from seed_summer_palace_demo import DB_ENGINE, ScenicSpotInfo, Session, select, 
 def main():
     locations = json.loads((ROOT / "data/summer_palace_locations.json").read_text(encoding="utf-8"))["spots"]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--spots", nargs="+", choices=list(locations), help="仅修正指定的景点；默认六个景点")
+    parser.add_argument("--spots", nargs="+", choices=list(locations), help="仅修正指定的景点；默认同步数据文件中的全部景点")
     names = set(parser.parse_args().spots or locations)
     with Session(DB_ENGINE) as session:
         spots = session.exec(select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)).all()

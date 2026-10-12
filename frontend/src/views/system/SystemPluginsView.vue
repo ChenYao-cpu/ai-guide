@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -11,7 +12,7 @@ onMounted(async () => {
   const { data } = await getSystemPluginsInfoRequest()
   if (data.code === 0) {
     pluginsInfo.value = data.data
-    ElMessage.success('获取组件信息成功')
+    ElMessage.success(t("获取组件信息成功"))
   } else {
     ElMessage.error(data.message)
   }
@@ -25,19 +26,19 @@ onMounted(async () => {
         <el-col :span="4">
           <div class="plugins-ico">
             <el-avatar shape="square" :size="60" :style="{ backgroundColor: item.avatar_color }">
-              {{ item.plugin_name }}
+              {{ $t(item.plugin_name) }}
             </el-avatar>
           </div>
         </el-col>
         <el-col :span="20">
           <div class="item-content">
             <div>
-              <p class="title">{{ item.plugin_name }}</p>
-              <p class="content">{{ item.describe }}</p>
+              <p class="title">{{ $t(item.plugin_name) }}</p>
+              <p class="content">{{ $t(item.describe) }}</p>
             </div>
             <div>
               <el-tag size="large" effect="dark" :type="item.enabled ? 'success' : 'danger'">
-                {{ item.enabled ? '已启动' : '未启动' }}
+                {{ $t(item.enabled ? '已启动' : '未启动') }}
               </el-tag>
             </div>
           </div>

@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es'
@@ -60,7 +61,7 @@ const handleHeighlightInputConfirm = () => {
 
 // 表单提交
 const onSubmit = async () => {
-  const statusInof = props.productId ? '编辑商品' : '新建商品'
+  const statusInof = props.productId ? t("编辑商品") : t("新建商品")
 
   try {
     saveLoading.value = true
@@ -70,21 +71,21 @@ const onSubmit = async () => {
 
     const { data } = await productCreadeOrEditRequest(productInfo.value)
     if (data.code === 0) {
-      ElMessage.success(`${statusInof}成功!`)
+      ElMessage.success(t("{p0}成功!", {p0: statusInof}))
       saveLoading.value = false
 
       router.push({ name: 'Product' })
     } else {
       saveLoading.value = false
-      ElMessage.error(`${statusInof}失败, ${data.message}`)
-      throw new Error(`${statusInof}失败, ${data.message}`)
+      ElMessage.error(t("{p0}失败, {p1}", {p0: statusInof, p1: data.message}))
+      throw new Error(t("{p0}失败, {p1}", {p0: statusInof, p1: data.message}))
     }
   } catch (error: unknown) {
     saveLoading.value = false
     if (error instanceof AxiosError) {
-      ElMessage.error('失败:' + error.message)
+      ElMessage.error(t("失败:") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -97,15 +98,15 @@ onMounted(async () => {
       if (data.code === 0) {
         productInfo.value = data.data
         heighlights_list.value = productInfo.value.heighlights.split(';')
-        ElMessage.success('获取商品信息成功')
+        ElMessage.success(t("获取商品信息成功"))
       } else {
         ElMessage.error(data.message)
       }
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
-        ElMessage.error('失败:' + error.message)
+        ElMessage.error(t("失败:") + error.message)
       } else {
-        ElMessage.error('未知错误：' + error)
+        ElMessage.error(t("未知错误：") + error)
       }
     }
   }
@@ -115,18 +116,17 @@ onMounted(async () => {
 <template>
   <div>
     <!-- 返回栏 -->
-    <el-page-header @back="router.push({ name: 'ProductList' })" title="返回">
+    <el-page-header @back="router.push({ name: 'ProductList' })" :title='$t("返回")'>
       <template #content>
         <div class="flex items-center">
           <span class="text-large font-600 mr-3">
-            {{ props.productId ? '编辑' : '新建' }}商品
-          </span>
+            {{ $t(props.productId ? '编辑' : '新建') }} {{ $t("商品") }}</span>
         </div>
       </template>
       <template #extra>
         <div class="flex items-center">
           <el-button type="primary" class="ml-2" @click="onSubmit" :loading="saveLoading"
-            >保存</el-button
+            >{{ $t("保存") }}</el-button
           >
         </div>
       </template>
@@ -135,8 +135,8 @@ onMounted(async () => {
       <template #header>
         <!-- 步骤条 -->
         <el-steps :active="currentStep" finish-status="success" align-center>
-          <el-step title="头图 & 说明书" @click="currentStep = 0" />
-          <el-step title="商品信息" @click="currentStep = 1" />
+          <el-step :title='$t("头图 & 说明书")' @click="currentStep = 0" />
+          <el-step :title='$t("商品信息")' @click="currentStep = 1" />
         </el-steps>
       </template>
       <!-- 表单 -->
@@ -144,11 +144,11 @@ onMounted(async () => {
       <el-form :model="productInfo" label-width="120" size="large">
         <div v-show="currentStep === 0">
           <!-- 商品头图 & 说明书-->
-          <el-form-item label="商品图片">
+          <el-form-item :label='$t("商品图片")'>
             <FileUpload v-model="productInfo.image_path" file-type="image" />
           </el-form-item>
 
-          <el-form-item label="商品说明书">
+          <el-form-item :label='$t("商品说明书")'>
             <FileUpload v-model="productInfo.instruction" file-type="doc" />
           </el-form-item>
         </div>
@@ -156,14 +156,14 @@ onMounted(async () => {
         <div v-show="currentStep === 1">
           <!-- 商品信息 -->
 
-          <el-form-item label="商品名称">
+          <el-form-item :label='$t("商品名称")'>
             <el-input v-model="productInfo.product_name" maxlength="50" show-word-limit />
           </el-form-item>
-          <el-form-item label="商品分类">
+          <el-form-item :label='$t("商品分类")'>
             <!-- TODO 改为下拉框 -->
             <el-input v-model="productInfo.product_class" />
           </el-form-item>
-          <el-form-item label="商品亮点">
+          <el-form-item :label='$t("商品亮点")'>
             <el-tag
               v-for="(heighlights, index) in heighlights_list"
               :key="index"
@@ -174,7 +174,7 @@ onMounted(async () => {
               size="large"
               style="margin: 3px"
             >
-              {{ heighlights }}
+              {{ $t(heighlights) }}
             </el-tag>
 
             <el-input
@@ -198,7 +198,7 @@ onMounted(async () => {
             >
             </el-button>
           </el-form-item>
-          <el-form-item label="价格">
+          <el-form-item :label='$t("价格")'>
             <el-input-number
               v-model="productInfo.selling_price"
               :min="0.01"
@@ -208,7 +208,7 @@ onMounted(async () => {
               size="large"
             />
           </el-form-item>
-          <el-form-item label="库存数量">
+          <el-form-item :label='$t("库存数量")'>
             <el-input-number
               v-model="productInfo.amount"
               :min="0"
@@ -217,16 +217,16 @@ onMounted(async () => {
               size="large"
             />
           </el-form-item>
-          <el-form-item label="发货地">
+          <el-form-item :label='$t("发货地")'>
             <!-- TODO 改为下拉框选择 ? -->
             <el-input v-model="productInfo.departure_place" maxlength="100" show-word-limit />
           </el-form-item>
-          <el-form-item label="快递公司">
+          <el-form-item :label='$t("快递公司")'>
             <!-- TODO 改为下拉框 -->
             <el-input v-model="productInfo.delivery_company" maxlength="50" show-word-limit />
           </el-form-item>
           <div class="bottom-gen-btn">
-            <el-button type="success" disabled> AI 生成 (comming soon) </el-button>
+            <el-button type="success" disabled>{{ $t("AI 生成 (comming soon)") }}</el-button>
           </div>
         </div>
       </el-form>
@@ -234,15 +234,15 @@ onMounted(async () => {
       <template #footer>
         <div class="form-bottom-btn">
           <el-button v-show="currentStep > 0" @click="currentStep--" :disabled="saveLoading"
-            >上一步</el-button
+            >{{ $t("上一步") }}</el-button
           >
-          <el-button v-show="currentStep < 1" @click="currentStep++">下一步</el-button>
+          <el-button v-show="currentStep < 1" @click="currentStep++">{{ $t("下一步") }}</el-button>
           <el-button
             v-show="currentStep === 1"
             type="primary"
             @click="onSubmit"
             :loading="saveLoading"
-            >保存</el-button
+            >{{ $t("保存") }}</el-button
           >
         </div>
       </template>

@@ -10,19 +10,22 @@
 import hashlib
 import time
 import uuid
+from typing import Literal
+from pydantic import BaseModel, Field as RequestField
+from sqlmodel import Session, select
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, Form
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
 from ..database.knowledge_doc_db import (
     add_knowledge_doc,
-    delete_knowledge_doc,
     get_db_knowledge_docs,
-    update_doc_status,
 )
-from ..models.tour_models import KnowledgeDocument
+from ..models.tour_models import KnowledgeDocument, KnowledgeReview
+from ..database.init_db import DB_ENGINE
+from ..modules.knowledge_review import read_document, review_document, KNOWLEDGE_WRITE_LOCK
 from ..modules.rag.rag_worker import rebuild_tour_rag_db
 from ..utils import ResultCode, make_return_data
 from .users import get_current_user_info
@@ -52,16 +55,19 @@ async def get_knowledge_doc_list(
 
 @router.post("/upload", summary="上传知识库文档")
 async def upload_knowledge_doc(
-    title: str = "",
+    title: str = Form(default=""),
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user_info),
 ):
     """上传景区知识文档（支持 PDF/Word/TXT）"""
-    file_type = file.filename.split(".")[-1].lower()
+    file_type = (file.filename or '').split(".")[-1].lower()
     allowed_types = ["pdf", "docx", "doc", "txt", "md"]
 
     if file_type not in allowed_types:
         return make_return_data(False, ResultCode.FAIL, f"不支持的文件类型: {file_type}", "")
+    content=await file.read(20*1024*1024+1)
+    if not content or len(content)>20*1024*1024:
+        return make_return_data(False,ResultCode.FAIL,'文档不能为空且不能超过20MB','')
 
     # 保存文件
     upload_time_str = str(int(time.time())) + "__" + str(uuid.uuid4().hex)
@@ -74,11 +80,10 @@ async def upload_knowledge_doc(
     save_path = save_dir / save_filename
 
     with open(save_path, "wb") as buffer:
-        content = await file.read()
         buffer.write(content)
 
     # 计算内容哈希
-    content_hash = hashlib.sha256(content).hexdigest()[:16]
+    content_hash = hashlib.sha256(content).hexdigest()
 
     # 创建数据库记录
     doc_title = title if title else file.filename
@@ -94,30 +99,63 @@ async def upload_knowledge_doc(
     )
     doc = await add_knowledge_doc(doc)
 
-    # 异步触发 RAG 重建
-    try:
-        await update_doc_status(doc.doc_id, "processing")
-        await rebuild_tour_rag_db(user_id)
-        await update_doc_status(doc.doc_id, "completed", chunk_count=-1)  # chunk count updated by feature_store
-    except Exception as e:
-        logger.error(f"RAG rebuild failed: {e}")
-        await update_doc_status(doc.doc_id, "failed")
+    return make_return_data(True, ResultCode.SUCCESS, "已上传，审核发布后才进入问答索引", {"doc_id": doc.doc_id})
 
-    return make_return_data(True, ResultCode.SUCCESS, "上传成功", {"doc_id": doc.doc_id})
+
+class ReviewRequest(BaseModel):
+    decision: Literal['publish','reject','withdraw']
+    note: str = RequestField(min_length=3,max_length=500)
+    expected_hash: str
+
+
+@router.get('/preview/{doc_id}',summary='预览正文与审核历史')
+async def preview_knowledge_doc(doc_id: int,user_id: int=Depends(get_current_user_info)):
+    try:
+        with Session(DB_ENGINE) as db:
+            doc=db.get(KnowledgeDocument,doc_id)
+            if not doc or doc.user_id!=user_id: raise ValueError('文档不存在或无权访问')
+            text,digest=read_document(doc)
+            reviews=db.exec(select(KnowledgeReview).where(KnowledgeReview.doc_id==doc_id)
+                            .order_by(KnowledgeReview.review_id.desc()).limit(50)).all()
+            return make_return_data(True,ResultCode.SUCCESS,'成功',{
+                'doc_id':doc_id,'title':doc.title,'status':doc.status,'expected_hash':doc.content_hash,
+                'content_hash':digest,'text':text[:12000],'truncated':len(text)>12000,
+                'reviews':reviews,'file_url':API_CONFIG.REQUEST_FILES_URL+'/'+doc.file_path.replace('\\','/')})
+    except ValueError as exc:
+        return make_return_data(False,ResultCode.FAIL,str(exc),'')
+
+
+@router.post('/review/{doc_id}',summary='审核发布、驳回或撤回知识文档')
+async def review_knowledge_doc(doc_id: int,request: ReviewRequest,user_id: int=Depends(get_current_user_info)):
+    try:
+        if len(request.note.strip())<3: raise ValueError('请填写至少3个字的审核说明')
+        result=await review_document(DB_ENGINE,doc_id,user_id,request.decision,request.note,request.expected_hash)
+        return make_return_data(True,ResultCode.SUCCESS,'审核完成',result)
+    except Exception as exc:
+        logger.warning('Knowledge review failed: {}',type(exc).__name__)
+        return make_return_data(False,ResultCode.FAIL,str(exc) if isinstance(exc,ValueError) else '审核失败，原发布版本保持不变','')
 
 
 @router.delete("/delete/{docId}", summary="删除知识库文档")
 async def remove_knowledge_doc(docId: int, user_id: int = Depends(get_current_user_info)):
-    success = await delete_knowledge_doc(docId, user_id)
-
-    if not success:
-        return make_return_data(False, ResultCode.FAIL, "删除失败", "")
-
-    # 重建 RAG
     try:
-        await rebuild_tour_rag_db(user_id)
+        from ..modules.rag import rag_worker
+        async with KNOWLEDGE_WRITE_LOCK:
+            with Session(DB_ENGINE) as db:
+                doc=db.get(KnowledgeDocument,docId)
+                if not doc or doc.user_id!=user_id: raise ValueError('文档不存在或无权删除')
+                published=db.exec(select(KnowledgeDocument).where(KnowledgeDocument.user_id==user_id,
+                                     KnowledgeDocument.status=='completed')).all()
+                paths=[d.file_path for d in published if d.doc_id!=docId]
+                prepared=await rag_worker._load_lightweight_tour_retriever(user_id,paths) if paths else None
+                db.add(KnowledgeReview(doc_id=docId,reviewer_id=user_id,previous_status=doc.status,status='deleted',
+                                       content_hash=doc.content_hash,note='管理员删除文档'))
+                db.delete(doc)
+                db.commit()
+                if user_id==1: rag_worker.TOUR_RAG_RETRIEVER=prepared
     except Exception as e:
-        logger.warning(f"RAG rebuild after delete failed: {e}")
+        logger.warning('Knowledge delete failed: {}',type(e).__name__)
+        return make_return_data(False,ResultCode.FAIL,str(e) if isinstance(e,ValueError) else '删除失败，原发布版本保持不变','')
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", "")
 
@@ -126,7 +164,8 @@ async def remove_knowledge_doc(docId: int, user_id: int = Depends(get_current_us
 async def reindex_knowledge_base(user_id: int = Depends(get_current_user_info)):
     """手动触发 RAG 向量数据库重建"""
     try:
-        await rebuild_tour_rag_db(user_id)
+        async with KNOWLEDGE_WRITE_LOCK:
+            await rebuild_tour_rag_db(user_id)
         return make_return_data(True, ResultCode.SUCCESS, "重建索引完成", "")
     except Exception as e:
         logger.error(f"Reindex failed: {e}")

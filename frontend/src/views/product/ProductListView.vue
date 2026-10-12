@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatTableCell } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Delete, Edit } from '@element-plus/icons-vue'
@@ -44,14 +45,14 @@ const getProductList = async (params: ProductListType = {}) => {
     if (data.code === 0) {
       queriedResult.value = data.data
     } else {
-      ElMessage.error('商品接口错误')
-      throw new Error('商品接口错误')
+      ElMessage.error(t("商品接口错误"))
+      throw new Error(t("商品接口错误"))
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('商品接口失败: ' + error.message)
+      ElMessage.error(t("商品接口失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -63,21 +64,21 @@ onMounted(() => {
 
 const isDelecting = ref(false)
 const DeleteProduct = async (id: number, productName: string) => {
-  ElMessageBox.confirm(`确定要删除 "${productName}" 吗？`, '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定要删除 \"{p0}\" 吗？", {p0: productName}), t("警告"), {
+    confirmButtonText: t("确定"),
+    cancelButtonText: t("取消"),
     type: 'warning',
     showClose: false
   })
     .then(async () => {
-      ElMessage.success(`正在删除 ${productName}，请稍候`)
+      ElMessage.success(t("正在删除 {p0}，请稍候", {p0: productName}))
       isDelecting.value = true
       const { data } = await deleteProductByIdRequest(id)
       if (data.code === 0) {
-        ElMessage.success('删除成功')
+        ElMessage.success(t("删除成功"))
         getProductList()
       } else {
-        ElMessage.error('删除失败')
+        ElMessage.error(t("删除失败"))
       }
       isDelecting.value = false
     })
@@ -98,11 +99,11 @@ const DeleteProduct = async (id: number, productName: string) => {
         <div class="card-header">
           <div>
             <el-form :inline="true" :model="queriedResult.product_list">
-              <el-form-item label="搜索">
+              <el-form-item :label='$t("搜索")'>
                 <el-input
                   style="width: 240px"
                   v-model="queryCondition.productName"
-                  placeholder="商品名称"
+                  :placeholder='$t("商品名称")'
                   clearable
                 />
               </el-form-item>
@@ -113,9 +114,7 @@ const DeleteProduct = async (id: number, productName: string) => {
                 </el-select>
               </el-form-item> -->
               <el-form-item>
-                <el-button type="primary" @click="() => getProductList({ currentPage: 1 })">
-                  查询
-                </el-button>
+                <el-button type="primary" @click="() => getProductList({ currentPage: 1 })">{{ $t("查询") }}</el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -124,18 +123,16 @@ const DeleteProduct = async (id: number, productName: string) => {
             <el-button type="primary" @click="router.push({ name: 'ProductCreate' })">
               <el-icon style="margin-right: 5px">
                 <Plus />
-              </el-icon>
-              添加商品
-            </el-button>
+              </el-icon>{{ $t("添加商品") }}</el-button>
           </div>
         </div>
       </template>
 
       <!-- 中部表格信息-->
       <el-table :data="queriedResult.product_list" max-height="1000" v-loading="tableLoading">
-        <el-table-column prop="product_id" label="ID" align="center" width="50px" />
+        <el-table-column :formatter="formatTableCell" prop="product_id" label="ID" align="center" width="50px" />
 
-        <el-table-column prop="image_path" label="图片" align="center">
+        <el-table-column prop="image_path" :label='$t("图片")' align="center">
           <template #default="scope">
             <div style="display: flex; align-items: center">
               <!-- TODO 加上  :preview-src-list="[scope.row.image_path]"  -->
@@ -144,15 +141,15 @@ const DeleteProduct = async (id: number, productName: string) => {
           </template>
         </el-table-column>
 
-        <el-table-column prop="product_name" label="名称" align="center" />
-        <el-table-column prop="product_class" label="分类" align="center" />
-        <el-table-column prop="heighlights" label="亮点" align="center" />
-        <el-table-column prop="selling_price" label="价格" align="center" />
-        <el-table-column prop="amount" label="库存" align="center" />
-        <el-table-column prop="departure_place" label="发货地" align="center" />
-        <el-table-column prop="delivery_company" label="快递公司" align="center" />
-        <el-table-column prop="upload_date" label="上传时间" align="center" />
-        <el-table-column label="操作" v-slot="{ row }" align="center" width="250px">
+        <el-table-column :formatter="formatTableCell" prop="product_name" :label='$t("名称")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_class" :label='$t("分类")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="heighlights" :label='$t("亮点")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="selling_price" :label='$t("价格")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="amount" :label='$t("库存")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="departure_place" :label='$t("发货地")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="delivery_company" :label='$t("快递公司")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="upload_date" :label='$t("上传时间")' align="center" />
+        <el-table-column :label='$t("操作")' v-slot="{ row }" align="center" width="250px">
           <div class="control-item">
             <el-button
               :type="row.instruction !== '' ? 'success' : 'warning'"
@@ -165,9 +162,7 @@ const DeleteProduct = async (id: number, productName: string) => {
                   row.product_id
                 )
               "
-            >
-              说明书
-            </el-button>
+            >{{ $t("说明书") }}</el-button>
 
             <!-- 编辑按钮 -->
             <el-button

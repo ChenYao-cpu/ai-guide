@@ -1,5 +1,6 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">import { t, locale } from '@/i18n'
+
+import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const chartRef = ref(null)
@@ -19,12 +20,14 @@ const props = defineProps({
   }
 })
 
+let chart: echarts.ECharts | undefined
 const initChart = () => {
-  const chart = echarts.init(chartRef.value, 'soft-ui')
+  chart?.dispose()
+  chart = echarts.init(chartRef.value, 'soft-ui', { locale: locale.value === 'en' ? 'EN' : 'ZH' })
 
   const option = {
     title: {
-      text: '本周运营趋势'
+      text: t("本周运营趋势")
     },
     tooltip: {
       trigger: 'axis',
@@ -36,7 +39,7 @@ const initChart = () => {
       }
     },
     legend: {
-      data: ['服务人次', '满意度(%)', '新开会话', '活跃游客']
+      data: [t("服务人次"), t("满意度(%)"), t("新开会话"), t("活跃游客")]
     },
     toolbox: {
       feature: {
@@ -53,7 +56,7 @@ const initChart = () => {
       {
         type: 'category',
         boundaryGap: false,
-        data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        data: [t("周一"), t("周二"), t("周三"), t("周四"), t("周五"), t("周六"), t("周日")]
       }
     ],
     yAxis: [
@@ -63,7 +66,7 @@ const initChart = () => {
     ],
     series: [
       {
-        name: '服务人次',
+        name: t("服务人次"),
         type: 'line',
         stack: 'Total',
         areaStyle: {},
@@ -73,7 +76,7 @@ const initChart = () => {
         data: props.sessionTrend
       },
       {
-        name: '满意度(%)',
+        name: t("满意度(%)"),
         type: 'line',
         stack: 'Total',
         areaStyle: {},
@@ -83,7 +86,7 @@ const initChart = () => {
         data: props.satisfactionTrend
       },
       {
-        name: '新开会话',
+        name: t("新开会话"),
         type: 'line',
         stack: 'Total',
         areaStyle: {},
@@ -93,7 +96,7 @@ const initChart = () => {
         data: props.newSessionTrend
       },
       {
-        name: '活跃游客',
+        name: t("活跃游客"),
         type: 'line',
         stack: 'Total',
         areaStyle: {},
@@ -111,6 +114,7 @@ const initChart = () => {
 onMounted(() => {
   initChart()
 })
+watch(locale, () => initChart())
 </script>
 
 <template>

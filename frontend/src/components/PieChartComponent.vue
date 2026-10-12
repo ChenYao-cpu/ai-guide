@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t, locale } from '@/i18n'
 import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
@@ -16,11 +17,12 @@ const defaultColors = ["#4f46e5", "#818cf8", "#6366f1", "#10b981", "#ec4899", "#
 
 function initChart() {
   if (!chartRef.value) return
-  chartInstance = echarts.init(chartRef.value, 'soft-ui')
+  chartInstance?.dispose()
+  chartInstance = echarts.init(chartRef.value, 'soft-ui', { locale: locale.value === 'en' ? 'EN' : 'ZH' })
 
   const option: echarts.EChartsOption = {
     title: props.title ? {
-      text: props.title,
+      text: t(props.title),
       left: 'center',
       textStyle: { fontSize: 16, fontWeight: 600 },
     } : undefined,
@@ -77,6 +79,7 @@ watch(() => props.data, () => {
 }, { deep: true })
 
 onMounted(() => { initChart() })
+watch(locale, () => initChart())
 </script>
 
 <template>

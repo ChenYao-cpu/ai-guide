@@ -39,12 +39,12 @@ const props = defineProps({
         <div class="user-info">
           <!-- 标签 -->
           <template v-if="props.role === 'streamer'">
-            <el-tag type="success" style="margin-right: 5px">主播</el-tag>
+            <el-tag type="success" style="margin-right: 5px">{{ $t("主播") }}</el-tag>
           </template>
           <!-- 用户名 -->
           <div class="message-title">{{ props.userName }}</div>
           <!-- 发送时间 -->
-          <div class="message-title">{{ props.datetime }}</div>
+          <div class="message-title">{{ $t(props.datetime) }}</div>
         </div>
         <div class="message-content">
           <!-- 内容 -->

@@ -1,5 +1,6 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">import { t, locale } from '@/i18n'
+
+import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const chartRef = ref(null)
@@ -23,21 +24,23 @@ const props = defineProps({
   }
 })
 
+let chart: echarts.ECharts | undefined
 const initChart = () => {
-  const chart = echarts.init(chartRef.value, 'soft-ui')
+  chart?.dispose()
+  chart = echarts.init(chartRef.value, 'soft-ui', { locale: locale.value === 'en' ? 'EN' : 'ZH' })
 
   const option = {
     title: {
-      text: '景区资源配置'
+      text: t("景区资源配置")
     },
     tooltip: {},
     xAxis: {
-      data: ['景点数量', '知识文档', '数字导游', '游览路线']
+      data: [t("景点数量"), t("知识文档"), t("数字导游"), t("游览路线")]
     },
     yAxis: {},
     series: [
       {
-        name: '数量',
+        name: t("数量"),
         type: 'bar',
         data: [props.spotCount, props.docCount, props.guideCount, props.routeCount]
       }
@@ -50,6 +53,7 @@ const initChart = () => {
 onMounted(() => {
   initChart()
 })
+watch(locale, () => initChart())
 </script>
 
 <template>

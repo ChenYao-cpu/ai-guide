@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { request_handler } from '@/api/base'
@@ -20,7 +21,7 @@ let pollTimer: ReturnType<typeof setTimeout> | undefined
 const auth = () => ({Authorization:header_authorization.value})
 function errorMessage(e: unknown) {
   const value=e as {response?:{data?:{detail?:string}}}
-  return value.response?.data?.detail || '请求失败，请检查服务连接'
+  return value.response?.data?.detail || t("请求失败，请检查服务连接")
 }
 function schedulePoll() {
   if(disposed)return
@@ -61,15 +62,15 @@ async function recoverMotion() {
 async function applyMotion() {
   if(!motion.value)return
   motionBusy.value=true
-  try {const r=await request_handler.post('/avatar/motion-jobs/'+motion.value.job_id+'/apply',null,{headers:auth()});motion.value=r.data.data;ElMessage.success('动作视频已应用');await refresh()}
+  try {const r=await request_handler.post('/avatar/motion-jobs/'+motion.value.job_id+'/apply',null,{headers:auth()});motion.value=r.data.data;ElMessage.success(t("动作视频已应用"));await refresh()}
   catch(e) {motionError.value=errorMessage(e)}
   finally {motionBusy.value=false}
 }
 const statusText:Record<string,string>={submitting:'正在提交',pending:'服务排队中',running:'正在生成',completed:'已生成，待预览应用',applied:'已应用',failed:'生成失败',unknown:'提交结果不确定，请核对百炼控制台'}
 async function configureCartoon() {
   uploading.value = true
-  try { await request_handler.post('/avatar/cartoon/' + props.guideId, null, { headers: { Authorization: header_authorization.value } }); ElMessage.success('已启用 Live2D 样例'); await refresh() }
-  catch { ElMessage.error('卡通配置失败，请检查登录权限和模型文件') }
+  try { await request_handler.post('/avatar/cartoon/' + props.guideId, null, { headers: { Authorization: header_authorization.value } }); ElMessage.success(t("已启用 Live2D 样例")); await refresh() }
+  catch { ElMessage.error(t("卡通配置失败，请检查登录权限和模型文件")) }
   finally { uploading.value = false }
 }
 async function refresh() {
@@ -81,9 +82,9 @@ async function upload(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  if (!file.name.toLowerCase().endsWith('.mp4') || file.size > 200 * 1024 * 1024) { ElMessage.error('请选择 200MB 以内的 MP4 视频'); input.value = ''; return }
+  if (!file.name.toLowerCase().endsWith('.mp4') || file.size > 200 * 1024 * 1024) { ElMessage.error(t("请选择 200MB 以内的 MP4 视频")); input.value = ''; return }
   uploading.value = true
-  try { const form = new FormData(); form.append('file', file); await request_handler.post('/avatar/source/' + props.guideId, form, { headers: { Authorization: header_authorization.value } }); ElMessage.success('真人素材已保存'); await refresh() }
+  try { const form = new FormData(); form.append('file', file); await request_handler.post('/avatar/source/' + props.guideId, form, { headers: { Authorization: header_authorization.value } }); ElMessage.success(t("真人素材已保存")); await refresh() }
   catch(e) { ElMessage.error(errorMessage(e)) }
   finally { uploading.value = false; input.value = '' }
 }
@@ -93,32 +94,32 @@ watch(()=>props.guideId,()=>{motion.value=null;prompt.value='';if(pollTimer)clea
 </script>
 <template>
   <div class="avatar-config">
-    <strong>数字人接入状态</strong>
-    <p v-if="error" class="error">{{ error }}</p>
+    <strong>{{ $t("数字人接入状态") }}</strong>
+    <p v-if="error" class="error">{{ $t(error) }}</p>
     <template v-else-if="state">
-      <p><span :class="{ready:state.realistic.ready}">真人</span>{{ state.realistic.message }}</p>
-      <p><span :class="{ready:state.cartoon.ready}">卡通</span>{{ state.cartoon.message }}</p>
+      <p><span :class="{ready:state.realistic.ready}">{{ $t("真人") }}</span>{{ state.realistic.message }}</p>
+      <p><span :class="{ready:state.cartoon.ready}">{{ $t("卡通") }}</span>{{ state.cartoon.message }}</p>
     </template>
-    <p v-else>正在查询后端状态…</p>
-    <div class="actions"><label class="upload"><input type="file" accept="video/mp4,.mp4" :disabled="uploading" @change="upload" />{{ uploading ? '正在上传…' : '上传动作视频' }}</label><el-button :disabled="uploading" @click="configureCartoon">启用卡通样例</el-button><el-button text @click="refresh">刷新状态</el-button></div>
-    <small>上传3至30秒的MP4：全身完整入镜、头部朝前、动作小幅自然、固定镜头。系统会检查视频解码和画面变化，动作质量需预览确认。</small>
+    <p v-else>{{ $t("正在查询后端状态…") }}</p>
+    <div class="actions"><label class="upload"><input type="file" accept="video/mp4,.mp4" :disabled="uploading" @change="upload" />{{ $t(uploading ? '正在上传…' : '上传动作视频') }}</label><el-button :disabled="uploading" @click="configureCartoon">{{ $t("启用卡通样例") }}</el-button><el-button text @click="refresh">{{ $t("刷新状态") }}</el-button></div>
+    <small>{{ $t("上传3至30秒的MP4：全身完整入镜、头部朝前、动作小幅自然、固定镜头。系统会检查视频解码和画面变化，动作质量需预览确认。") }}</small>
     <div class="motion-panel">
-      <strong>海报生成全身动作</strong>
+      <strong>{{ $t("海报生成全身动作") }}</strong>
       <p>{{ motionConfig?.message || '正在查询动作生成配置…' }}</p>
-      <el-input v-model="prompt" type="textarea" :rows="4" maxlength="800" placeholder="描述欢迎、点头、讲解手势等动作" />
-      <small>会将该角色海报提交到阿里云百炼，调用会产生费用。生成效果需确认人物、服装与动作一致。</small>
+      <el-input v-model="prompt" type="textarea" :rows="4" maxlength="800" :placeholder='$t("描述欢迎、点头、讲解手势等动作")' />
+      <small>{{ $t("会将该角色海报提交到阿里云百炼，调用会产生费用。生成效果需确认人物、服装与动作一致。") }}</small>
       <div class="actions">
-        <el-button :disabled="!motionConfig?.configured || motionBusy || !prompt.trim() || !!(motion && ['submitting','pending','running','unknown'].includes(motion.status))" @click="generateMotion">生成动作视频（收费）</el-button>
-        <el-button v-if="motion" :disabled="motionBusy" @click="refreshMotion">刷新任务</el-button>
+        <el-button :disabled="!motionConfig?.configured || motionBusy || !prompt.trim() || !!(motion && ['submitting','pending','running','unknown'].includes(motion.status))" @click="generateMotion">{{ $t("生成动作视频（收费）") }}</el-button>
+        <el-button v-if="motion" :disabled="motionBusy" @click="refreshMotion">{{ $t("刷新任务") }}</el-button>
       </div>
-      <p v-if="motion">{{ statusText[motion.status] || motion.status }}{{ motion.message ? '：'+motion.message : '' }}</p>
+      <p v-if="motion">{{ $t(statusText[motion.status] || motion.status) }} {{ motion.message ? '：'+motion.message : '' }}</p>
       <div v-if="motion?.status==='unknown'">
-        <el-input v-model="recoveryTaskId" placeholder="在百炼控制台找到原任务，粘贴任务ID" />
-        <el-button :disabled="motionBusy || !recoveryTaskId.trim()" @click="recoverMotion">恢复原任务</el-button>
+        <el-input v-model="recoveryTaskId" :placeholder='$t("在百炼控制台找到原任务，粘贴任务ID")' />
+        <el-button :disabled="motionBusy || !recoveryTaskId.trim()" @click="recoverMotion">{{ $t("恢复原任务") }}</el-button>
       </div>
-      <p v-if="motionError" class="error">{{ motionError }}</p>
+      <p v-if="motionError" class="error">{{ $t(motionError) }}</p>
       <video v-if="motion?.video_url" :src="motion.video_url" controls playsinline class="motion-preview" />
-      <el-button v-if="motion?.status==='completed'" :disabled="motionBusy" @click="applyMotion">使用这段动作视频</el-button>
+      <el-button v-if="motion?.status==='completed'" :disabled="motionBusy" @click="applyMotion">{{ $t("使用这段动作视频") }}</el-button>
     </div>
   </div>
 </template>

@@ -1,6 +1,8 @@
-<script lang="ts" setup>
+<script lang="ts" setup>import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import { t } from '@/i18n'
+
 import BrandLogo from '@/components/BrandLogo.vue'
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   User,
@@ -53,13 +55,13 @@ interface FormType {
   password: string
 }
 const loginForm = reactive<FormType>({ username: '', password: '' })
-const rules = reactive<FormRules<FormType>>({
-  username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
+const rules = computed<FormRules<FormType>>(() => ({
+  username: [{ required: true, message: t("请输入账号"), trigger: 'blur' }],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 18, message: '密码长度必须为 6 至 18 位', trigger: 'blur' }
+    { required: true, message: t("请输入密码"), trigger: 'blur' },
+    { min: 6, max: 18, message: t("密码长度必须为 6 至 18 位"), trigger: 'blur' }
   ]
-})
+}))
 async function selectEntry(mode: EntryMode, focus = false) {
   if (isLogining.value) return
   entryMode.value = mode
@@ -79,7 +81,7 @@ const onSubmit = async () => {
       password: loginForm.password
     })
     if (response.status !== 200) {
-      ElMessage.error('账号或密码错误')
+      ElMessage.error(t("账号或密码错误"))
       return
     }
     tokenStore.saveToken(response.data as TokenItem)
@@ -90,18 +92,18 @@ const onSubmit = async () => {
     } catch {
       /* Account recall is optional when browser storage is restricted. */
     }
-    ElNotification({ title: '登录成功', message: '已进入后台', type: 'success' })
+    ElNotification({ title: t("登录成功"), message: t("已进入后台"), type: 'success' })
     router.push((route.query.redirect as string) || '/home')
   } catch (error) {
     if (error instanceof AxiosError && error.response?.status === 401)
-      ElMessage.error('账号或密码错误')
-    else ElMessage.error('登录失败，请稍后重试')
+      ElMessage.error(t("账号或密码错误"))
+    else ElMessage.error(t("登录失败，请稍后重试"))
   } finally {
     isLogining.value = false
   }
 }
 const enterAsVisitor = () => router.push('/visitor/home')
-const handleForgotPassword = () => ElMessage.info('请联系系统管理员重置密码')
+const handleForgotPassword = () => ElMessage.info(t("请联系系统管理员重置密码"))
 onMounted(() => {
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   try {
@@ -188,10 +190,10 @@ onBeforeUnmount(() => {
       <span class="entry-orbit orbit-one"></span><span class="entry-orbit orbit-two"></span
       ><span class="entry-orbit orbit-three"></span>
     </div>
-    <header class="entry-header"><BrandLogo /></header>
-    <section class="entry-center" aria-label="选择访问入口">
+    <header class="entry-header"><BrandLogo /><LanguageSwitch class="entry-language" /></header>
+    <section class="entry-center" :aria-label='$t("选择访问入口")'>
       <div class="entry-card">
-        <div class="entry-tabs" role="tablist" aria-label="访问方式">
+        <div class="entry-tabs" role="tablist" :aria-label='$t("访问方式")'>
           <span
             class="entry-tab-indicator"
             :class="{ admin: entryMode === 'admin' }"
@@ -209,7 +211,7 @@ onBeforeUnmount(() => {
             @keydown.right.prevent="selectEntry('admin', true)"
             @keydown.end.prevent="selectEntry('admin', true)"
           >
-            <el-icon><Guide /></el-icon><span>游客导览</span>
+            <el-icon><Guide /></el-icon><span>{{ $t("游客导览") }}</span>
           </button>
           <button
             id="entry-tab-admin"
@@ -223,7 +225,7 @@ onBeforeUnmount(() => {
             @keydown.left.prevent="selectEntry('visitor', true)"
             @keydown.home.prevent="selectEntry('visitor', true)"
           >
-            <el-icon><User /></el-icon><span>后台登录</span>
+            <el-icon><User /></el-icon><span>{{ $t("后台登录") }}</span>
           </button>
         </div>
         <Transition name="entry-switch" mode="out-in">
@@ -237,8 +239,8 @@ onBeforeUnmount(() => {
             tabindex="0"
           >
             <div class="entry-heading">
-              <h1>游客导览</h1>
-              <p>选好路线，跟随数字人出发。</p>
+              <h1>{{ $t("游客导览") }}</h1>
+              <p>{{ $t("选好路线，跟随数字人出发。") }}</p>
             </div>
             <div class="visitor-scene" aria-hidden="true">
               <svg viewBox="0 0 400 170" fill="none">
@@ -293,16 +295,16 @@ onBeforeUnmount(() => {
             </div>
             <div class="entry-features">
               <span
-                ><el-icon><MapLocation /></el-icon>景区地图</span
+                ><el-icon><MapLocation /></el-icon>{{ $t("景区地图") }}</span
               ><span
-                ><el-icon><Location /></el-icon>路线规划</span
+                ><el-icon><Location /></el-icon>{{ $t("路线规划") }}</span
               >
               <span
-                ><el-icon><ChatDotRound /></el-icon>数字人导览</span
+                ><el-icon><ChatDotRound /></el-icon>{{ $t("数字人导览") }}</span
               >
             </div>
             <el-button type="primary" class="entry-primary" @click="enterAsVisitor"
-              >进入游客导览<el-icon><ArrowRight /></el-icon
+              >{{ $t("进入游客导览") }}<el-icon><ArrowRight /></el-icon
             ></el-button>
           </section>
           <section
@@ -315,8 +317,8 @@ onBeforeUnmount(() => {
             tabindex="0"
           >
             <div class="entry-heading">
-              <h1>后台登录</h1>
-              <p>管理景点、路线与数字人。</p>
+              <h1>{{ $t("后台登录") }}</h1>
+              <p>{{ $t("管理景点、路线与数字人。") }}</p>
             </div>
             <el-form
               ref="formRef"
@@ -327,34 +329,34 @@ onBeforeUnmount(() => {
               class="entry-form"
               @submit.prevent="onSubmit"
             >
-              <el-form-item label="账号" prop="username"
+              <el-form-item :label='$t("账号")' prop="username"
                 ><el-input
                   v-model="loginForm.username"
                   :prefix-icon="User"
-                  placeholder="输入账号"
+                  :placeholder='$t("输入账号")'
                   autocomplete="username"
                   :disabled="isLogining"
               /></el-form-item>
-              <el-form-item label="密码" prop="password"
+              <el-form-item :label='$t("密码")' prop="password"
                 ><el-input
                   v-model="loginForm.password"
                   :prefix-icon="Lock"
                   type="password"
-                  placeholder="输入密码"
+                  :placeholder='$t("输入密码")'
                   autocomplete="current-password"
                   show-password
                   :disabled="isLogining"
               /></el-form-item>
               <div class="entry-options">
-                <el-checkbox v-model="rememberAccount">记住账号</el-checkbox
-                ><button type="button" @click="handleForgotPassword">忘记密码？</button>
+                <el-checkbox v-model="rememberAccount">{{ $t("记住账号") }}</el-checkbox
+                ><button type="button" @click="handleForgotPassword">{{ $t("忘记密码？") }}</button>
               </div>
               <el-button
                 type="primary"
                 native-type="submit"
                 :loading="isLogining"
                 class="entry-primary"
-                >登录后台<el-icon v-if="!isLogining"><ArrowRight /></el-icon
+                >{{ $t("登录后台") }}<el-icon v-if="!isLogining"><ArrowRight /></el-icon
               ></el-button>
             </el-form>
           </section>
@@ -362,11 +364,11 @@ onBeforeUnmount(() => {
         <div class="entry-status" :class="serviceState" role="status">
           <i aria-hidden="true"></i>
           <span>{{
-            serviceState === 'ready'
+            $t(serviceState === 'ready'
               ? '服务可用'
               : serviceState === 'offline'
                 ? '服务暂不可用，请稍后重试'
-                : '正在连接服务'
+                : '正在连接服务')
           }}</span>
         </div>
       </div>
@@ -489,6 +491,7 @@ onBeforeUnmount(() => {
   border: none;
   animation: entry-pin-float 5s ease-in-out infinite;
 }
+.entry-language{margin-left:auto}
 .entry-header {
   display: flex;
   align-items: center;
