@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <view class="nav"><text class="nav-back" @tap="goBack">‹</text><text class="nav-title">游览记录</text></view>
+    <view class="nav" :style="{paddingTop:headerTop+'px'}"><text class="nav-back" @tap="goBack">‹</text><text class="nav-title">游览记录</text></view>
     <scroll-view scroll-y class="main">
       <view v-if="loading" class="empty">加载中…</view>
       <view v-else-if="error" class="empty" @tap="loadData">{{ error }}，点击重试</view>
@@ -27,7 +27,8 @@
 <script>
 import { BASE_URL } from '../../common/config.js'
 export default {
-  data:function(){return{list:[],loading:false,error:'',selected:null,messages:[],messagesLoading:false,messagesError:''}},
+  data:function(){return{headerTop:48,list:[],loading:false,error:'',selected:null,messages:[],messagesLoading:false,messagesError:''}},
+  onLoad:function(){var info=uni.getSystemInfoSync();this.headerTop=Math.max(info.statusBarHeight||0,info.safeArea&&info.safeArea.top||0)+16},
   methods:{
     goBack:function(){uni.navigateBack()},
     openSession:function(s){this.selected=s;this.messages=[];this.messagesLoading=true;this.messagesError='';uni.request({url:BASE_URL+'/tour-session/my-history/'+s.session_id+'/messages',header:{Authorization:'Bearer '+uni.getStorageSync('token')},success:r=>{if(!this.selected||this.selected.session_id!==s.session_id)return;if(r.statusCode===200&&r.data.success)this.messages=r.data.data.messages;else this.messagesError='对话加载失败'},fail:()=>{if(this.selected&&this.selected.session_id===s.session_id)this.messagesError='对话加载失败'},complete:()=>{if(this.selected&&this.selected.session_id===s.session_id)this.messagesLoading=false}})},
@@ -37,13 +38,13 @@ export default {
 }
 </script>
 <style scoped>
-.page{min-height:100vh;background-color:var(--ng-surface);position:relative;overflow:hidden}
+.page{height:100vh;display:flex;flex-direction:column;background-color:var(--ng-surface);position:relative;overflow:hidden}
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mt{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:55% 75% 0 0}.ink-mt-1{bottom:20%;height:220rpx;opacity:.04;transform:scaleX(1.3)}.ink-mt-2{bottom:25%;height:160rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
-.nav{position:relative;z-index:1;display:flex;align-items:center;padding:50rpx 24rpx 16rpx}
+.nav{position:relative;z-index:1;display:flex;flex-shrink:0;align-items:center;padding:50rpx 24rpx 16rpx}
 .nav-back{font-size:56rpx;color:var(--ng-text);padding-right:20rpx;line-height:1}
 .nav-title{flex:1;font-size:34rpx;font-weight:600;color:var(--ng-text);letter-spacing:0;font-family:var(--app-font-family);text-align:center}
-.main{position:relative;z-index:1;padding:0 24rpx;height:calc(100vh - 120rpx);box-sizing:border-box;width:100%}
+.main{position:relative;z-index:1;padding:0 24rpx;height:0;min-height:0;flex:1;box-sizing:border-box;width:100%}
 .empty{text-align:center;padding:100rpx;color:var(--ng-secondary);font-size:28rpx}
 .card{display:flex;align-items:center;gap:14rpx;padding:16rpx 18rpx;margin-bottom:14rpx;background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:18rpx}
 .c-img{width:88rpx;height:88rpx;border-radius:14rpx;flex-shrink:0}.c-img-df{width:88rpx;height:88rpx;border-radius:14rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:36rpx;flex-shrink:0}

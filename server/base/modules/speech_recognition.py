@@ -2,6 +2,7 @@
 import base64
 import os
 import subprocess
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,9 @@ async def transcribe_audio(content: bytes) -> str:
             target = Path(directory) / 'speech.wav'
             source.write_bytes(content)
             ffmpeg = ROOT / 'weights/digital_human_weights/drivers/ffmpeg.exe'
+            ffmpeg = os.getenv('FFMPEG_PATH') or (str(ffmpeg) if ffmpeg.exists() else shutil.which('ffmpeg'))
+            if not ffmpeg:
+                raise ValueError('语音识别缺少 FFmpeg 音频转换工具，请联系管理员配置')
             result = subprocess.run([str(ffmpeg), '-hide_banner', '-loglevel', 'error',
                 '-i', str(source), '-t', '61', '-ac', '1', '-ar', '16000',
                 '-y', str(target)], capture_output=True, timeout=30)

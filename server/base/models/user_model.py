@@ -42,3 +42,21 @@ class UserInfo(UserBaseInfo, SQLModel, table=True):
     ip_address: IPv4Address | None = None
     delete: bool = False
     openid: str | None = None
+
+
+class EmailVerification(SQLModel, table=True):
+    __tablename__ = "email_verification"
+    email: str = Field(primary_key=True)
+    code_hash: str
+    expires_at: int
+    sent_at: int
+    sender_ip: str = Field(index=True)
+    attempts: int = 0
+
+
+class ScenicRecognition(SQLModel, table=True):
+    __tablename__ = "scenic_recognition"
+    recognition_id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True)
+    result_json: str
+    created_at: datetime = Field(default_factory=datetime.now)

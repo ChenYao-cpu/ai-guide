@@ -83,7 +83,7 @@ import httpx
 LLM_MODEL_HANDLER = OpenAI(
     base_url=os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1"),
     api_key=os.getenv("LLM_API_KEY", ""),
-    http_client=httpx.Client(verify=False, timeout=60.0),
+    http_client=httpx.Client(timeout=20.0, trust_env=False),
 )
 
 

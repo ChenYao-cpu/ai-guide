@@ -7,6 +7,7 @@
 @Desc    :   导览会话核心接口 — 游客对话管道
 """
 
+import asyncio
 import json
 import os
 import re
@@ -15,7 +16,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -98,6 +99,7 @@ def _build_local_knowledge_answer(
     tour_tips = spot.get("tour_tips", "")
     text = question.strip()
 
+    from ..modules.tour_intent import PHOTO_WORDS, HISTORY_WORDS, NATURE_WORDS
     # 推荐问题采用高优先级意图，避免“附近”“哪里”等词把问题误判为位置查询。
     if any(word in text for word in ("服务设施", "卫生间", "厕所", "洗手间", "休息", "餐饮", "商店", "游客中心", "寄存")):
         detail = service_facilities or f"{name}周边服务信息请以园内导览牌和游客服务点公告为准。"
@@ -111,12 +113,14 @@ def _build_local_knowledge_answer(
             )
         else:
             detail = "当前已是本路线最后一个景点，可以结束导览或返回路线页选择新的主题路线。"
-    elif any(word in text for word in ("拍照", "摄影", "机位", "取景", "出片")):
+    elif any(word in text for word in PHOTO_WORDS):
         detail = photo_tips or f"建议从{name}视野开阔的一侧取景，并避让正常游览人流。"
     elif any(word in text for word in ("特色", "亮点", "看什么", "介绍")):
         detail = "".join(part for part in (description, tour_tips) if part)
-    elif any(word in text for word in ("历史", "故事", "典故", "由来", "文化")):
+    elif any(word in text for word in HISTORY_WORDS):
         detail = history or description
+    elif any(word in text for word in NATURE_WORDS):
+        detail = description or tour_tips or f"{name}暂无自然景观资料。"
     elif any(word in text for word in ("位置", "在哪", "怎么走", "路线")):
         detail = f"{name}位于{location}。建议结合当前路线顺序和园内指示前往。"
     elif any(word in text for word in ("多久", "时间", "逛", "游览")):
@@ -126,7 +130,7 @@ def _build_local_knowledge_answer(
     else:
         detail = description or history
 
-    return f"现在我们来到{name}。{detail} 以上内容来自景区知识档案，你还可以继续询问更具体的问题。"
+    return f"{detail} 以上内容来自景区知识档案。"
 
 
 @router.get("/list", summary="获取导览会话列表（管理员查看全部）")
@@ -414,7 +418,7 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
             "reasons": result["score_details"], "preferences": preferences,
         }, ensure_ascii=False)}]
         try:
-            response = await asyncio.wait_for(get_llm_res(prompt), timeout=12)
+            response = await asyncio.wait_for(get_llm_res(prompt, timeout=10, tour_mode=True), timeout=12)
             summary = verified_model_summary(result, json.loads(_extract_json_from_response(response)),
                                              [s.spot_name for s in spots])
             if summary:
@@ -590,7 +594,7 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
         location = spot_info_data.get("location", "")
         # A saved location answers a simple location question without mixing in
         # unrelated route recommendations or knowledge-base introductions.
-        if location and not re.search(r'历史|介绍|特色|故事|文化|路线|从.+到', user_message):
+        if location and not re.search(r'历史|介绍|特色|故事|文化|自然|风光|风景|景色|路线|从.+到|打卡|照相|拍图|拍照|摄影|拍摄|机位|取景|出片|好看|推荐|建议|厕所|卫生间|洗手间|餐饮|休息|下一站', user_message):
             direct_answer = f"{spot_name}位于{location}。"
 
     guide_id = guide_info_data.get("guide_id", 1) if guide_info_data else 1
@@ -662,12 +666,14 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     answer_mode = "local_knowledge"
     fallback_reason = ""
     model_name = os.getenv("LLM_MODEL_NAME", "deepseek-flash")
+    if os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true':
+        model_name = os.getenv('VISION_MODEL', 'qwen3-vl-plus')
     if direct_answer:
         guide_response = direct_answer
         answer_mode = "database"
     elif _llm_is_configured():
         try:
-            guide_response = await get_llm_res(prompt)
+            guide_response = await asyncio.wait_for(get_llm_res(prompt, timeout=12, tour_mode=True), timeout=13)
             answer_mode = "llm_rag" if rag_applied else "llm_context"
         except Exception as exc:
             logger.warning(f"LLM unavailable, using local knowledge fallback: {exc}")
@@ -696,21 +702,23 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
 
     # 8. TTS 语音合成 (Edge-TTS，免费无需GPU)
     tts_audio_url = ""
-    try:
-        from ..modules.edge_tts_client import synthesize_speech
-        tts_output_dir = str(Path(WEB_CONFIGS.SERVER_FILE_ROOT) / WEB_CONFIGS.TOUR_FILE_DIR / "tts")
-        os.makedirs(tts_output_dir, exist_ok=True)
-        voice_style = guide_info_data.get("voice_style", "female_wenrou") if guide_info_data else "female_wenrou"
-        voice_speed = guide_info_data.get("voice_speed", 1.0) if guide_info_data else 1.0
-        tts_audio_path = await synthesize_speech(
-            guide_response, voice_style=voice_style, speed=voice_speed, output_dir=tts_output_dir
-        )
-        if tts_audio_path and os.path.exists(tts_audio_path):
-            tts_filename = os.path.basename(tts_audio_path)
-            tts_audio_url = API_CONFIG.REQUEST_FILES_URL + "/" + WEB_CONFIGS.TOUR_FILE_DIR + "/tts/" + tts_filename
-            logger.info(f"Edge-TTS generated: {tts_audio_url}")
-    except Exception as e:
-        logger.warning(f"Edge-TTS failed, returning text only: {e}")
+    # Xingyun SDK produces synchronized speech; do not wait for a second TTS service.
+    if chat_item.avatarMode != 'xingyun':
+        try:
+            from ..modules.edge_tts_client import synthesize_speech
+            tts_output_dir = str(Path(WEB_CONFIGS.SERVER_FILE_ROOT) / WEB_CONFIGS.TOUR_FILE_DIR / "tts")
+            os.makedirs(tts_output_dir, exist_ok=True)
+            voice_style = guide_info_data.get("voice_style", "female_wenrou") if guide_info_data else "female_wenrou"
+            voice_speed = guide_info_data.get("voice_speed", 1.0) if guide_info_data else 1.0
+            tts_audio_path = await asyncio.wait_for(synthesize_speech(
+                guide_response, voice_style=voice_style, speed=voice_speed, output_dir=tts_output_dir
+            ), timeout=6)
+            if tts_audio_path and os.path.exists(tts_audio_path):
+                tts_filename = os.path.basename(tts_audio_path)
+                tts_audio_url = API_CONFIG.REQUEST_FILES_URL + "/" + WEB_CONFIGS.TOUR_FILE_DIR + "/tts/" + tts_filename
+                logger.info(f"Edge-TTS generated: {tts_audio_url}")
+        except Exception as e:
+            logger.warning(f"Edge-TTS failed, returning text only: {e}")
 
     # 9. 保存导游回复
     interaction = await save_visitor_message(
@@ -757,7 +765,6 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
         from ..database.init_db import DB_ENGINE
         from ..models.tour_models import DigitalGuideInfo
         from sqlmodel import Session
-        import asyncio
         with Session(DB_ENGINE) as db:
             guide3d = db.get(DigitalGuideInfo, guide_id)
         try:
@@ -800,6 +807,35 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     }
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", response_data)
+
+
+@router.post("/recognize-spot", summary="拍照识景")
+async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), user_id: int = Depends(get_current_user_info)):
+    from sqlmodel import Session, select
+    from ..database.init_db import DB_ENGINE
+    from ..models.tour_models import ScenicSpotInfo
+    from ..models.user_model import ScenicRecognition
+    from ..modules.scenic_recognition import recognize_photo
+    try:
+        content = await file.read(8 * 1024 * 1024 + 1)
+        if not content or len(content) > 8 * 1024 * 1024:
+            raise HTTPException(400, '请选择不超过8MB的照片')
+        with Session(DB_ENGINE) as db:
+            spots = db.exec(select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)).all()
+            catalog = [{'spot_id':s.spot_id,'spot_name':s.spot_name,
+                        'city':s.city or '', 'description':(s.description or '')[:600]} for s in spots]
+        if not catalog:
+            raise HTTPException(503, '景点资料尚未配置，暂时无法识别')
+        result = await recognize_photo(content, catalog, question)
+        with Session(DB_ENGINE) as db:
+            record = ScenicRecognition(user_id=user_id, result_json=json.dumps(result, ensure_ascii=False))
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            result['recognition_id'] = record.recognition_id
+        return make_return_data(True, ResultCode.SUCCESS, '识别完成', result)
+    finally:
+        await file.close()
 
 
 @router.post("/asr-upload", summary="语音识别（直接上传文件）")
@@ -1237,6 +1273,7 @@ async def check_nearby_spot(
     latitude: float = 0,
     longitude: float = 0,
     session_id: int = 0,
+    target_spot_id: int = 0,
 ):
     """根据游客GPS坐标检测附近景点，支持自动触发讲解切换
 
@@ -1270,9 +1307,12 @@ async def check_nearby_spot(
 
     # 计算所有景点距离
     nearby_spots = []
+    target_spot = None
     for s in (spots or []):
         if s.latitude and s.longitude and s.latitude != 0:
             distance = haversine_distance(latitude, longitude, s.latitude, s.longitude)
+            if s.spot_id == target_spot_id:
+                target_spot = {"spot_id": s.spot_id, "spot_name": s.spot_name, "distance": round(distance, 1)}
             radius = s.trigger_radius or 50.0
             if distance <= radius:
                 nearby_spots.append({
@@ -1315,6 +1355,7 @@ async def check_nearby_spot(
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", {
         "visitor_position": {"latitude": latitude, "longitude": longitude},
+        "target_spot": target_spot,
         "nearby_spots": nearby_spots,
         "closest_spot": nearby_spots[0] if nearby_spots else None,
         "auto_switched": auto_switched,
