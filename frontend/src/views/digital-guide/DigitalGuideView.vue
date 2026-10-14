@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { computed, onMounted, ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus/es'
 import { Plus, Delete, Edit } from '@element-plus/icons-vue'
@@ -32,13 +33,13 @@ const fetchGuides = async () => {
     if (data.code === 0) {
       guideList.value = data.data.guide_list
     } else {
-      ElMessage.error('获取数字导游列表失败：' + data.message)
+      ElMessage.error(t("获取数字导游列表失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取数字导游列表失败：' + error.message)
+      ElMessage.error(t("获取数字导游列表失败：") + error.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   } finally {
     loading.value = false
@@ -51,12 +52,12 @@ const characterLabels = (character: string) =>
   character.split(/[,，;；]/).map((item) => item.trim()).filter(Boolean).slice(0, 4)
 
 const voiceStyleLabel = (style: string) =>
-  voiceStyleOptions.find((option) => option.value === style)?.label || '自然人声'
+  voiceStyleOptions.find((option) => option.value === style)?.label || t("自然人声")
 
 const guideSpecialty = (item: DigitalGuide) => {
-  if (item.name.includes('小颐')) return '园林文化 · 故事讲解'
+  if (item.name.includes('小颐')) return t("园林文化 · 故事讲解")
   const labels = characterLabels(item.character)
-  return labels.slice(0, 2).join(' · ') || '智能景区导览'
+  return labels.slice(0, 2).join(' · ') || t("智能景区导览")
 }
 
 // ======================== 对话框控制 ========================
@@ -113,7 +114,7 @@ async function scanVRMModels() {
   try {
     const response = await request_handler.get('/avatar/cartoon-models')
     availableVRMModels.value = response.data.data || []
-  } catch { availableVRMModels.value = []; ElMessage.error('卡通模型清单读取失败') }
+  } catch { availableVRMModels.value = []; ElMessage.error(t("卡通模型清单读取失败")) }
 }
 
 // ======================== 语音风格选项 ========================
@@ -198,13 +199,13 @@ const openEditDialog = async (guideId: number) => {
       characterTags.value = item.character ? item.character.split(/[,，]/).filter(Boolean) : []
       dialogVisible.value = true
     } else {
-      ElMessage.error('获取导游详情失败：' + data.message)
+      ElMessage.error(t("获取导游详情失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取导游详情失败：' + error.message)
+      ElMessage.error(t("获取导游详情失败：") + error.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   }
 }
@@ -213,15 +214,15 @@ const openEditDialog = async (guideId: number) => {
 
 const handleSave = async () => {
   if (!form.name.trim()) {
-    ElMessage.warning('请输入导游名称')
+    ElMessage.warning(t("请输入导游名称"))
     return
   }
   syncCharacter()
   if (!form.character.trim()) {
-    ElMessage.warning('请输入角色设定')
+    ElMessage.warning(t("请输入角色设定"))
     return
   }
-  if (!form.poster_image || !form.avatar) { ElMessage.warning('请上传全身形象和头像'); return }
+  if (!form.poster_image || !form.avatar) { ElMessage.warning(t("请上传全身形象和头像")); return }
   saving.value = true
   try {
     const payload: Partial<DigitalGuide> = {
@@ -243,17 +244,17 @@ const handleSave = async () => {
       ? await editGuide(form.guide_id, payload)
       : await createGuide(payload)
     if (res.data.code === 0) {
-      ElMessage.success(isEditMode.value ? '编辑成功' : '新增成功')
+      ElMessage.success(isEditMode.value ? t("编辑成功") : t("新增成功"))
       dialogVisible.value = false
       await fetchGuides()
     } else {
-      ElMessage.error('保存失败：' + res.data.message)
+      ElMessage.error(t("保存失败：") + res.data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('保存失败：' + error.message)
+      ElMessage.error(t("保存失败：") + error.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   } finally {
     saving.value = false
@@ -261,21 +262,21 @@ const handleSave = async () => {
 }
 
 const handleDelete = (guideId: number, name: string) => {
-  ElMessageBox.confirm(`确定删除数字导游“${name}”吗？`, '删除确认', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定删除数字导游“{p0}”吗？", {p0: name}), t("删除确认"), {
+    confirmButtonText: t("删除"),
+    cancelButtonText: t("取消"),
     type: 'warning',
   }).then(async () => {
     try {
       const { data } = await deleteGuide(guideId)
       if (data.code === 0) {
-        ElMessage.success('删除成功')
+        ElMessage.success(t("删除成功"))
         await fetchGuides()
       } else {
-        ElMessage.error('删除失败：' + data.message)
+        ElMessage.error(t("删除失败：") + data.message)
       }
     } catch (error: unknown) {
-      ElMessage.error(error instanceof AxiosError ? `删除失败：${error.message}` : '删除失败')
+      ElMessage.error(error instanceof AxiosError ? t("删除失败：{p0}", {p0: error.message}) : t("删除失败"))
     }
   }).catch(() => undefined)
 }
@@ -285,7 +286,7 @@ async function togglePublication(item: DigitalGuide) {
     const { data } = await request_handler.put('/digital-guide/publication/' + item.guide_id, { is_enabled: !item.is_enabled }, { headers: { Authorization: header_authorization.value } })
     if (!data.success) throw new Error(data.message)
     ElMessage.success(data.message); await fetchGuides()
-  } catch(e: any) { ElMessage.error(e.response?.data?.detail || e.message || '上下架失败') }
+  } catch(e: any) { ElMessage.error(e.response?.data?.detail || e.message || t("上下架失败")) }
 }
 
 // ======================== 生命周期 ========================
@@ -301,80 +302,76 @@ onMounted(() => {
     <!-- 顶部操作栏 -->
     <div class="toolbar">
       <div class="page-intro">
-        <h2>数字导游管理</h2>
+        <h2>{{ $t("数字导游管理") }}</h2>
       </div>
       <XingyunCreate @saved="fetchGuides" />
     </div>
 
     <!-- 导游卡片网格 -->
     <div v-loading="loading" class="card-grid">
-      <el-empty v-if="!loading && guideList.length === 0" description="暂无数字导游" />
+      <el-empty v-if="!loading && guideList.length === 0" :description='$t("暂无数字导游")' />
       <el-card v-for="item in guideList" :key="item.guide_id" class="guide-card" shadow="never">
         <div class="card-content">
           <div class="card-status-row">
-            <span class="guide-code">AI GUIDE · {{ String(item.guide_id).padStart(2, '0') }}</span>
+            <span class="guide-code">AI GUIDE · {{ $t(String(item.guide_id).padStart(2, '0')) }}</span>
             <div class="status-badges">
-            <span class="online-badge">{{ item.is_enabled ? '已上架' : '已下架' }}</span>
-            <span class="voice-badge">{{ item.render_mode === 'xingyun' ? '应用音色' : voiceStyleLabel(item.voice_style) }}</span>
+            <span class="online-badge">{{ $t(item.is_enabled ? '已上架' : '已下架') }}</span>
+            <span class="voice-badge">{{ $t(item.render_mode === 'xingyun' ? '应用音色' : voiceStyleLabel(item.voice_style)) }}</span>
             </div>
           </div>
           <el-image v-if="item.poster_image" :src="item.poster_image" fit="contain" style="width:100%;height:260px" :preview-src-list="[item.poster_image]" preview-teleported />
           <div class="identity-row">
             <div>
-              <h3>{{ item.name }}</h3>
-              <p>{{ guideSpecialty(item) }}</p>
+              <h3>{{ $t(item.name) }}</h3>
+              <p>{{ $t(guideSpecialty(item)) }}</p>
             </div>
-            <span class="model-gender">{{ item.render_mode === 'xingyun' ? '实时数字人' : item.base_mp4_path ? '已上传基础视频' : '形象图片 · 动态待开发' }}</span>
+            <span class="model-gender">{{ $t(item.render_mode === 'xingyun' ? '实时数字人' : item.base_mp4_path ? '已上传基础视频' : '形象图片 · 动态待开发') }}</span>
           </div>
 
           <div class="character-tags">
-            <span v-for="tag in characterLabels(item.character)" :key="tag">{{ tag }}</span>
+            <span v-for="tag in characterLabels(item.character)" :key="tag">{{ $t(tag) }}</span>
           </div>
 
-          <p class="guide-character">{{ item.character || '尚未配置角色设定' }}</p>
+          <p class="guide-character">{{ $t(item.character || '尚未配置角色设定') }}</p>
 
           <div class="guide-meta">
             <div class="meta-item">
-              <span>讲解声音</span>
-              <strong>{{ item.render_mode === 'xingyun' ? '以应用配置为准' : voiceStyleLabel(item.voice_style) }}</strong>
+              <span>{{ $t("讲解声音") }}</span>
+              <strong>{{ $t(item.render_mode === 'xingyun' ? '以应用配置为准' : voiceStyleLabel(item.voice_style)) }}</strong>
             </div>
             <div class="meta-item">
-              <span>语速设置</span>
-              <strong>{{ item.render_mode === 'xingyun' ? '以应用配置为准' : Number(item.voice_speed || 1).toFixed(1) + '×' }}</strong>
+              <span>{{ $t("语速设置") }}</span>
+              <strong>{{ $t(item.render_mode === 'xingyun' ? '以应用配置为准' : Number(item.voice_speed || 1).toFixed(1) + '×') }}</strong>
             </div>
             <div class="meta-item">
-              <span>数字人模型</span>
-              <strong>{{ item.poster_image ? '已上传形象' : '待上传' }}</strong>
+              <span>{{ $t("数字人模型") }}</span>
+              <strong>{{ $t(item.poster_image ? '已上传形象' : '待上传') }}</strong>
             </div>
           </div>
 
           <XingyunConfiguration :guide-id="item.guide_id" @saved="fetchGuides" />
           <AvatarConfiguration v-if="item.render_mode !== 'xingyun'" :guide-id="item.guide_id" />
           <div class="card-actions">
-            <el-button :type="item.is_enabled ? 'warning' : 'success'" plain @click="togglePublication(item)">{{ item.is_enabled ? '下架' : '上架' }}</el-button>
+            <el-button :type="item.is_enabled ? 'warning' : 'success'" plain @click="togglePublication(item)">{{ $t(item.is_enabled ? '下架' : '上架') }}</el-button>
             <el-button type="primary" plain @click="openEditDialog(item.guide_id)">
-              <el-icon><Edit /></el-icon>
-              编辑配置
-            </el-button>
+              <el-icon><Edit /></el-icon>{{ $t("编辑配置") }}</el-button>
             <el-button v-if="item.name !== '小颐'" type="danger" plain @click="handleDelete(item.guide_id, item.name)">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+              <el-icon><Delete /></el-icon>{{ $t("删除") }}</el-button>
           </div>
         </div>
       </el-card>
     </div>
 
     <!-- 新建/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="720px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="$t(dialogTitle)" width="720px" destroy-on-close>
       <el-form :model="form" label-width="130px" label-position="right">
-        <el-form-item label="导游名称" required>
-          <el-input v-model="form.name" placeholder="请输入导游名称" maxlength="30" show-word-limit />
+        <el-form-item :label='$t("导游名称")' required>
+          <el-input v-model="form.name" :placeholder='$t("请输入导游名称")' maxlength="30" show-word-limit />
         </el-form-item>
-        <el-form-item label="游客可选择"><el-switch v-model="form.is_enabled" /><span class="form-hint">新增人物可先保持下架，绑定应用后再上架。</span></el-form-item>
+        <el-form-item :label='$t("游客可选择")'><el-switch v-model="form.is_enabled" /><span class="form-hint">{{ $t("新增人物可先保持下架，绑定应用后再上架。") }}</span></el-form-item>
 
         <!-- 角色设定（标签输入） -->
-        <el-form-item label="角色设定" required>
+        <el-form-item :label='$t("角色设定")' required>
           <div class="tag-input-container">
             <el-tag
               v-for="tag in characterTags"
@@ -385,7 +382,7 @@ onMounted(() => {
               class="character-tag"
               @close="removeCharacterTag(tag)"
             >
-              {{ tag }}
+              {{ $t(tag) }}
             </el-tag>
             <el-input
               v-if="characterInputVisible"
@@ -393,7 +390,7 @@ onMounted(() => {
               v-model="characterInput"
               class="tag-input"
               size="small"
-              placeholder="输入角色标签"
+              :placeholder='$t("输入角色标签")'
               @keyup.enter="addCharacterTag"
               @blur="addCharacterTag"
             />
@@ -402,29 +399,27 @@ onMounted(() => {
               class="add-tag-btn"
               size="small"
               @click="characterInputVisible = true"
-            >
-              + 添加标签
-            </el-button>
+            >{{ $t("+ 添加标签") }}</el-button>
           </div>
-          <span class="form-hint">输入角色特征标签，如：热情、专业、幽默，按回车确认</span>
+          <span class="form-hint">{{ $t("输入角色特征标签，如：热情、专业、幽默，按回车确认") }}</span>
         </el-form-item>
 
         <!-- 语音风格 & 语速 -->
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="语音风格">
-              <el-select v-model="form.voice_style" placeholder="选择语音风格" style="width: 100%" @change="syncVoiceAndModel">
+            <el-form-item :label='$t("语音风格")'>
+              <el-select v-model="form.voice_style" :placeholder='$t("选择语音风格")' style="width: 100%" @change="syncVoiceAndModel">
                 <el-option
                   v-for="opt in voiceStyleOptions"
                   :key="opt.value"
-                  :label="opt.label"
+                  :label="$t(opt.label)"
                   :value="opt.value"
                 />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="语速">
+            <el-form-item :label='$t("语速")'>
               <div class="slider-wrap">
                 <el-slider
                   v-model="form.voice_speed"
@@ -447,19 +442,19 @@ onMounted(() => {
           </el-col>
         </el-row>
 
-        <el-form-item label="全身数字人形象" required><FileUpload v-model="form.poster_image" file-type="image" /></el-form-item>
-        <el-form-item label="头像" required><FileUpload v-model="form.avatar" file-type="image" /></el-form-item>
-        <el-form-item label="数字人基础视频">
+        <el-form-item :label='$t("全身数字人形象")' required><FileUpload v-model="form.poster_image" file-type="image" /></el-form-item>
+        <el-form-item :label='$t("头像")' required><FileUpload v-model="form.avatar" file-type="image" /></el-form-item>
+        <el-form-item :label='$t("数字人基础视频")'>
           <FileUpload v-model="form.base_mp4_path" file-type="video" />
-          <span class="form-hint">上传正面人物 MP4 视频，供真人口型推理使用。</span>
+          <span class="form-hint">{{ $t("上传正面人物 MP4 视频，供真人口型推理使用。") }}</span>
         </el-form-item>
 
       </el-form>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
-          <el-button @click="dialogVisible = false" :disabled="saving">取消</el-button>
+          <el-button type="primary" @click="handleSave" :loading="saving">{{ $t("保存") }}</el-button>
+          <el-button @click="dialogVisible = false" :disabled="saving">{{ $t("取消") }}</el-button>
         </div>
       </template>
     </el-dialog>

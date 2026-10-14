@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { request_handler } from '@/api/base'
 import { avatarHeaders } from '@/api/xingyunTour'
@@ -17,14 +18,17 @@ const configured = ref(false)
 const provider = ref('')
 const loading = ref(false)
 const ready = ref(false)
-const message = ref('正在查询数字人配置')
-const statusText = computed(() => message.value.startsWith('数字人服务异常') ? '暂时无法连接，请重试' : message.value.replace(/SDK/g, '数字人资源').replace(/^Error:\s*/, ''))
+const message = ref('数字人正在加载中')
+const querying = ref(true)
+const statusText = computed(() => message.value.startsWith('数字人服务异常') ? t("暂时无法连接，请重试") : message.value.replace(/SDK/g, '数字人资源').replace(/^Error:\s*/, ''))
 let avatar: Avatar | undefined
 let active = true
 let generation = 0
 let configPromise: Promise<void> = Promise.resolve()
 watch(() => [props.guideId, props.tourId], () => {
   release(); configured.value = false; provider.value = ''
+  querying.value = true
+  message.value = '数字人正在加载中'
   const current = generation
   configPromise = (async () => {
     if (!props.guideId) return
@@ -33,13 +37,14 @@ watch(() => [props.guideId, props.tourId], () => {
       if (!active || current !== generation) return
       configured.value = data.configured
       provider.value = data.provider
-      message.value = data.configured ? '尚未连接实时数字人，请点击连接' : '该数字人未上架或未完成应用绑定'
+      message.value = data.configured ? t("尚未连接实时数字人，请点击连接") : t("该数字人未上架或未完成应用绑定")
       if (configured.value && props.tourId) {
         void nextTick().then(() => {
           if (active && current === generation) void connect()
         })
       }
     } catch { if (active && current === generation) { provider.value = 'xingyun'; message.value = '数字人配置查询失败，请检查后端服务' } }
+    finally { if (active && current === generation) querying.value = false }
   })()
 }, { immediate: true })
 
@@ -49,12 +54,12 @@ async function loadSdk() {
   await new Promise<void>((resolve, reject) => {
     const script = document.createElement('script')
     script.src = 'https://media.xingyun3d.com/xingyun3d/general/litesdk/xmovAvatar@latest.js'
-    const timer = setTimeout(() => { script.remove(); reject(new Error('SDK 下载超时')) }, 30000)
+    const timer = setTimeout(() => { script.remove(); reject(new Error(t("SDK 下载超时"))) }, 30000)
     script.onload = () => { clearTimeout(timer); resolve() }
-    script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('SDK 下载失败')) }
+    script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error(t("SDK 下载失败"))) }
     document.head.appendChild(script)
   })
-  if (!win.XmovAvatar) throw new Error('SDK 未正确加载')
+  if (!win.XmovAvatar) throw new Error(t("SDK 未正确加载"))
   return win.XmovAvatar
 }
 function release() {
@@ -76,6 +81,9 @@ async function connect() {
     const SDK = await loadSdk()
     if (!active || current !== generation) return
     await nextTick()
+    let resolveReady!: () => void
+    let rejectReady!: (error: Error) => void
+    const rendered = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject })
     // SDK 的本地签名会被代理忽略；真实应用凭据保留在后端。
     const instance = new SDK({
       containerId: '#' + containerId,
@@ -86,13 +94,14 @@ async function connect() {
         subtitle_on: () => {},
         subtitle_off: () => {},
       },
-      onInitEvent: (code: number) => { if (current === generation && code === 4000) { ready.value = true; emit('connected', true); message.value = '数字人已连接' } },
+      onInitEvent: (code: number) => { if (current === generation && code === 4000) { ready.value = true; emit('connected', true); message.value = '数字人已连接'; resolveReady() } },
       onMessage: (error: { code?: number; message?: string }) => {
         if (current === generation && error.code && error.code !== 4000) {
-          message.value = '数字人服务异常：' + (error.message || String(error.code))
+          message.value = t("数字人服务异常：") + (error.message || String(error.code))
           ready.value = false
           emit('connected', false)
           emit('playing', false)
+          rejectReady(new Error(t("数字人服务异常，请重试")))
         }
       },
       onVoiceStateChange: (status: string) => {
@@ -106,25 +115,27 @@ async function connect() {
           ready.value = true
           emit('connected', true)
           message.value = '数字人已连接'
+          resolveReady()
         }
       },
     })
     avatar = instance
     let initTimer: ReturnType<typeof setTimeout> | undefined
-    try { await Promise.race([instance.init({
+    try { await Promise.race([Promise.all([rendered, instance.init({
       onDownloadProgress: (progress: number) => {
-        if (current === generation) message.value = '正在加载数字人资源：' + Math.round(progress) + '%'
+        if (current === generation) message.value = t("正在加载数字人资源：") + Math.round(progress) + '%'
       },
       onClose: () => {
         if (current !== generation) return
         ready.value = false
         emit('connected', false); emit('playing', false)
         message.value = '数字人连接已关闭，可重新连接'
+        rejectReady(new Error(t("数字人连接已关闭，可重新连接")))
       },
-    }), new Promise<never>((_, reject) => { initTimer = setTimeout(() => reject(new Error('数字人初始化超时，请重新连接')), 90000) })])
+    })]), new Promise<never>((_, reject) => { initTimer = setTimeout(() => reject(new Error(t("数字人初始化超时，请重新连接"))), 90000) })])
     } finally { if (initTimer) clearTimeout(initTimer) }
   } catch (error) {
-    if (current === generation) { release(); message.value = error instanceof Error ? error.message : '数字人连接失败' }
+    if (current === generation) { release(); message.value = error instanceof Error ? error.message : t("数字人连接失败") }
   } finally { if (active) loading.value = false }
 }
 function stop() {
@@ -143,15 +154,14 @@ onBeforeUnmount(() => { active = false; release() })
 defineExpose({ speak, stop, isReady: () => ready.value })
 </script>
 <template>
-  <section v-show="provider === 'xingyun'" class="xingyun-guide" :class="{ activated: ready || loading, half: framing === 'half' }">
-    <div v-show="ready || loading || posterImage" class="xingyun-frame">
-      <div :id="containerId" class="xingyun-canvas" />
-      <img v-if="!ready && posterImage" class="xingyun-poster" :src="posterImage" alt="数字导游形象" />
+  <section v-show="provider === 'xingyun' || querying" class="xingyun-guide" :class="{ activated: ready || loading, half: framing === 'half' }">
+    <div class="xingyun-frame" :aria-busy="querying || loading">
+      <div :id="containerId" class="xingyun-canvas" :style="{ visibility: ready ? 'visible' : 'hidden' }" :aria-hidden="!ready" />
+      <p v-if="!ready" class="xingyun-loading" role="status">{{ $t(querying || loading ? '数字人正在加载中' : statusText) }}</p>
     </div>
     <div class="xingyun-controls">
-      <button v-if="configured && !ready" :disabled="loading" @click="connect">{{ loading ? '连接中…' : '连接数字人' }}</button>
-      <button v-if="ready" @click="release(); message='数字人连接已关闭'">断开连接</button>
-      <p v-if="!ready" role="status">{{ statusText }}</p>
+      <button v-if="configured && !ready && !loading && !querying" @click="connect">{{ $t("连接数字人") }}</button>
+      <button v-if="ready" @click="release(); message='数字人连接已关闭'">{{ $t("断开连接") }}</button>
     </div>
   </section>
 </template>
@@ -161,8 +171,6 @@ defineExpose({ speak, stop, isReady: () => ready.value })
 /* SDK injects its own pixel size, scale and offsets. Fit the complete source frame
    into the available stage instead of cropping it or inheriting those offsets. */
 .xingyun-guide:not(.half) .xingyun-canvas :deep(canvas){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;transform:none!important;object-fit:contain!important;object-position:50% 50%!important}
-.xingyun-guide:not(.half) .xingyun-poster{inset:44px 16px 62px;width:calc(100% - 32px);height:calc(100% - 106px);object-position:50% 50%;transform:none}
-.xingyun-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
-.half .xingyun-poster{transform:scale(1.65);transform-origin:50% 15%}
+.xingyun-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center;font-size:18px;line-height:1.6;color:var(--text-secondary)}
 .xingyun-guide{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;justify-content:center;flex:1}.xingyun-guide.activated{flex:1;min-height:180px}.xingyun-frame{flex:1;min-height:120px;width:100%;position:relative;overflow:hidden}.xingyun-canvas{position:absolute;inset:0;width:100%;height:100%}.half .xingyun-canvas{transform:scale(1.75);transform-origin:50% 0}.xingyun-controls{flex-shrink:0;text-align:center;padding:8px;font-size:12px;color: var(--text-secondary)}.xingyun-controls button{padding:8px 14px;border: 1px solid var(--glass-line);border-radius:8px;color: var(--champagne-text);background: var(--glass);cursor:pointer}.xingyun-controls p{margin:6px 0}
 </style>

@@ -1,7 +1,8 @@
 @use 'sass:color';
 
 :root {
-  --app-font-family: "SimSun", "宋体", "Songti SC", "STSong", serif;
+  // 拉丁字母与数字使用 Arial，中文字符继续回退到宋体。
+  --app-font-family: Arial, "SimSun", "宋体", "Songti SC", "STSong", serif;
   --el-font-family: var(--app-font-family);
   --brand-950: #090b12;
   --brand-900: #111521;

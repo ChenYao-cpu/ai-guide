@@ -43,3 +43,12 @@ def resolve_voice_style(voice_style: str, model_path: str) -> str:
     if gender == "female" and voice_gender(voice_style) != "female":
         return "female_wenrou"
     return voice_style or ("male_wenhou" if gender == "male" else "female_wenrou")
+
+
+def resolve_guide_voice(voice_style: str, model_path: str, render_mode: str = "") -> str:
+    """Cloud avatars use the explicitly configured fallback, not a stale VRM.
+
+    A cloud application controls its own voice; local slow/English synthesis
+    must use the administrator's selected fallback voice for this guide.
+    """
+    return resolve_voice_style(voice_style, "" if render_mode == "xingyun" else model_path)

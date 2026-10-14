@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es'
@@ -21,13 +22,13 @@ const fetchSessions = async () => {
     if (data.code === 0) {
       sessionList.value = data.data.session_list
     } else {
-      ElMessage.error('获取导览会话列表失败：' + data.message)
+      ElMessage.error(t("获取导览会话列表失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取导览会话列表失败：' + error.message)
+      ElMessage.error(t("获取导览会话列表失败：") + error.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   } finally {
     loading.value = false
@@ -58,10 +59,10 @@ const openCreateDialog = async () => {
     if (routeRes.data.code === 0) routeList.value = routeRes.data.data.route_list
     if (guideRes.data.code === 0) guideList.value = guideRes.data.data.guide_list
     if (guideList.value.length === 0) {
-      ElMessage.warning('请先在"数字导游"页面创建至少一个导游，再创建导览会话')
+      ElMessage.warning(t("请先在\"数字导游\"页面创建至少一个导游，再创建导览会话"))
     }
     if (routeList.value.length === 0) {
-      ElMessage.warning('请先在"游览路线"页面创建至少一条路线，再创建导览会话')
+      ElMessage.warning(t("请先在\"游览路线\"页面创建至少一条路线，再创建导览会话"))
     }
   } catch (e) {
     console.error(e)
@@ -71,7 +72,7 @@ const openCreateDialog = async () => {
 
 const handleCreate = async () => {
   if (!form.value.name.trim()) {
-    ElMessage.warning('请输入会话名称')
+    ElMessage.warning(t("请输入会话名称"))
     return
   }
   creating.value = true
@@ -83,17 +84,17 @@ const handleCreate = async () => {
       form.value.preferences,
     )
     if (data.code === 0) {
-      ElMessage.success('导览会话创建成功！')
+      ElMessage.success(t("导览会话创建成功！"))
       dialogVisible.value = false
       await fetchSessions()
     } else {
-      ElMessage.error('创建失败：' + data.message)
+      ElMessage.error(t("创建失败：") + data.message)
     }
   } catch (e: unknown) {
     if (e instanceof AxiosError) {
-      ElMessage.error('创建失败：' + e.message)
+      ElMessage.error(t("创建失败：") + e.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   } finally {
     creating.value = false
@@ -110,10 +111,10 @@ interface StatusInfo {
 const getStatusInfo = (session: TourSessionItem): StatusInfo => {
   const raw = session.live_status
   switch (raw) {
-    case 0: return { label: '未开始', tagType: 'info' }
-    case 1: return { label: '进行中', tagType: 'success' }
-    case 2: return { label: '已结束', tagType: 'warning' }
-    default: return { label: '未知', tagType: '' }
+    case 0: return { label: t("未开始"), tagType: 'info' }
+    case 1: return { label: t("进行中"), tagType: 'success' }
+    case 2: return { label: t("已结束"), tagType: 'warning' }
+    default: return { label: t("未知"), tagType: '' }
   }
 }
 
@@ -124,13 +125,13 @@ const handleStart = async (sessionId: number) => {
   try {
     const { data } = await startSession(sessionId)
     if (data.code === 0) {
-      ElMessage.success('导览已开始')
+      ElMessage.success(t("导览已开始"))
       fetchSessions()
     } else {
-      ElMessage.error('开始失败：' + data.message)
+      ElMessage.error(t("开始失败：") + data.message)
     }
   } catch (e: unknown) {
-    if (e instanceof AxiosError) ElMessage.error('开始失败：' + e.message)
+    if (e instanceof AxiosError) ElMessage.error(t("开始失败：") + e.message)
   }
 }
 
@@ -138,13 +139,13 @@ const handleEnd = async (sessionId: number) => {
   try {
     const { data } = await endSession(sessionId)
     if (data.code === 0) {
-      ElMessage.success('导览已结束')
+      ElMessage.success(t("导览已结束"))
       fetchSessions()
     } else {
-      ElMessage.error('结束失败：' + data.message)
+      ElMessage.error(t("结束失败：") + data.message)
     }
   } catch (e: unknown) {
-    if (e instanceof AxiosError) ElMessage.error('结束失败：' + e.message)
+    if (e instanceof AxiosError) ElMessage.error(t("结束失败：") + e.message)
   }
 }
 
@@ -179,7 +180,7 @@ const toggleSelect = (sessionId: number) => {
 
 const confirmDelete = async () => {
   if (selectedIds.value.size === 0) {
-    ElMessage.warning('请至少勾选一个会话')
+    ElMessage.warning(t("请至少勾选一个会话"))
     return
   }
   deleting.value = true
@@ -188,17 +189,17 @@ const confirmDelete = async () => {
     const results = await Promise.allSettled(ids.map(id => deleteSession(id)))
     const successCount = results.filter(r => r.status === 'fulfilled' && (r.value.data as any)?.code === 0).length
     if (successCount > 0) {
-      ElMessage.success(`成功删除 ${successCount} 个会话`)
+      ElMessage.success(t("成功删除 {p0} 个会话", {p0: successCount}))
     }
     const failedCount = ids.length - successCount
     if (failedCount > 0) {
-      ElMessage.warning(`${failedCount} 个会话删除失败`)
+      ElMessage.warning(t("{p0} 个会话删除失败", {p0: failedCount}))
     }
     deleteMode.value = false
     selectedIds.value = new Set()
     await fetchSessions()
   } catch (e: unknown) {
-    ElMessage.error('删除操作出错')
+    ElMessage.error(t("删除操作出错"))
   } finally {
     deleting.value = false
   }
@@ -223,13 +224,13 @@ const handleAnalyze = async (sessionId: number) => {
     if (data.code === 0) {
       analysisResult.value = data.data
       analysisDialogVisible.value = true
-      ElMessage.success('AI分析完成')
+      ElMessage.success(t("AI分析完成"))
     } else {
-      ElMessage.error(data.message || '分析失败')
+      ElMessage.error(data.message || t("分析失败"))
     }
   } catch (e: unknown) {
-    if (e instanceof AxiosError) ElMessage.error('分析失败：' + e.message)
-    else ElMessage.error('未知错误')
+    if (e instanceof AxiosError) ElMessage.error(t("分析失败：") + e.message)
+    else ElMessage.error(t("未知错误"))
   } finally {
     analyzingId.value = 0
   }
@@ -257,20 +258,19 @@ onMounted(() => {
 <template>
   <div class="tour-session-container">
     <div class="page-header">
-      <h3 class="page-title">导览会话管理</h3>
+      <h3 class="page-title">{{ $t("导览会话管理") }}</h3>
       <div class="header-actions">
         <el-button type="primary" @click="openCreateDialog">
-          <el-icon><Plus /></el-icon> 新建会话
-        </el-button>
-        <el-button :loading="loading" @click="fetchSessions">刷新列表</el-button>
-        <el-button v-if="!deleteMode" @click="toggleDeleteMode">删除会话</el-button>
-        <el-button v-else type="danger" :loading="deleting" @click="confirmDelete">确认删除</el-button>
+          <el-icon><Plus /></el-icon>{{ $t("新建会话") }}</el-button>
+        <el-button :loading="loading" @click="fetchSessions">{{ $t("刷新列表") }}</el-button>
+        <el-button v-if="!deleteMode" @click="toggleDeleteMode">{{ $t("删除会话") }}</el-button>
+        <el-button v-else type="danger" :loading="deleting" @click="confirmDelete">{{ $t("确认删除") }}</el-button>
       </div>
     </div>
 
     <!-- 会话卡片网格 -->
     <div v-loading="loading" class="card-grid">
-      <el-empty v-if="!loading && sessionList.length === 0" description="暂无导览会话，请先创建" />
+      <el-empty v-if="!loading && sessionList.length === 0" :description='$t("暂无导览会话，请先创建")' />
 
       <div v-for="(row, rowIndex) in chunkedSessions" :key="rowIndex" class="card-row">
         <el-row :gutter="20">
@@ -289,47 +289,39 @@ onMounted(() => {
               </div>
               <div class="card-status">
                 <el-tag :type="getStatusInfo(item).tagType" size="small" effect="dark">
-                  {{ getStatusInfo(item).label }}
+                  {{ $t(getStatusInfo(item).label) }}
                 </el-tag>
               </div>
 
               <p class="session-name">
-                {{ item.name || `会话 #${item.session_id}` }}
+                {{ $t(item.name || `会话 #${item.session_id}`) }}
               </p>
 
               <div class="session-info">
                 <div class="info-row">
-                  <span class="info-label">开始时间</span>
-                  <span class="info-value">{{ formatTime(item.start_time) }}</span>
+                  <span class="info-label">{{ $t("开始时间") }}</span>
+                  <span class="info-value">{{ $t(formatTime(item.start_time)) }}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">消息数</span>
-                  <span class="info-value">{{ (item as any).message_count || 0 }} 条</span>
+                  <span class="info-label">{{ $t("消息数") }}</span>
+                  <span class="info-value">{{ (item as any).message_count || 0 }} {{ $t("条") }}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">景点进度</span>
-                  <span class="info-value">第 {{ ((item as any).current_spot_index || 0) + 1 }} 个</span>
+                  <span class="info-label">{{ $t("景点进度") }}</span>
+                  <span class="info-value">{{ $t("第") }} {{ $t(((item as any).current_spot_index || 0) + 1) }} {{ $t("个") }}</span>
                 </div>
               </div>
 
               <div class="card-actions">
                 <template v-if="isPending(item)">
-                  <el-button type="primary" size="default" @click="handleStart(item.session_id)">
-                    开始导览
-                  </el-button>
+                  <el-button type="primary" size="default" @click="handleStart(item.session_id)">{{ $t("开始导览") }}</el-button>
                 </template>
                 <template v-else-if="isLive(item)">
-                  <el-button type="success" size="default" :icon="VideoPlay" @click="enterTour(item.session_id)">
-                    进入导览
-                  </el-button>
-                  <el-button type="danger" size="default" @click="handleEnd(item.session_id)">
-                    结束
-                  </el-button>
+                  <el-button type="success" size="default" :icon="VideoPlay" @click="enterTour(item.session_id)">{{ $t("进入导览") }}</el-button>
+                  <el-button type="danger" size="default" @click="handleEnd(item.session_id)">{{ $t("结束") }}</el-button>
                 </template>
                 <template v-else>
-                  <el-button type="warning" size="default" :loading="analyzingId === item.session_id" @click="handleAnalyze(item.session_id)">
-                    AI 分析
-                  </el-button>
+                  <el-button type="warning" size="default" :loading="analyzingId === item.session_id" @click="handleAnalyze(item.session_id)">{{ $t("AI 分析") }}</el-button>
                 </template>
               </div>
             </el-card>
@@ -339,68 +331,68 @@ onMounted(() => {
     </div>
 
     <!-- AI 分析结果弹窗 -->
-    <el-dialog v-model="analysisDialogVisible" title="AI 导览分析报告" width="650px" destroy-on-close>
+    <el-dialog v-model="analysisDialogVisible" :title='$t("AI 导览分析报告")' width="650px" destroy-on-close>
       <div v-if="analysisResult" class="analysis-content">
         <div class="analysis-section">
-          <h4>游客满意度</h4>
+          <h4>{{ $t("游客满意度") }}</h4>
           <el-tag :type="analysisResult.satisfaction === '高' ? 'success' : analysisResult.satisfaction === '中' ? 'warning' : 'danger'" size="large">
-            {{ analysisResult.satisfaction || '-' }}
+            {{ $t(analysisResult.satisfaction || '-') }}
           </el-tag>
-          <p class="analysis-desc">{{ analysisResult.satisfaction_reason || '-' }}</p>
+          <p class="analysis-desc">{{ $t(analysisResult.satisfaction_reason || '-') }}</p>
         </div>
         <div class="analysis-section">
-          <h4>游客情感趋势</h4>
-          <p>{{ analysisResult.visitor_emotion_trend || '-' }}</p>
+          <h4>{{ $t("游客情感趋势") }}</h4>
+          <p>{{ $t(analysisResult.visitor_emotion_trend || '-') }}</p>
         </div>
         <div class="analysis-section">
-          <h4>热门话题</h4>
+          <h4>{{ $t("热门话题") }}</h4>
           <div class="tag-group">
-            <el-tag v-for="(t, i) in (analysisResult.hot_topics || [])" :key="i" type="success" effect="plain">{{ t }}</el-tag>
+            <el-tag v-for="(t, i) in (analysisResult.hot_topics || [])" :key="i" type="success" effect="plain">{{ $t(t) }}</el-tag>
             <span v-if="!analysisResult.hot_topics?.length">-</span>
           </div>
         </div>
         <div class="analysis-section">
-          <h4>游客常见提问</h4>
+          <h4>{{ $t("游客常见提问") }}</h4>
           <ul class="question-list">
-            <li v-for="(q, i) in (analysisResult.frequent_questions || [])" :key="i">{{ q }}</li>
+            <li v-for="(q, i) in (analysisResult.frequent_questions || [])" :key="i">{{ $t(q) }}</li>
             <li v-if="!analysisResult.frequent_questions?.length">-</li>
           </ul>
         </div>
         <div class="analysis-section">
-          <h4>改进建议</h4>
-          <p class="analysis-desc">{{ analysisResult.service_suggestions || '-' }}</p>
+          <h4>{{ $t("改进建议") }}</h4>
+          <p class="analysis-desc">{{ $t(analysisResult.service_suggestions || '-') }}</p>
         </div>
         <div class="analysis-section summary-box">
-          <h4>总结</h4>
-          <p>{{ analysisResult.summary || analysisResult.raw || '-' }}</p>
+          <h4>{{ $t("总结") }}</h4>
+          <p>{{ $t(analysisResult.summary || analysisResult.raw || '-') }}</p>
         </div>
       </div>
       <template #footer>
-        <el-button @click="analysisDialogVisible = false">关闭</el-button>
+        <el-button @click="analysisDialogVisible = false">{{ $t("关闭") }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 新建会话对话框 -->
-    <el-dialog v-model="dialogVisible" title="新建导览会话" width="500px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title='$t("新建导览会话")' width="500px" destroy-on-close>
       <el-form :model="form" label-width="100px">
-        <el-form-item label="会话名称" required>
-          <el-input v-model="form.name" placeholder="如：3月15日导览" maxlength="50" />
+        <el-form-item :label='$t("会话名称")' required>
+          <el-input v-model="form.name" :placeholder='$t("如：3月15日导览")' maxlength="50" />
         </el-form-item>
-        <el-form-item label="游览路线">
-          <el-select v-model="form.route_id" placeholder="选择路线" style="width:100%">
-            <el-option v-for="r in routeList" :key="r.route_id" :label="r.name" :value="r.route_id" />
+        <el-form-item :label='$t("游览路线")'>
+          <el-select v-model="form.route_id" :placeholder='$t("选择路线")' style="width:100%">
+            <el-option v-for="r in routeList" :key="r.route_id" :label="$t(r.name)" :value="r.route_id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="数字导游">
-          <el-select v-model="form.guide_id" placeholder="选择导游" style="width:100%">
-            <el-option v-for="g in guideList" :key="g.guide_id" :label="g.name" :value="g.guide_id" />
+        <el-form-item :label='$t("数字导游")'>
+          <el-select v-model="form.guide_id" :placeholder='$t("选择导游")' style="width:100%">
+            <el-option v-for="g in guideList" :key="g.guide_id" :label="$t(g.name)" :value="g.guide_id" />
           </el-select>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate" :loading="creating">创建</el-button>
+        <el-button @click="dialogVisible = false">{{ $t("取消") }}</el-button>
+        <el-button type="primary" @click="handleCreate" :loading="creating">{{ $t("创建") }}</el-button>
       </template>
     </el-dialog>
   </div>

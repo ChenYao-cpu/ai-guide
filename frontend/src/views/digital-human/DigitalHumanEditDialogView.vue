@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -30,13 +31,13 @@ const showItemInfoDialog = async (streamerId: number) => {
     if (data.code === 0) {
       steamerInfo.value = data.data
     } else {
-      ElMessage.error('获取主播数据失败: ' + data.message)
+      ElMessage.error(t("获取主播数据失败: ") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取主播数据失败: ' + error.message)
+      ElMessage.error(t("获取主播数据失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -48,18 +49,18 @@ const handelSaveClick = async () => {
 
     if (data.code === 0) {
       steamerInfo.value.streamer_id = data.data
-      ElMessage.success('保存成功')
+      ElMessage.success(t("保存成功"))
       saveLoading.value = false
     } else {
       saveLoading.value = false
-      ElMessage.error('保存失败: ' + data.message)
+      ElMessage.error(t("保存失败: ") + data.message)
     }
   } catch (error: unknown) {
     saveLoading.value = false
     if (error instanceof AxiosError) {
-      ElMessage.error('保存失败: ' + error.message)
+      ElMessage.error(t("保存失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -69,15 +70,13 @@ defineExpose({ showItemInfoDialog })
 
 <template>
   <div class="dialog-container">
-    <el-dialog v-model="dialogInfoVisible" title="主播详情" width="80%" destroy-on-close>
+    <el-dialog v-model="dialogInfoVisible" :title='$t("主播详情")' width="80%" destroy-on-close>
       <StreamerInfoComponent v-model="steamerInfo" :disable-change="false" />
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button type="primary" @click="handelSaveClick" :loading="saveLoading">
-            保存
-          </el-button>
-          <el-button @click="dialogInfoVisible = false" :disabled="saveLoading"> 关闭 </el-button>
+          <el-button type="primary" @click="handelSaveClick" :loading="saveLoading">{{ $t("保存") }}</el-button>
+          <el-button @click="dialogInfoVisible = false" :disabled="saveLoading">{{ $t("关闭") }}</el-button>
         </div>
       </template>
     </el-dialog>

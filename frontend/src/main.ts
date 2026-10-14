@@ -19,6 +19,7 @@ document.documentElement.dataset.uiTheme = 'soft-ui'
 
 import App from './App.vue'
 import router from './router'
+import { installI18n } from './i18n'
 
 // ── PWA Service Worker 注册 ──
 if ('serviceWorker' in navigator) {
@@ -39,6 +40,7 @@ if ('serviceWorker' in navigator) {
 }
 
 const app = createApp(App)
+installI18n(app)
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate) // 持久化储存插件

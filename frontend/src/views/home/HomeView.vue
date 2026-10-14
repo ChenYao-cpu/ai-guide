@@ -1,5 +1,6 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+<script setup lang="ts">import { t, locale } from '@/i18n'
+
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useTransition } from '@vueuse/core'
 import { getDashboardInfoRequest, type DashboardItem } from '@/api/dashboard'
@@ -40,17 +41,17 @@ const statCards = computed(() => {
   const stats = comprehensive.value?.service_stats
   const emotion = comprehensive.value?.emotion_stats
   return [
-    { title: '总交互数', value: emotion?.total || 0, icon: ChatDotRound, sub: '全局交互次数' },
-    { title: '好评率', value: (emotion?.positive_rate || 0) + '%', icon: CircleCheck, sub: (emotion?.positive || 0) + ' 条正面' },
-    { title: '今日提问', value: stats?.today_questions || 0, icon: QuestionFilled, sub: '今日游客提问' },
-    { title: '负面率', value: (emotion?.negative_rate || 0) + '%', icon: WarningFilled, sub: '负面情绪占比' },
-    { title: '本周服务', value: stats?.week_sessions || 0, icon: UserFilled, sub: '本周会话数' },
-    { title: '知识覆盖', value: knowledgeGaps.value ? Math.max(0, 100 - knowledgeGaps.value.uncertain_answers_count * 2) + '%' : 'N/A', icon: Reading, sub: '知识响应率' },
+    { title: t("总交互数"), value: emotion?.total || 0, icon: ChatDotRound, sub: t("全局交互次数") },
+    { title: t("好评率"), value: (emotion?.positive_rate || 0) + '%', icon: CircleCheck, sub: (emotion?.positive || 0) + t(" 条正面") },
+    { title: t("今日提问"), value: stats?.today_questions || 0, icon: QuestionFilled, sub: t("今日游客提问") },
+    { title: t("负面率"), value: (emotion?.negative_rate || 0) + '%', icon: WarningFilled, sub: t("负面情绪占比") },
+    { title: t("本周服务"), value: stats?.week_sessions || 0, icon: UserFilled, sub: t("本周会话数") },
+    { title: t("知识覆盖"), value: knowledgeGaps.value ? Math.max(0, 100 - knowledgeGaps.value.uncertain_answers_count * 2) + '%' : 'N/A', icon: Reading, sub: t("知识响应率") },
   ]
 })
 const questionTypeData = computed(() => {
   const e = comprehensive.value?.emotion_stats; if (!e) return []
-  return [{ name: '满意度相关', value: e.positive || 0 }, { name: '一般问题', value: e.neutral || 0 }, { name: '投诉/不满', value: e.negative || 0 }]
+  return [{ name: t("满意度相关"), value: e.positive || 0 }, { name: t("一般问题"), value: e.neutral || 0 }, { name: t("投诉/不满"), value: e.negative || 0 }]
 })
 const emotionStats = computed(() => comprehensive.value?.emotion_stats)
 const hourlyData = computed(() => comprehensive.value?.hourly_distribution || [])
@@ -59,16 +60,16 @@ const hourlyData = computed(() => comprehensive.value?.hourly_distribution || []
 function initTrendChart() {
   if (!trendChartRef.value || !comprehensive.value?.daily_trend) return
   if (trendChart) trendChart.dispose(); trendChart = echarts.init(trendChartRef.value, 'soft-ui')
-  const t = comprehensive.value.daily_trend
+  const trend = comprehensive.value.daily_trend
   trendChart.setOption({
-    tooltip: { trigger: 'axis' }, legend: { data: ['服务人次','提问数','满意度(%)'], bottom: 0 },
+    tooltip: { trigger: 'axis' }, legend: { data: [t("服务人次"),t("提问数"),t("满意度(%)")], bottom: 0 },
     grid: { left: 50, right: 50, top: 10, bottom: 30 },
-    xAxis: { type: 'category', data: t.map(d => d.date), axisLabel: { interval: 4, rotate: 30 } },
-    yAxis: [{ type: 'value', name: '数量' }, { type: 'value', name: '%', max: 100 }],
+    xAxis: { type: 'category', data: trend.map(d => d.date), axisLabel: { interval: 4, rotate: 30 } },
+    yAxis: [{ type: 'value', name: t("数量") }, { type: 'value', name: '%', max: 100 }],
     series: [
-      { name: '服务人次', type: 'line', data: t.map(d => d.sessions), smooth: true, symbol: 'none', areaStyle: { opacity: .1 } },
-      { name: '提问数', type: 'line', data: t.map(d => d.questions), smooth: true, symbol: 'none', areaStyle: { opacity: .1 } },
-      { name: '满意度(%)', type: 'line', yAxisIndex: 1, data: t.map(d => d.satisfaction), smooth: true, lineStyle: { type: 'dashed' }, symbol: 'none' },
+      { name: t("服务人次"), type: 'line', data: trend.map(d => d.sessions), smooth: true, symbol: 'none', areaStyle: { opacity: .1 } },
+      { name: t("提问数"), type: 'line', data: trend.map(d => d.questions), smooth: true, symbol: 'none', areaStyle: { opacity: .1 } },
+      { name: t("满意度(%)"), type: 'line', yAxisIndex: 1, data: trend.map(d => d.satisfaction), smooth: true, lineStyle: { type: 'dashed' }, symbol: 'none' },
     ],
   })
 }
@@ -78,7 +79,7 @@ function initSpotChart() {
   const spots = comprehensive.value.spot_ranking.slice(0, 10).reverse()
   spotChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }, grid: { left: 100, right: 40, top: 10, bottom: 20 },
-    xAxis: { type: 'value', name: '会话数' }, yAxis: { type: 'category', data: spots.map(s => s.spot_name), axisLabel: { fontSize: 11 } },
+    xAxis: { type: 'value', name: t("会话数") }, yAxis: { type: 'category', data: spots.map(s => s.spot_name), axisLabel: { fontSize: 11 } },
     series: [{ type: 'bar', data: spots.map(s => ({ value: s.session_count, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#6366f1'},{offset:1,color:'#818cf8'}]), borderRadius: [0,6,6,0] } })), barMaxWidth: 28, label: { show: true, position: 'right', fontSize: 11 } }],
   })
 }
@@ -96,9 +97,9 @@ async function generateReport(type: 'daily' | 'weekly') {
   reportLoading.value = type
   try {
     const { data } = await generateAnalyticsReport(type)
-    if (data.code === 0) { currentReport.value = data.data; ElMessage.success(`${type==='daily'?'日报':'周报'}生成成功！`) }
-    else { ElMessage.error(data.message || '报告生成失败') }
-  } catch { ElMessage.error('请求失败') }
+    if (data.code === 0) { currentReport.value = data.data; ElMessage.success(t("{p0}生成成功！", {p0: type==='daily'?'日报':'周报'})) }
+    else { ElMessage.error(data.message || t("报告生成失败")) }
+  } catch { ElMessage.error(t("请求失败")) }
   finally { reportLoading.value = null }
 }
 
@@ -110,6 +111,7 @@ async function loadAll() {
   loading.value = false
 }
 onMounted(loadAll)
+watch(locale, () => { initTrendChart(); initSpotChart() })
 </script>
 
 <template>
@@ -118,33 +120,33 @@ onMounted(loadAll)
     <section class="dashboard-hero">
       <div>
 
-        <h1>综合看板</h1>
+        <h1>{{ $t("综合看板") }}</h1>
       </div>
       <div class="hero-actions">
 
-        <el-button plain :icon="RefreshRight" @click="loadAll">刷新数据</el-button>
+        <el-button plain :icon="RefreshRight" @click="loadAll">{{ $t("刷新数据") }}</el-button>
       </div>
     </section>
 
     <!-- 基础资源 -->
     <section class="metric-section">
-      <div class="section-heading"><div><h2>基础资源</h2></div></div>
+      <div class="section-heading"><div><h2>{{ $t("基础资源") }}</h2></div></div>
       <el-row :gutter="16">
-        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Picture /></el-icon></div><div class="metric-info"><el-statistic title="景区景点" :value="spotCountTrans"><template #suffix><span class="metric-unit">个</span></template></el-statistic></div></el-card></el-col>
-        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Collection /></el-icon></div><div class="metric-info"><el-statistic title="知识文档" :value="docCountTrans"><template #suffix><span class="metric-unit">份</span></template></el-statistic></div></el-card></el-col>
-        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><User /></el-icon></div><div class="metric-info"><el-statistic title="数字导游" :value="guideCountTrans"><template #suffix><span class="metric-unit">位</span></template></el-statistic></div></el-card></el-col>
-        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Guide /></el-icon></div><div class="metric-info"><el-statistic title="游览路线" :value="routeCountTrans"><template #suffix><span class="metric-unit">条</span></template></el-statistic></div></el-card></el-col>
+        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Picture /></el-icon></div><div class="metric-info"><el-statistic :title='$t("景区景点")' :value="spotCountTrans"><template #suffix><span class="metric-unit">{{ $t("个") }}</span></template></el-statistic></div></el-card></el-col>
+        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Collection /></el-icon></div><div class="metric-info"><el-statistic :title='$t("知识文档")' :value="docCountTrans"><template #suffix><span class="metric-unit">{{ $t("份") }}</span></template></el-statistic></div></el-card></el-col>
+        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><User /></el-icon></div><div class="metric-info"><el-statistic :title='$t("数字导游")' :value="guideCountTrans"><template #suffix><span class="metric-unit">{{ $t("位") }}</span></template></el-statistic></div></el-card></el-col>
+        <el-col :span="6"><el-card shadow="never" class="metric-card"><div class="metric-icon"><el-icon><Guide /></el-icon></div><div class="metric-info"><el-statistic :title='$t("游览路线")' :value="routeCountTrans"><template #suffix><span class="metric-unit">{{ $t("条") }}</span></template></el-statistic></div></el-card></el-col>
       </el-row>
     </section>
 
     <!-- 运营数据 -->
     <section class="metric-section">
-      <div class="section-heading"><div><h2>运营数据</h2></div></div>
+      <div class="section-heading"><div><h2>{{ $t("运营数据") }}</h2></div></div>
       <el-row :gutter="12">
         <el-col :span="4" v-for="card in statCards" :key="card.title">
           <el-card shadow="never" class="metric-card metric-card-sm">
             <div class="metric-icon"><el-icon><component :is="card.icon" /></el-icon></div>
-            <div class="metric-info"><el-statistic :title="card.title" :value="card.value" /></div>
+            <div class="metric-info"><el-statistic :title="$t(card.title)" :value="card.value" /></div>
           </el-card>
         </el-col>
       </el-row>
@@ -155,13 +157,13 @@ onMounted(loadAll)
       <el-row :gutter="16">
         <el-col :span="14">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header"><div><strong>近30天服务趋势</strong></div></div></template>
+            <template #header><div class="chart-header"><div><strong>{{ $t("近30天服务趋势") }}</strong></div></div></template>
             <div ref="trendChartRef" style="height:360px" />
           </el-card>
         </el-col>
         <el-col :span="10">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header"><div><strong>热门景点TOP10</strong></div></div></template>
+            <template #header><div class="chart-header"><div><strong>{{ $t("热门景点TOP10") }}</strong></div></div></template>
             <div ref="spotChartRef" style="height:360px" />
           </el-card>
         </el-col>
@@ -173,16 +175,16 @@ onMounted(loadAll)
       <el-row :gutter="16">
         <el-col :span="10">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header"><div><strong>问题类型分布</strong></div></div></template>
+            <template #header><div class="chart-header"><div><strong>{{ $t("问题类型分布") }}</strong></div></div></template>
             <PieChartComponent v-if="questionTypeData.length" :data="questionTypeData" :colors="['#4f46e5','#818cf8','#6366f1','#10b981','#ec4899','#f59e0b','#d15d1a']" height="340px" />
-            <el-empty v-else description="暂无数据" :image-size="80" />
+            <el-empty v-else :description='$t("暂无数据")' :image-size="80" />
           </el-card>
         </el-col>
         <el-col :span="14">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header"><div><strong>游客活跃时段分布（近7天）</strong></div></div></template>
+            <template #header><div class="chart-header"><div><strong>{{ $t("游客活跃时段分布（近7天）") }}</strong></div></div></template>
             <HeatmapComponent v-if="hourlyData.length" :data="hourlyData" height="340px" />
-            <el-empty v-else description="暂无数据" :image-size="80" />
+            <el-empty v-else :description='$t("暂无数据")' :image-size="80" />
           </el-card>
         </el-col>
       </el-row>
@@ -193,29 +195,29 @@ onMounted(loadAll)
       <el-row :gutter="16">
         <el-col :span="12">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header between"><div><strong>知识盲区</strong></div><el-button size="small" type="primary" :loading="gapsLoading" @click="loadKnowledgeGaps">刷新</el-button></div></template>
+            <template #header><div class="chart-header between"><div><strong>{{ $t("知识盲区") }}</strong></div><el-button size="small" type="primary" :loading="gapsLoading" @click="loadKnowledgeGaps">{{ $t("刷新") }}</el-button></div></template>
             <div v-if="knowledgeGaps">
-              <div class="gap-summary"><span class="gap-count">{{ knowledgeGaps.uncertain_answers_count }}</span> 个不确定回答<span class="gap-total"> / {{ knowledgeGaps.total_interactions_analyzed }} 条交互</span></div>
+              <div class="gap-summary"><span class="gap-count">{{ $t(knowledgeGaps.uncertain_answers_count) }}</span>{{ $t("个不确定回答") }}<span class="gap-total"> / {{ $t(knowledgeGaps.total_interactions_analyzed) }} {{ $t("条交互") }}</span></div>
               <div v-if="knowledgeGaps.uncertain_samples?.length" class="gap-samples">
-                <div v-for="(s,i) in knowledgeGaps.uncertain_samples.slice(0,5)" :key="i" class="gap-sample-item"><el-tag size="small" type="warning" effect="dark">{{ s.keyword_matched }}</el-tag><span class="gap-text">{{ s.guide_response }}</span></div>
+                <div v-for="(s,i) in knowledgeGaps.uncertain_samples.slice(0,5)" :key="i" class="gap-sample-item"><el-tag size="small" type="warning" effect="dark">{{ $t(s.keyword_matched) }}</el-tag><span class="gap-text">{{ $t(s.guide_response) }}</span></div>
               </div>
-              <div v-if="knowledgeGaps.top_entities?.length" class="gap-entities mt-2"><h4>高频实体词</h4><div class="entity-tags"><el-tag v-for="(e,i) in knowledgeGaps.top_entities.slice(0,10)" :key="i" size="small" effect="plain" :type="i<3?'danger':'warning'">{{ e.entity }}({{ e.count }})</el-tag></div></div>
+              <div v-if="knowledgeGaps.top_entities?.length" class="gap-entities mt-2"><h4>{{ $t("高频实体词") }}</h4><div class="entity-tags"><el-tag v-for="(e,i) in knowledgeGaps.top_entities.slice(0,10)" :key="i" size="small" effect="plain" :type="i<3?'danger':'warning'">{{ $t(e.entity) }}({{ $t(e.count) }})</el-tag></div></div>
             </div>
-            <el-empty v-else description="暂无数据" :image-size="60" />
+            <el-empty v-else :description='$t("暂无数据")' :image-size="60" />
           </el-card>
         </el-col>
         <el-col :span="12">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header"><div><strong>游客情感分布</strong></div></div></template>
+            <template #header><div class="chart-header"><div><strong>{{ $t("游客情感分布") }}</strong></div></div></template>
             <div v-if="emotionStats" class="emotion-section">
               <div class="emotion-bars">
-                <div class="emotion-bar-item"><span class="emotion-label">正面</span><div class="emotion-track"><div class="emotion-fill positive" :style="{width:emotionStats.positive_rate+'%'}">{{ emotionStats.positive_rate }}%</div></div><span class="emotion-count">{{ emotionStats.positive }}</span></div>
-                <div class="emotion-bar-item"><span class="emotion-label">中性</span><div class="emotion-track"><div class="emotion-fill neutral" :style="{width:(100-emotionStats.positive_rate-emotionStats.negative_rate).toFixed(1)+'%'}">{{ (100-emotionStats.positive_rate-emotionStats.negative_rate).toFixed(1) }}%</div></div><span class="emotion-count">{{ emotionStats.neutral }}</span></div>
-                <div class="emotion-bar-item"><span class="emotion-label">负面</span><div class="emotion-track"><div class="emotion-fill negative" :style="{width:emotionStats.negative_rate+'%'}">{{ emotionStats.negative_rate }}%</div></div><span class="emotion-count">{{ emotionStats.negative }}</span></div>
+                <div class="emotion-bar-item"><span class="emotion-label">{{ $t("正面") }}</span><div class="emotion-track"><div class="emotion-fill positive" :style="{width:emotionStats.positive_rate+'%'}">{{ $t(emotionStats.positive_rate) }}%</div></div><span class="emotion-count">{{ $t(emotionStats.positive) }}</span></div>
+                <div class="emotion-bar-item"><span class="emotion-label">{{ $t("中性") }}</span><div class="emotion-track"><div class="emotion-fill neutral" :style="{width:(100-emotionStats.positive_rate-emotionStats.negative_rate).toFixed(1)+'%'}">{{ $t((100-emotionStats.positive_rate-emotionStats.negative_rate).toFixed(1)) }}%</div></div><span class="emotion-count">{{ $t(emotionStats.neutral) }}</span></div>
+                <div class="emotion-bar-item"><span class="emotion-label">{{ $t("负面") }}</span><div class="emotion-track"><div class="emotion-fill negative" :style="{width:emotionStats.negative_rate+'%'}">{{ $t(emotionStats.negative_rate) }}%</div></div><span class="emotion-count">{{ $t(emotionStats.negative) }}</span></div>
               </div>
-              <div class="emotion-total">总交互数: {{ emotionStats.total }}</div>
+              <div class="emotion-total">{{ $t("总交互数:") }} {{ $t(emotionStats.total) }}</div>
             </div>
-            <el-empty v-else description="暂无数据" :image-size="80" />
+            <el-empty v-else :description='$t("暂无数据")' :image-size="80" />
           </el-card>
         </el-col>
       </el-row>
@@ -226,18 +228,18 @@ onMounted(loadAll)
       <el-row :gutter="16">
         <el-col :span="24">
           <el-card shadow="never" class="chart-card">
-            <template #header><div class="chart-header between"><div><strong>AI 分析报告</strong></div><div class="report-actions"><el-button size="small" type="primary" :loading="reportLoading==='daily'" @click="generateReport('daily')">生成日报</el-button><el-button size="small" type="success" :loading="reportLoading==='weekly'" @click="generateReport('weekly')">生成周报</el-button></div></div></template>
+            <template #header><div class="chart-header between"><div><strong>{{ $t("AI 分析报告") }}</strong></div><div class="report-actions"><el-button size="small" type="primary" :loading="reportLoading==='daily'" @click="generateReport('daily')">{{ $t("生成日报") }}</el-button><el-button size="small" type="success" :loading="reportLoading==='weekly'" @click="generateReport('weekly')">{{ $t("生成周报") }}</el-button></div></div></template>
             <div v-if="currentReport" class="report-display">
-              <div class="report-meta"><el-tag type="primary" size="large">{{ currentReport.report?.title || currentReport.report_type }}</el-tag><span class="report-period">{{ currentReport.report?.period || '' }}</span><span class="report-time">生成时间: {{ currentReport.generated_at }}</span></div>
+              <div class="report-meta"><el-tag type="primary" size="large">{{ $t(currentReport.report?.title || currentReport.report_type) }}</el-tag><span class="report-period">{{ $t(currentReport.report?.period || '') }}</span><span class="report-time">{{ $t("生成时间:") }} {{ $t(currentReport.generated_at) }}</span></div>
               <div class="report-body" v-if="currentReport.report">
-                <div class="report-summary">{{ currentReport.report.executive_summary }}</div>
+                <div class="report-summary">{{ $t(currentReport.report.executive_summary) }}</div>
                 <el-divider />
-                <div class="key-metrics"><div v-for="(m,i) in currentReport.report.key_metrics" :key="i" class="metric-item"><span class="metric-name">{{ m.name }}</span><span class="metric-value" :style="{color:m.trend==='up'?'#059669':m.trend==='down'?'#e11d48':'#818cf8'}">{{ m.value }} {{ m.trend==='up'?'↑':m.trend==='down'?'↓':'→' }}</span><span class="metric-comment">{{ m.comment }}</span></div></div>
+                <div class="key-metrics"><div v-for="(m,i) in currentReport.report.key_metrics" :key="i" class="metric-item"><span class="metric-name">{{ $t(m.name) }}</span><span class="metric-value" :style="{color:m.trend==='up'?'#059669':m.trend==='down'?'#e11d48':'#818cf8'}">{{ $t(m.value) }} {{ $t(m.trend==='up'?'↑':m.trend==='down'?'↓':'→') }}</span><span class="metric-comment">{{ $t(m.comment) }}</span></div></div>
                 <el-divider />
-                <div class="report-recommendations"><h4>改进建议</h4><div v-for="(rec,i) in currentReport.report.recommendations" :key="i" class="rec-item"><el-tag :type="rec.priority==='高'?'danger':rec.priority==='中'?'warning':'info'" size="small">{{ rec.priority }}</el-tag><span>{{ rec.action }}</span></div></div>
+                <div class="report-recommendations"><h4>{{ $t("改进建议") }}</h4><div v-for="(rec,i) in currentReport.report.recommendations" :key="i" class="rec-item"><el-tag :type="rec.priority==='高'?'danger':rec.priority==='中'?'warning':'info'" size="small">{{ $t(rec.priority) }}</el-tag><span>{{ $t(rec.action) }}</span></div></div>
               </div>
             </div>
-            <el-empty v-else description="尚未生成报告" :image-size="80" />
+            <el-empty v-else :description='$t("尚未生成报告")' :image-size="80" />
           </el-card>
         </el-col>
       </el-row>

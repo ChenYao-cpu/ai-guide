@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MdPreview } from 'md-editor-v3'
@@ -16,7 +17,7 @@ const dialogFormVisible = ref(false)
 
 // AI 生成后的 文案 or 数字人视频 值双向绑定
 const modelGenValue = defineModel<StreamingRoomProductList[]>({
-  default: [] as StreamingRoomProductList[]
+  default: () => [] as StreamingRoomProductList[]
 })
 
 // 定义标题
@@ -52,13 +53,13 @@ const showItemInfoDialog = async (
       if (data.code === 0) {
         infoValue.value = data.data
       } else {
-        ElMessage.error('获取说明书失败：' + data.message)
+        ElMessage.error(t("获取说明书失败：") + data.message)
       }
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
-        ElMessage.error('获取说明书失败：' + error.message)
+        ElMessage.error(t("获取说明书失败：") + error.message)
       } else {
-        ElMessage.error('未知错误：' + error)
+        ElMessage.error(t("未知错误：") + error)
       }
     }
   } else {
@@ -138,13 +139,13 @@ const stopGenProgress = () => {
 // 生成数据人视频
 const getDigitalHumanVideo = async () => {
   if (salesDoc.value === '') {
-    ElMessage.error('需先生成文案')
+    ElMessage.error(t("需先生成文案"))
     return
   }
 
   isGenerating.value = true
-  ElMessage.success('正在生成，预计 3 分钟，请稍候')
-  ElMessage.warning('若未生成完成，请不要离开页面！')
+  ElMessage.success(t("正在生成，预计 3 分钟，请稍候"))
+  ElMessage.warning(t("若未生成完成，请不要离开页面！"))
 
   startGenProgress()
   try {
@@ -154,15 +155,15 @@ const getDigitalHumanVideo = async () => {
       infoValue.value = data.data
       updateGenValue(infoValue.value)
       genPercentage.value = 100
-      ElMessage.success('生成数字人视频成功')
+      ElMessage.success(t("生成数字人视频成功"))
     } else {
-      ElMessage.error('生成数字人视频失败：' + data.message)
+      ElMessage.error(t("生成数字人视频失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('生成数字人视频失败：' + error.message)
+      ElMessage.error(t("生成数字人视频失败：") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
   isGenerating.value = false
@@ -172,8 +173,8 @@ const getDigitalHumanVideo = async () => {
 // 生成解说文案
 const handleGenSalesDocClick = async () => {
   isGenerating.value = true
-  ElMessage.success('正在生成，请稍候')
-  ElMessage.warning('若未生成完成，请不要离开页面！')
+  ElMessage.success(t("正在生成，请稍候"))
+  ElMessage.warning(t("若未生成完成，请不要离开页面！"))
   try {
     startGenProgress()
 
@@ -182,15 +183,15 @@ const handleGenSalesDocClick = async () => {
     if (data.code === 0) {
       infoValue.value = data.data
       updateGenValue(infoValue.value) // 更新与父组件双向绑定的值
-      ElMessage.success('生成文案成功')
+      ElMessage.success(t("生成文案成功"))
     } else {
-      ElMessage.error('生成文案失败：' + data.message)
+      ElMessage.error(t("生成文案失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('生成文案失败：' + error.message)
+      ElMessage.error(t("生成文案失败：") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
   isGenerating.value = false
@@ -212,7 +213,7 @@ defineExpose({ showItemInfoDialog })
     <!-- 显示说明书 or 文案 or 数字人视频-->
     <el-dialog
       v-model="dialogFormVisible"
-      :title="titleName + title"
+      :title="$t(titleName) + $t(title)"
       width="1000"
       top="5vh"
       :close-on-press-escape="false"
@@ -239,9 +240,7 @@ defineExpose({ showItemInfoDialog })
             <el-progress v-show="isGenerating" :text-inside="true" :percentage="genPercentage" />
           </div>
           <div class="bottom-gen-btn">
-            <el-button @click="handleGenSalesDocClick" :loading="isGenerating" type="primary">
-              AI 生成
-            </el-button>
+            <el-button @click="handleGenSalesDocClick" :loading="isGenerating" type="primary">{{ $t("AI 生成") }}</el-button>
           </div>
         </div>
       </template>
@@ -257,9 +256,7 @@ defineExpose({ showItemInfoDialog })
         </div>
 
         <div class="bottom-gen-btn">
-          <el-button @click="getDigitalHumanVideo" :loading="isGenerating" type="primary">
-            AI 生成数字人视频
-          </el-button>
+          <el-button @click="getDigitalHumanVideo" :loading="isGenerating" type="primary">{{ $t("AI 生成数字人视频") }}</el-button>
         </div>
       </template>
       <template #footer>
@@ -271,10 +268,8 @@ defineExpose({ showItemInfoDialog })
             @click="handleSaveClick"
             type="success"
             :disabled="isGenerating"
-          >
-            保存
-          </el-button>
-          <el-button @click="dialogFormVisible = false" :disabled="isGenerating">关闭</el-button>
+          >{{ $t("保存") }}</el-button>
+          <el-button @click="dialogFormVisible = false" :disabled="isGenerating">{{ $t("关闭") }}</el-button>
         </div>
       </template>
     </el-dialog>

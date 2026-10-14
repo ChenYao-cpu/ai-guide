@@ -144,7 +144,7 @@ function copyLink() {
 <template>
   <el-dialog
     v-model="showDialog"
-    :title="isInstalled ? '已安装成功' : '安装智游灵境'"
+    :title="$t(isInstalled ? '已安装成功' : '安装智游灵境')"
     width="420px"
     :close-on-click-modal="false"
     :show-close="false"
@@ -155,35 +155,33 @@ function copyLink() {
       <div class="install-hero">
 
         <h3><BrandLogo /></h3>
-        <p>添加到手机桌面</p>
+        <p>{{ $t("添加到手机桌面") }}</p>
       </div>
 
       <!-- 已安装 -->
       <div v-if="isInstalled" class="installed-msg">
 
-        <strong>APP已就绪</strong>
-        <p>在手机桌面找到「智游灵境」图标即可开始使用</p>
-        <el-button type="primary" @click="showDialog = false">开始导览</el-button>
+        <strong>{{ $t("APP已就绪") }}</strong>
+        <p>{{ $t("在手机桌面找到「智游灵境」图标即可开始使用") }}</p>
+        <el-button type="primary" @click="showDialog = false">{{ $t("开始导览") }}</el-button>
       </div>
 
       <!-- iOS 引导 -->
       <div v-else-if="platform === 'ios'" class="guide-steps">
         <div class="step">
           <span class="step-num">1</span>
-          <div>点击底部 <strong>Safari分享按钮</strong> <span class="icon-demo">⎋</span></div>
+          <div>{{ $t("点击底部") }}<strong>{{ $t("Safari分享按钮") }}</strong> <span class="icon-demo">⎋</span></div>
         </div>
         <div class="step">
           <span class="step-num">2</span>
-          <div>向下滑动，点击 <strong>「添加到主屏幕」</strong></div>
+          <div>{{ $t("向下滑动，点击") }}<strong>{{ $t("「添加到主屏幕」") }}</strong></div>
         </div>
         <div class="step">
           <span class="step-num">3</span>
-          <div>点击右上角「添加」→ 桌面出现APP图标</div>
+          <div>{{ $t("点击右上角「添加」→ 桌面出现APP图标") }}</div>
         </div>
         <el-alert type="info" :closable="false" show-icon style="margin-top: 12px;">
-          <template #title>
-            使用 <strong>Safari浏览器</strong> 打开才能安装，微信/QQ内置浏览器不支持
-          </template>
+          <template #title>{{ $t("使用") }}<strong>{{ $t("Safari浏览器") }}</strong>{{ $t("打开才能安装，微信/QQ内置浏览器不支持") }}</template>
         </el-alert>
       </div>
 
@@ -192,26 +190,23 @@ function copyLink() {
         <template v-if="deferredPrompt">
 
           <el-button type="primary" size="large" class="install-btn" @click="installPwa">
-            <el-icon><Download /></el-icon> 安装APP到桌面
-          </el-button>
+            <el-icon><Download /></el-icon>{{ $t("安装APP到桌面") }}</el-button>
         </template>
         <template v-else>
           <div class="step">
             <span class="step-num">1</span>
-            <div>点击浏览器右上角 <strong>⋮ 菜单</strong></div>
+            <div>{{ $t("点击浏览器右上角") }}<strong>{{ $t("⋮ 菜单") }}</strong></div>
           </div>
           <div class="step">
             <span class="step-num">2</span>
-            <div>选择 <strong>「添加到主屏幕」</strong> 或 <strong>「安装应用」</strong></div>
+            <div>{{ $t("选择") }}<strong>{{ $t("「添加到主屏幕」") }}</strong>{{ $t("或") }}<strong>{{ $t("「安装应用」") }}</strong></div>
           </div>
           <div class="step">
             <span class="step-num">3</span>
-            <div>确认安装 → 桌面出现APP图标</div>
+            <div>{{ $t("确认安装 → 桌面出现APP图标") }}</div>
           </div>
           <el-alert type="warning" :closable="false" show-icon style="margin-top:12px;">
-            <template #title>
-              使用 <strong>Chrome浏览器</strong> 打开体验最佳，微信内打开不支持安装
-            </template>
+            <template #title>{{ $t("使用") }}<strong>{{ $t("Chrome浏览器") }}</strong>{{ $t("打开体验最佳，微信内打开不支持安装") }}</template>
           </el-alert>
         </template>
       </div>
@@ -220,13 +215,13 @@ function copyLink() {
       <div v-else class="guide-steps">
         <div class="step">
           <span class="step-num">1</span>
-          <div>点击浏览器地址栏右侧的 <strong>安装图标 ⊕</strong></div>
+          <div>{{ $t("点击浏览器地址栏右侧的") }}<strong>{{ $t("安装图标 ⊕") }}</strong></div>
         </div>
         <div class="step">
           <span class="step-num">2</span>
-          <div>点击「安装」→ 桌面出现独立的APP窗口</div>
+          <div>{{ $t("点击「安装」→ 桌面出现独立的APP窗口") }}</div>
         </div>
-        <p style="text-align:center;margin-top:10px;">或直接用手机扫码体验 ↓</p>
+        <p style="text-align:center;margin-top:10px;">{{ $t("或直接用手机扫码体验 ↓") }}</p>
       </div>
 
       <!-- 本地开发：引导使用 tunnel -->
@@ -238,14 +233,11 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-          <strong> 要让手机扫码打开，请使用公网模式：</strong><br/>
-          在终端 <strong>Ctrl+C</strong> 停掉当前服务，然后运行：<br/>
+          <strong>{{ $t("要让手机扫码打开，请使用公网模式：") }}</strong><br/>{{ $t("在终端") }}<strong>Ctrl+C</strong>{{ $t("停掉当前服务，然后运行：") }}<br/>
           <code style="background:var(--glass);padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block;margin:4px 0;">
             npm run dev:public
           </code><br/>
-          <span style="font-size:11px;color:var(--champagne-text);">
-            这个命令会自动创建公网隧道，生成一个全世界都能访问的链接
-          </span>
+          <span style="font-size:11px;color:var(--champagne-text);">{{ $t("这个命令会自动创建公网隧道，生成一个全世界都能访问的链接") }}</span>
         </template>
       </el-alert>
 
@@ -258,8 +250,7 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-           <strong>公网已连接！</strong>下方二维码手机扫码直接打开
-        </template>
+           <strong>{{ $t("公网已连接！") }}</strong>{{ $t("下方二维码手机扫码直接打开") }}</template>
       </el-alert>
 
       <!-- tunnel已连接 (localtunnel - 需要首次验证) -->
@@ -271,21 +262,20 @@ function copyLink() {
         style="margin-top: 4px;"
       >
         <template #title>
-           <strong>公网已连接！</strong><br/>
-           首次打开会提示输入IP验证（localtunnel安全机制），输入页面显示的IP即可，<strong>7天内不再提示</strong>
+           <strong>{{ $t("公网已连接！") }}</strong><br/>{{ $t("首次打开会提示输入IP验证（localtunnel安全机制），输入页面显示的IP即可，") }}<strong>{{ $t("7天内不再提示") }}</strong>
         </template>
       </el-alert>
 
       <!-- 二维码区 -->
       <div class="qr-section">
-        <div class="qr-divider"><span>手机扫码立即体验</span></div>
+        <div class="qr-divider"><span>{{ $t("手机扫码立即体验") }}</span></div>
 
         <!-- URL手动编辑 -->
         <div class="url-edit-row">
           <el-input
             v-model="installUrl"
             size="small"
-            placeholder="输入可访问的地址"
+            :placeholder='$t("输入可访问的地址")'
             @change="onUrlChange"
           >
 
@@ -293,23 +283,23 @@ function copyLink() {
         </div>
 
         <div class="qr-box">
-          <img v-if="installUrl && !installUrl.includes('null')" :src="qrCodeUrl" alt="扫码打开智游灵境" class="qr-img" />
+          <img v-if="installUrl && !installUrl.includes('null')" :src="qrCodeUrl" :alt='$t("扫码打开智游灵境")' class="qr-img" />
           <div v-else class="qr-placeholder">
-            <p>URL无效<br/>请检查服务是否启动</p>
+            <p>{{ $t("URL无效") }}<br/>{{ $t("请检查服务是否启动") }}</p>
           </div>
         </div>
         <div class="qr-url-row">
-          <code>{{ installUrl || '(请先启动服务)' }}</code>
-          <el-button size="small" plain class="copy-link-btn" @click="copyLink">复制</el-button>
+          <code>{{ $t(installUrl || '(请先启动服务)') }}</code>
+          <el-button size="small" plain class="copy-link-btn" @click="copyLink">{{ $t("复制") }}</el-button>
         </div>
 
         <!-- 排查提示 -->
         <el-collapse v-if="!isTunnelDetected" style="width:100%;margin-top:4px;">
-          <el-collapse-item title=" 公网访问设置" name="trouble">
+          <el-collapse-item :title='$t(" 公网访问设置")' name="trouble">
             <div class="troubleshoot">
-              <p>在终端运行：<br/>
+              <p>{{ $t("在终端运行：") }}<br/>
               <code style="font-size:13px;background:var(--glass);padding:4px 10px;border-radius:4px;display:inline-block;margin:4px 0;">npm run dev:public</code></p>
-              <p style="color:var(--text-muted);font-size:11px;">自动生成公网链接，游客扫码即用，无需任何网络配置</p>
+              <p style="color:var(--text-muted);font-size:11px;">{{ $t("自动生成公网链接，游客扫码即用，无需任何网络配置") }}</p>
             </div>
           </el-collapse-item>
         </el-collapse>
@@ -317,7 +307,7 @@ function copyLink() {
     </div>
 
     <template #footer>
-      <el-button @click="dismiss" :icon="CircleClose">暂不需要</el-button>
+      <el-button @click="dismiss" :icon="CircleClose">{{ $t("暂不需要") }}</el-button>
     </template>
   </el-dialog>
 </template>

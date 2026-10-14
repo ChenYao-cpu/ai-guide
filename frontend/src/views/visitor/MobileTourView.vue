@@ -2,14 +2,15 @@
   <main class="mt-root">
     <header class="mt-top">
       <div class="mt-title"><BrandLogo compact /></div>
-      <button class="mt-btn-gps" :class="{ on: gpsTracking }" @click="toggleGps" :aria-pressed="gpsTracking"><el-icon><Location /></el-icon>{{ gpsTracking ? '定位已开' : '定位' }}</button>
-      <button class="mt-btn-end" @click="confirmEnd">结束</button>
+        <LanguageSwitch />
+      <button class="mt-btn-gps" :class="{ on: gpsTracking }" @click="toggleGps" :aria-pressed="gpsTracking"><el-icon><Location /></el-icon>{{ $t(gpsTracking ? '定位已开' : '定位') }}</button>
+      <button class="mt-btn-end" @click="confirmEnd">{{ $t("结束") }}</button>
     </header>
 
-    <section class="mt-hero" aria-label="数字人导游">
+    <section class="mt-hero" :aria-label='$t("数字人导游")'>
       <div class="mt-guide-heading">
-        <h1>{{ guideInfo?.name || '数字导游' }}</h1>
-        <span v-if="isSpeaking || loading" class="mt-status" role="status"><i></i>{{ isSpeaking ? '正在讲解' : '正在准备讲解' }}</span>
+        <h1>{{ $t(guideInfo?.name || '数字导游') }}</h1>
+        <span v-if="isSpeaking || loading" class="mt-status" role="status"><i></i>{{ $t(isSpeaking ? '正在讲解' : '正在准备讲解') }}</span>
       </div>
       <div v-if="guideInfo?.guide_id" class="mt-3d-wrap">
         <DigitalAvatarPlayer ref="live2dRef" :audioElement="ttsAudio" :width="gw" :height="gh"
@@ -17,55 +18,57 @@
           :poster-image="guideInfo.poster_image" :source-video="guideInfo.base_mp4_path"
           :guide-id="guideInfo.guide_id" :speaking="isSpeaking" :busy="loading" @playing="isSpeaking = $event" />
       </div>
-      <p v-else class="mt-avatar-loading" role="status">正在加载数字人…</p>
+      <p v-else class="mt-avatar-loading" role="status">{{ $t("正在加载数字人…") }}</p>
     </section>
 
-    <section class="mt-chat-panel" aria-label="景区问答">
-      <header class="mt-chat-heading"><h2>景区问答</h2><span>{{ spotCards[spotIdx]?.spot_name || currentSpot?.spot_name }}</span></header>
-      <div class="mt-chat" ref="chatEl" role="log" aria-label="导览对话" aria-live="polite">
-        <p v-if="!conversations.length" class="mt-chat-empty">想了解什么？直接向导游提问。</p>
+    <section class="mt-chat-panel" :aria-label='$t("景区问答")'>
+      <header class="mt-chat-heading"><h2>{{ $t("景区问答") }}</h2><span>{{ $t(spotCards[spotIdx]?.spot_name || currentSpot?.spot_name) }}</span></header>
+      <div class="mt-chat" ref="chatEl" role="log" :aria-label='$t("导览对话")' aria-live="polite">
+        <p v-if="!conversations.length" class="mt-chat-empty">{{ $t("想了解什么？直接向导游提问。") }}</p>
         <div v-for="(m, i) in conversations" :key="i" class="mc-row" :class="m.role">
           <div class="mc-bubble">
             <div class="mc-text" v-html="fmt(m.message, m.role)"></div>
-            <details v-if="m.role === 'guide' && m.message?.includes('以上内容来自景区知识档案')" class="mc-source"><summary>参考资料</summary><p>景区知识档案</p></details>
+            <details v-if="m.role === 'guide' && m.message?.includes('以上内容来自景区知识档案')" class="mc-source"><summary>{{ $t("参考资料") }}</summary><p>{{ $t("景区知识档案") }}</p></details>
           </div>
         </div>
-        <p v-if="loading" class="mc-loading" role="status">正在准备讲解…</p>
+        <p v-if="loading" class="mc-loading" role="status">{{ $t("正在准备讲解…") }}</p>
       </div>
     </section>
 
     <footer class="mt-bar">
-      <div class="mt-quick-row" aria-label="快捷提问">
-        <button v-for="q in quickQuestions" :key="q.message" class="mt-quick-btn" :disabled="loading || recognizing || recording" @click="send(q.message)">{{ q.label }}</button>
+      <div class="mt-quick-row" :aria-label='$t("快捷提问")'>
+        <button v-for="q in quickQuestions" :key="q.message" class="mt-quick-btn" :disabled="loading || recognizing || recording" @click="send(q.message)">{{ $t(q.label) }}</button>
       </div>
       <div class="mt-input-row">
-        <button :aria-label="recording ? '结束录音' : '开始录音'" :title="recording ? '点击结束录音' : '点击开始录音'" class="mt-voice-btn" :class="{ rec: recording }"
+        <button :aria-label="$t(recording ? '结束录音' : '开始录音')" :title="$t(recording ? '点击结束录音' : '点击开始录音')" class="mt-voice-btn" :class="{ rec: recording }"
           @click="recording ? stopVoice() : startVoice()" :disabled="recognizing || loading"><el-icon><Microphone /></el-icon></button>
-        <input v-model="inputText" class="mt-input" aria-label="导览问题" :disabled="loading || recognizing || recording"
-          :placeholder="recording ? '录音中，点击麦克风结束' : recognizing ? '正在识别录音…' : '有什么想问的？'" enterkeyhint="send" @keydown.enter="send(inputText)" />
-        <button class="mt-send-btn" @click="send(inputText)" :disabled="!inputText.trim() || loading || recording || recognizing">发送</button>
+        <input v-model="inputText" class="mt-input" :aria-label='$t("导览问题")' :disabled="loading || recognizing || recording"
+          :placeholder="$t(recording ? '录音中，点击麦克风结束' : recognizing ? '正在识别录音…' : '有什么想问的？')" enterkeyhint="send" @keydown.enter="send(inputText)" />
+        <button class="mt-send-btn" @click="send(inputText)" :disabled="!inputText.trim() || loading || recording || recognizing">{{ $t("发送") }}</button>
       </div>
     </footer>
 
-    <section class="mt-spot" v-if="spotCards.length" aria-label="当前景点">
+    <section class="mt-spot" v-if="spotCards.length" :aria-label='$t("当前景点")'>
       <div class="mts-row">
-        <button class="mts-nav" aria-label="浏览上一个景点" @click="prevSpot" :disabled="spotCards.length < 2"><el-icon><ArrowLeft /></el-icon></button>
+        <button class="mts-nav" :aria-label='$t("浏览上一个景点")' @click="prevSpot" :disabled="spotCards.length < 2"><el-icon><ArrowLeft /></el-icon></button>
         <button class="mts-summary" @click="spotExpanded = !spotExpanded" :aria-expanded="spotExpanded" aria-controls="mobile-spot-description">
-          <strong>{{ spotCards[spotIdx]?.spot_name }}</strong>
-          <span>{{ spotIdx + 1 }} / {{ spotCards.length }}</span>
+          <strong>{{ $t(spotCards[spotIdx]?.spot_name) }}</strong>
+          <span>{{ $t(spotIdx + 1) }} / {{ $t(spotCards.length) }}</span>
           <el-icon :class="{ expanded: spotExpanded }"><ArrowDown /></el-icon>
         </button>
-        <button class="mts-nav" aria-label="浏览下一个景点" @click="nextSpot" :disabled="spotCards.length < 2"><el-icon><ArrowRight /></el-icon></button>
+        <button class="mts-nav" :aria-label='$t("浏览下一个景点")' @click="nextSpot" :disabled="spotCards.length < 2"><el-icon><ArrowRight /></el-icon></button>
       </div>
-      <p v-if="spotExpanded" id="mobile-spot-description" class="mts-description">{{ spotCards[spotIdx]?.description }}</p>
-      <button v-if="!finalSpot" class="mts-advance" @click="advanceSpot" :disabled="advancingSpot || loading || recording || recognizing">{{ advancingSpot ? '正在切换…' : '前往下一景点' }}</button>
-      <span v-else class="mts-finished">已到达路线最后一站</span>
+      <p v-if="spotExpanded" id="mobile-spot-description" class="mts-description">{{ $t(spotCards[spotIdx]?.description) }}</p>
+      <button v-if="!finalSpot" class="mts-advance" @click="advanceSpot" :disabled="advancingSpot || loading || recording || recognizing">{{ $t(advancingSpot ? '正在切换…' : '前往下一景点') }}</button>
+      <span v-else class="mts-finished">{{ $t("已到达路线最后一站") }}</span>
     </section>
     <audio ref="ttsAudio" @play="onPlay" @ended="onEnd" @pause="onEnd" />
   </main>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts">import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import { t, locale } from '@/i18n'
+
 import BrandLogo from '@/components/BrandLogo.vue'
 import { computed,ref,onMounted,onUnmounted,nextTick,watch } from 'vue'
 import { useRouter,useRoute } from 'vue-router'
@@ -128,12 +131,12 @@ async function advanceSpot() {
     if (res.data?.success) {
       await refresh()
       spotExpanded.value = false
-      ElMessage.success('已切换景点')
+      ElMessage.success(t("已切换景点"))
     } else {
-      ElMessage.error(res.data?.message || '切换失败')
+      ElMessage.error(res.data?.message || t("切换失败"))
     }
   } catch {
-    ElMessage.error('切换失败，请重试')
+    ElMessage.error(t("切换失败，请重试"))
   } finally {
     advancingSpot.value = false
   }
@@ -154,7 +157,7 @@ async function send(text:string){
     const viewingSpot=spotCards.value[spotIdx.value]
     const nextViewingSpot=spotCards.value[spotIdx.value+1]
     live2dRef.value?.stop()
-    const res=await sendTourChatMessage(sid,msg,viewingSpot?.spot_id||currentSpot.value?.spot_id,nextViewingSpot?.spot_id||0,(await live2dRef.value?.getMode())||'audio')
+    const res=await sendTourChatMessage(sid,msg,viewingSpot?.spot_id||currentSpot.value?.spot_id,nextViewingSpot?.spot_id||0,(await live2dRef.value?.getMode())||'audio', { language: locale.value })
     const b=res.data
     if(b?.success){
       await live2dRef.value?.acceptPerformance(b.data?.avatarPerformance)
@@ -165,8 +168,8 @@ async function send(text:string){
         try{ttsAudio.value.play()}catch{}
       }
       await refresh()
-    }else{ ElMessage.error(b?.message||'回复失败') }
-  }catch(e:any){ ElMessage.error('发送失败') }
+    }else{ ElMessage.error(b?.message||t("回复失败")) }
+  }catch(e:any){ ElMessage.error(t("发送失败")) }
   finally{ loading.value=false; sc() }
 }
 
@@ -192,7 +195,7 @@ async function refresh(){
 }
 
 async function confirmEnd(){
-  try{ await ElMessageBox.confirm('结束本次导览？','退出',{confirmButtonText:'结束',cancelButtonText:'继续'}); await endTourSession(sid); router.push('/m/home') }catch{}
+  try{ await ElMessageBox.confirm(t("结束本次导览？"),t("退出"),{confirmButtonText:t("结束"),cancelButtonText:t("继续")}); await endTourSession(sid); router.push('/m/home') }catch{}
 }
 
 onMounted(() => { refresh(); window.addEventListener('resize', syncViewport) })

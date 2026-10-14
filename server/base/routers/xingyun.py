@@ -4,6 +4,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from typing import Literal
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -44,6 +45,7 @@ class BindingInput(BaseModel):
     app_secret: str = InputField(default="", max_length=500)
     voice_label: str = InputField(default="", max_length=80)
     use_xingyun: bool = True
+    voice_style: Literal['female_wenrou','female_huopo','male_wenhou','male_hongliang'] | None = None
 
 
 class CreateGuideInput(BaseModel):
@@ -54,6 +56,7 @@ class CreateGuideInput(BaseModel):
     voice_label: str = InputField(default="", max_length=80)
     poster_image: str = InputField(min_length=1, max_length=2000)
     avatar: str = InputField(min_length=1, max_length=2000)
+    voice_style: Literal['female_wenrou','female_huopo','male_wenhou','male_hongliang']
 
 
 @router.post("/guides")
@@ -65,6 +68,7 @@ def create_xingyun_guide(data: CreateGuideInput, user_id: int = Depends(require_
     with Session(DB_ENGINE) as db:
         guide = DigitalGuideInfo(name=name, character=data.character.strip(), user_id=user_id,
                                  render_mode="xingyun", is_enabled=False,
+                                 voice_style=data.voice_style,
                                  poster_image=data.poster_image.strip(), avatar=data.avatar.strip())
         db.add(guide)
         db.flush()
@@ -91,6 +95,7 @@ def binding_info(guide_id: int, user_id: int = Depends(require_guide_admin)):
         return {"app_id": binding.app_id if binding else "",
                 "secret_configured": bool(binding and binding.secret_encrypted),
                 "voice_label": binding.voice_label if binding else "",
+                "voice_style": guide.voice_style,
                 "use_xingyun": guide.render_mode == "xingyun"}
 
 
@@ -113,6 +118,8 @@ def save_binding(guide_id: int, data: BindingInput, user_id: int = Depends(requi
         # 即使留空沿用，也验证旧凭据仍能解密。
         decrypt_secret(binding.secret_encrypted)
         guide.render_mode = "xingyun" if data.use_xingyun else "realistic"
+        if data.voice_style is not None:
+            guide.voice_style = data.voice_style
         db.add(binding)
         db.add(guide)
         db.commit()

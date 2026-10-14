@@ -22,6 +22,10 @@ VOICE_MAP = {
     "male_wenhou": "zh-CN-YunxiNeural",             # 温厚男声
     "male_hongliang": "zh-CN-YunjianNeural",        # 洪亮男声
 }
+ENGLISH_VOICE_MAP = {
+    "female_wenrou": "en-US-JennyNeural", "female_huopo": "en-US-AriaNeural",
+    "male_wenhou": "en-US-GuyNeural", "male_hongliang": "en-US-ChristopherNeural",
+}
 
 # 语速映射
 SPEED_MAP = {
@@ -38,6 +42,7 @@ async def synthesize_speech(
     voice_style: str = "female_wenrou",
     speed: float = 1.0,
     output_dir: str = "",
+    language: str = "zh",
 ) -> str:
     """使用 Edge TTS 合成语音
 
@@ -59,8 +64,9 @@ async def synthesize_speech(
     if not text:
         return ""
 
-    voice = VOICE_MAP.get(voice_style, VOICE_MAP["female_wenrou"])
-    rate = SPEED_MAP.get(speed, "+0%")
+    voices = ENGLISH_VOICE_MAP if language == "en" else VOICE_MAP
+    voice = voices.get(voice_style, voices["female_wenrou"])
+    rate = f"{round((max(0.8,min(1.5,float(speed)))-1)*100):+d}%"
 
     # 清理文本（移除 markdown 语法）
     clean_text = text.replace("**", "").replace("*", "").replace("`", "").replace("#", "")
@@ -71,15 +77,22 @@ async def synthesize_speech(
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, f"tts_{uuid.uuid4().hex[:8]}.mp3")
 
-    try:
-        communicate = edge_tts.Communicate(clean_text, voice, rate=rate)
-        await communicate.save(output_file)
-
-        logger.info(f"Edge TTS synthesized: {output_file} (voice={voice}, rate={rate})")
-        return output_file
-    except Exception as e:
-        logger.error(f"Edge TTS synthesis failed: {e}")
-        return ""
+    proxy=os.getenv("EDGE_TTS_PROXY", "").strip() or None
+    # A configured speech proxy is local setup, not a global model/network
+    # setting. Both attempts are bounded so a voice outage cannot stall Q&A.
+    attempts=[proxy,None] if proxy else [None]
+    for attempt_proxy in attempts:
+        try:
+            communicate = edge_tts.Communicate(clean_text,voice,rate=rate,proxy=attempt_proxy,
+                                              connect_timeout=5,receive_timeout=10)
+            await asyncio.wait_for(communicate.save(output_file),timeout=15)
+            logger.info("Edge TTS synthesized (voice={}, rate={})",voice,rate)
+            return output_file
+        except Exception as exc:
+            logger.warning("Edge TTS attempt unavailable: {}",type(exc).__name__)
+            Path(output_file).unlink(missing_ok=True)
+    from .windows_speech import synthesize_windows
+    return await synthesize_windows(clean_text, voice_style, speed, output_file, language)
 
 
 def synthesize_speech_sync(text: str, voice_style: str = "female_wenrou", speed: float = 1.0) -> str:

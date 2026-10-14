@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatTableCell } from '@/i18n'
+
 import { useRouter } from 'vue-router'
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -65,15 +66,15 @@ const getProductInfo = async () => {
       //   DrawerProductList.value.totalSize = data.data.totalSize
       // }
       console.info(DrawerProductList.value)
-      ElMessage.success('获取商品成功')
+      ElMessage.success(t("获取商品成功"))
     } else {
-      ElMessage.error('获取商品失败：' + data.message)
+      ElMessage.error(t("获取商品失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取商品失败：' + error.message)
+      ElMessage.error(t("获取商品失败：") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -103,13 +104,13 @@ const getProductListInfo = async (currentPage: number, pageSize: number) => {
       console.info(data.data)
       RoomDetailInfo.value = data.data
     } else {
-      ElMessage.error('获取直播间详情失败' + data.message)
+      ElMessage.error(t("获取直播间详情失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取直播间详情失败' + error.message)
+      ElMessage.error(t("获取直播间详情失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -123,15 +124,15 @@ const getSteramerInfo = async () => {
     const { data } = await streamerInfoListRequest()
     if (data.code === 0) {
       streamerNameOptions.value = data.data
-      ElMessage.success('获取主播信息成功')
+      ElMessage.success(t("获取主播信息成功"))
     } else {
-      ElMessage.error('获取主播信息失败' + data.message)
+      ElMessage.error(t("获取主播信息失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('获取主播信息失败' + error.message)
+      ElMessage.error(t("获取主播信息失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -170,15 +171,15 @@ async function confirmClick() {
     if (data.code === 0) {
       // 新建会返回直播间后台保存 ID
       RoomDetailInfo.value.room_id = data.data
-      ElMessage.success('操作成功')
+      ElMessage.success(t("操作成功"))
     } else {
-      ElMessage.error('操作失败' + data.message)
+      ElMessage.error(t("操作失败") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('操作失败' + error.message)
+      ElMessage.error(t("操作失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 
@@ -193,12 +194,12 @@ const onSubmit = async () => {
   try {
     // 调用接口保存商品
     await RoomCreadeOrEditRequest(RoomDetailInfo.value)
-    ElMessage.success('保存成功')
+    ElMessage.success(t("保存成功"))
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('保存失败' + error.message)
+      ElMessage.error(t("保存失败") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -206,7 +207,7 @@ const onSubmit = async () => {
 const handelOnAirClick = async () => {
   for (const entry of RoomDetailInfo.value.product_list) {
     if (entry.start_video === '') {
-      ElMessage.error('必须将所有的商品都生成数字人视频才可以进行开播')
+      ElMessage.error(t("必须将所有的商品都生成数字人视频才可以进行开播"))
       return false
     }
   }
@@ -218,12 +219,12 @@ const handelOnAirClick = async () => {
     try {
       // 调用接口执行开播
       await onAirRoomStartRequest(RoomDetailInfo.value.room_id)
-      ElMessage.success('开播成功')
+      ElMessage.success(t("开播成功"))
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
-        ElMessage.error('开播成功' + error.message)
+        ElMessage.error(t("开播成功") + error.message)
       } else {
-        ElMessage.error('未知错误：' + error)
+        ElMessage.error(t("未知错误：") + error)
       }
     }
   }
@@ -256,12 +257,11 @@ const handelControlClick = (
 <template>
   <div>
     <!-- 返回栏 -->
-    <el-page-header @back="router.push({ name: 'StreamingOverview' })" title="返回">
+    <el-page-header @back="router.push({ name: 'StreamingOverview' })" :title='$t("返回")'>
       <template #content>
         <div class="flex items-center">
           <span class="text-large font-600 mr-3">
-            {{ RoomDetailInfo.room_id !== 0 ? '编辑' : '新建' }} 直播间
-          </span>
+            {{ $t(RoomDetailInfo.room_id !== 0 ? '编辑' : '新建') }} {{ $t("直播间") }}</span>
         </div>
       </template>
     </el-page-header>
@@ -269,7 +269,7 @@ const handelControlClick = (
     <!-- 新增窗口右边抽屉弹窗 -->
     <el-drawer v-model="drawerShow" direction="rtl">
       <template #header>
-        <h1>添加商品</h1>
+        <h1>{{ $t("添加商品") }}</h1>
       </template>
       <template #default>
         <div>
@@ -296,9 +296,9 @@ const handelControlClick = (
                     </el-col>
                     <el-col :span="18">
                       <div class="product-info">
-                        <p class="title">{{ item.product_info.product_name }}</p>
-                        <p class="content">{{ item.product_info.heighlights }}</p>
-                        <p class="price">￥{{ item.product_info.selling_price }}</p>
+                        <p class="title">{{ $t(item.product_info.product_name) }}</p>
+                        <p class="content">{{ $t(item.product_info.heighlights) }}</p>
+                        <p class="price">￥{{ $t(item.product_info.selling_price) }}</p>
                       </div>
                     </el-col>
                   </el-row>
@@ -310,14 +310,14 @@ const handelControlClick = (
       </template>
       <template #footer>
         <div style="flex: auto">
-          <el-button @click="cancelClick">取消</el-button>
-          <el-button type="primary" @click="confirmClick">确认</el-button>
+          <el-button @click="cancelClick">{{ $t("取消") }}</el-button>
+          <el-button type="primary" @click="confirmClick">{{ $t("确认") }}</el-button>
         </div>
       </template>
     </el-drawer>
 
     <el-card shadow="never" style="margin-top: 10px">
-      <h2>直播间名称</h2>
+      <h2>{{ $t("直播间名称") }}</h2>
       <el-divider />
 
       <el-input v-model="RoomDetailInfo.name" size="large" />
@@ -341,15 +341,13 @@ const handelControlClick = (
       >
         <el-icon style="margin-right: 5px">
           <Edit />
-        </el-icon>
-        增删商品
-      </el-button>
+        </el-icon>{{ $t("增删商品") }}</el-button>
 
       <!-- TODO 商品表格可以做成 component 组件 -->
       <el-table :data="RoomDetailInfo.product_list" max-height="1000" border>
-        <el-table-column prop="product_info.product_id" label="ID" align="center" width="50px" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.product_id" label="ID" align="center" width="50px" />
 
-        <el-table-column prop="product_info.image_path" label="图片" align="center">
+        <el-table-column prop="product_info.image_path" :label='$t("图片")' align="center">
           <template #default="scope">
             <div style="display: flex; align-items: center">
               <!-- TODO 加上  :preview-src-list="[scope.row.image_path]"  -->
@@ -358,15 +356,15 @@ const handelControlClick = (
           </template>
         </el-table-column>
 
-        <el-table-column prop="product_info.product_name" label="名称" align="center" />
-        <el-table-column prop="product_info.product_class" label="分类" align="center" />
-        <el-table-column prop="product_info.heighlights" label="亮点" align="center" />
-        <el-table-column prop="product_info.selling_price" label="价格" align="center" />
-        <el-table-column prop="product_info.amount" label="库存" align="center" />
-        <el-table-column prop="product_info.departure_place" label="发货地" align="center" />
-        <el-table-column prop="product_info.delivery_company" label="快递公司" align="center" />
-        <el-table-column prop="product_info.upload_date" label="上传时间" align="center" />
-        <el-table-column label="操作" v-slot="{ row }" align="center" width="400px">
+        <el-table-column :formatter="formatTableCell" prop="product_info.product_name" :label='$t("名称")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.product_class" :label='$t("分类")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.heighlights" :label='$t("亮点")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.selling_price" :label='$t("价格")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.amount" :label='$t("库存")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.departure_place" :label='$t("发货地")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.delivery_company" :label='$t("快递公司")' align="center" />
+        <el-table-column :formatter="formatTableCell" prop="product_info.upload_date" :label='$t("上传时间")' align="center" />
+        <el-table-column :label='$t("操作")' v-slot="{ row }" align="center" width="400px">
           <div class="control-item">
             <el-button
               size="small"
@@ -382,9 +380,7 @@ const handelControlClick = (
                   row.sales_doc
                 )
               "
-            >
-              说明书
-            </el-button>
+            >{{ $t("说明书") }}</el-button>
 
             <el-button
               size="small"
@@ -401,9 +397,7 @@ const handelControlClick = (
                   row.sales_doc
                 )
               "
-            >
-              解说文案
-            </el-button>
+            >{{ $t("解说文案") }}</el-button>
 
             <el-button
               size="small"
@@ -420,16 +414,12 @@ const handelControlClick = (
                   row.sales_doc
                 )
               "
-            >
-              数字人视频
-            </el-button>
+            >{{ $t("数字人视频") }}</el-button>
 
             <el-button
               size="small"
               @click="router.push({ name: 'ProductEdit', params: { productId: row.product_id } })"
-            >
-              编辑
-            </el-button>
+            >{{ $t("编辑") }}</el-button>
           </div>
         </el-table-column>
       </el-table>
@@ -457,13 +447,13 @@ const handelControlClick = (
               @click="handelOnAirClick"
               :disable="RoomDetailInfo.room_id === 0"
             >
-              {{ RoomDetailInfo.status.live_status === 1 ? '进入' : '开始' }}直播</el-button
+              {{ $t(RoomDetailInfo.status.live_status === 1 ? '进入' : '开始') }} {{ $t("直播") }}</el-button
             >
             <el-button
               type="primary"
               @click="onSubmit"
               :disabled="RoomDetailInfo.product_list.length === 0"
-              >保存</el-button
+              >{{ $t("保存") }}</el-button
             >
           </div>
         </div>

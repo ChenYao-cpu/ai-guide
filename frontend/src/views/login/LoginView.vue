@@ -1,6 +1,10 @@
 <script lang="ts" setup>
+import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import { gsap } from 'gsap'
+import { t } from '@/i18n'
+
 import BrandLogo from '@/components/BrandLogo.vue'
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   User,
@@ -30,8 +34,76 @@ const rememberedAccountKey = 'zhiyou.remembered-account'
 const entryPage = ref<HTMLElement>()
 let pointerFrame = 0
 let motionPreference: MediaQueryList | undefined
+let motionMedia: gsap.MatchMedia | undefined
+let motionContext: gsap.Context | undefined
+let contentMotion: gsap.Context | undefined
+let sceneryMotion: gsap.core.Timeline | undefined
+let arrivalMotion: gsap.core.Timeline | undefined
+const motionPaused = ref(false)
+
+function animateEntryContent(element: Element) {
+  contentMotion?.revert()
+  if (motionPreference?.matches || document.hidden) return
+  contentMotion = gsap.context(() => {
+    const timeline = gsap.timeline({
+      defaults: { duration: 0.45, ease: 'power2.out', clearProps: 'transform,opacity' }
+    })
+    timeline.from('.entry-heading', { opacity: 0, y: 12 }, 0)
+    const visitorScene = element.querySelector('.visitor-scene')
+    if (visitorScene) {
+      timeline.from(visitorScene, { opacity: 0, y: 14, scale: 0.96, ease: 'back.out(1.2)' }, 0.08)
+    }
+    timeline
+      .from('.entry-features > span, .el-form-item', { opacity: 0, y: 10, stagger: 0.075 }, 0.14)
+      .from('.entry-options, .entry-primary', { opacity: 0, y: 8, stagger: 0.07 }, 0.23)
+  }, element)
+}
+
+function syncMotionVisibility() {
+  motionPaused.value = document.hidden
+  sceneryMotion?.paused(document.hidden)
+  // Finish an entrance when leaving the tab so returning never shows a half-hidden form.
+  if (document.hidden) {
+    arrivalMotion?.progress(1)
+    contentMotion?.revert()
+    resetAtmosphere()
+  }
+}
+
+function resetReducedMotion() {
+  if (motionPreference?.matches) resetAtmosphere()
+}
+
+function startLoginMotion() {
+  if (!entryPage.value) return
+  motionContext = gsap.context(() => {
+    motionMedia = gsap.matchMedia()
+    motionMedia.add('(prefers-reduced-motion: no-preference)', () => {
+      // Parallel scenic layers share a timeline; the form is never part of this ambient loop.
+      sceneryMotion = gsap
+        .timeline({ repeat: -1, yoyo: true, defaults: { ease: 'sine.inOut' } })
+        .to('.scenery-far', { x: 26, y: -10, duration: 9 }, 0)
+        .to('.scenery-near', { x: -20, y: 8, duration: 9 }, 0)
+        .to('.scenery-reflection', { x: 38, opacity: 0.65, duration: 9 }, 0)
+        .to('.scenery-cloud', { x: 48, duration: 9 }, 0)
+      arrivalMotion = gsap
+        .timeline({ defaults: { ease: 'power3.out', clearProps: 'transform,opacity' } })
+        .from('.entry-header', { opacity: 0, y: -12, duration: 0.6 }, 0.08)
+        .from('.entry-card', { opacity: 0, y: 22, scale: 0.985, duration: 0.7 }, 0.12)
+        .from('.entry-scenery', { opacity: 0, y: 24, duration: 1.2, ease: 'sine.out' }, 0.1)
+      const panel = entryPage.value?.querySelector('.entry-content')
+      if (panel) animateEntryContent(panel)
+      syncMotionVisibility()
+      return () => {
+        contentMotion?.revert()
+        sceneryMotion = undefined
+        arrivalMotion = undefined
+      }
+    })
+  }, entryPage.value)
+}
 function moveAtmosphere(event: PointerEvent) {
-  if (event.pointerType !== 'mouse' || motionPreference?.matches) return
+  if (event.pointerType !== 'mouse' || motionPreference?.matches || document.hidden) return
   const bounds =
     event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
   if (!bounds) return
@@ -53,13 +125,13 @@ interface FormType {
   password: string
 }
 const loginForm = reactive<FormType>({ username: '', password: '' })
-const rules = reactive<FormRules<FormType>>({
-  username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
+const rules = computed<FormRules<FormType>>(() => ({
+  username: [{ required: true, message: t('请输入账号'), trigger: 'blur' }],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 18, message: '密码长度必须为 6 至 18 位', trigger: 'blur' }
+    { required: true, message: t('请输入密码'), trigger: 'blur' },
+    { min: 6, max: 18, message: t('密码长度必须为 6 至 18 位'), trigger: 'blur' }
   ]
-})
+}))
 async function selectEntry(mode: EntryMode, focus = false) {
   if (isLogining.value) return
   entryMode.value = mode
@@ -79,7 +151,7 @@ const onSubmit = async () => {
       password: loginForm.password
     })
     if (response.status !== 200) {
-      ElMessage.error('账号或密码错误')
+      ElMessage.error(t('账号或密码错误'))
       return
     }
     tokenStore.saveToken(response.data as TokenItem)
@@ -90,20 +162,23 @@ const onSubmit = async () => {
     } catch {
       /* Account recall is optional when browser storage is restricted. */
     }
-    ElNotification({ title: '登录成功', message: '已进入后台', type: 'success' })
+    ElNotification({ title: t('登录成功'), message: t('已进入后台'), type: 'success' })
     router.push((route.query.redirect as string) || '/home')
   } catch (error) {
     if (error instanceof AxiosError && error.response?.status === 401)
-      ElMessage.error('账号或密码错误')
-    else ElMessage.error('登录失败，请稍后重试')
+      ElMessage.error(t('账号或密码错误'))
+    else ElMessage.error(t('登录失败，请稍后重试'))
   } finally {
     isLogining.value = false
   }
 }
 const enterAsVisitor = () => router.push('/visitor/home')
-const handleForgotPassword = () => ElMessage.info('请联系系统管理员重置密码')
+const handleForgotPassword = () => ElMessage.info(t('请联系系统管理员重置密码'))
 onMounted(() => {
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+  motionPreference.addEventListener('change', resetReducedMotion)
+  document.addEventListener('visibilitychange', syncMotionVisibility)
+  startLoginMotion()
   try {
     loginForm.username = localStorage.getItem(rememberedAccountKey) || ''
   } catch {
@@ -122,6 +197,11 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   cancelAnimationFrame(pointerFrame)
+  document.removeEventListener('visibilitychange', syncMotionVisibility)
+  motionPreference?.removeEventListener('change', resetReducedMotion)
+  contentMotion?.revert()
+  motionMedia?.revert()
+  motionContext?.revert()
   document.documentElement.classList.remove('login-viewport')
   document.body.classList.remove('login-viewport')
 })
@@ -131,6 +211,7 @@ onBeforeUnmount(() => {
   <main
     ref="entryPage"
     class="entry-page"
+    :class="{ 'motion-paused': motionPaused }"
     @pointermove="moveAtmosphere"
     @pointerleave="resetAtmosphere"
   >
@@ -140,6 +221,70 @@ onBeforeUnmount(() => {
       <div class="entry-contour contour-left"></div>
       <div class="entry-contour contour-right"></div>
       <div class="entry-aurora"></div>
+      <svg class="entry-scenery" viewBox="0 0 1440 620" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="scenery-violet" x1="0" y1="0" x2="0" y2="1">
+            <stop stop-color="#b6afe5" stop-opacity=".38" />
+            <stop offset="1" stop-color="#d9d7ed" stop-opacity=".08" />
+          </linearGradient>
+          <linearGradient id="scenery-jade" x1="0" y1="0" x2="0" y2="1">
+            <stop stop-color="#96c5c9" stop-opacity=".36" />
+            <stop offset="1" stop-color="#c8e0de" stop-opacity=".12" />
+          </linearGradient>
+        </defs>
+        <g class="scenery-cloud" fill="none" stroke="#a5b1cc" stroke-opacity=".24">
+          <path d="M36 214Q75 196 119 214T205 212M70 226H167" />
+          <path d="M1170 130Q1215 112 1260 129T1378 131M1220 146H1351" />
+        </g>
+        <g class="scenery-far" fill="url(#scenery-violet)">
+          <path
+            d="M-80 445Q0 415 78 330Q116 286 147 326L216 402Q249 433 276 390L336 283Q366 225 397 274L477 419Q507 475 566 457L660 530H-80Z"
+          />
+          <path
+            d="M925 465L1056 335Q1081 311 1104 339L1146 387L1237 251Q1261 215 1291 251L1380 377L1495 323V550H925Z"
+          />
+        </g>
+        <g class="scenery-near" fill="url(#scenery-jade)">
+          <path d="M-60 501Q33 447 115 453T257 426T455 469T618 503V610H-60Z" />
+          <path d="M854 541Q964 478 1062 483T1240 441T1490 468V620H854Z" />
+        </g>
+        <g
+          class="scenery-landmarks"
+          fill="none"
+          stroke="#8e98ba"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <g class="scenery-bridge">
+            <path
+              d="M42 476Q170 395 298 476M42 486Q170 408 298 486M57 466V476M82 451V461M111 439V449M141 432V442M170 429V439M199 432V442M229 439V449M258 451V461M283 466V476"
+            />
+            <path d="M75 488V509M265 488V509M88 479Q170 431 252 479" />
+          </g>
+          <g class="scenery-pavilion">
+            <path
+              d="M1200 448H1320M1214 448V420H1306V448M1228 418V394H1292V418M1242 392V371H1278V392M1260 332V344"
+            />
+            <path
+              d="M1200 418Q1230 417 1260 397Q1290 417 1320 418ZM1215 393Q1240 390 1260 375Q1280 390 1305 393ZM1230 371Q1250 368 1260 344Q1270 368 1290 371Z"
+            />
+            <path d="M1243 448V429H1254V448M1266 448V429H1277V448M1245 415V400M1275 415V400" />
+          </g>
+        </g>
+        <g
+          class="scenery-reflection"
+          fill="none"
+          stroke="#8fb8c2"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          opacity=".35"
+        >
+          <path
+            d="M24 532H90M120 544H240M62 559H186M266 534H342M1136 493H1280M1200 508H1350M1164 526H1254M1040 570H1150"
+          />
+        </g>
+      </svg>
       <svg class="entry-flow-map" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
         <g fill="none" stroke-linecap="round">
           <path class="flow-track" d="M-60 660C100 650 370 520 315 310S70 110 210 25" />
@@ -154,6 +299,18 @@ onBeforeUnmount(() => {
             pathLength="1200"
             d="M1480 170C1190 120 1000 260 1160 485S1460 735 1100 920"
           />
+        </g>
+        <g class="flow-waypoints" fill="#f7f8fc" stroke="#9a92d8" stroke-width="1.5">
+          <g class="flow-waypoint waypoint-one">
+            <circle class="waypoint-wave" cx="280" cy="427" r="8" />
+            <circle cx="280" cy="427" r="5" />
+            <circle cx="280" cy="427" r="2" fill="#9485d5" stroke="none" />
+          </g>
+          <g class="flow-waypoint waypoint-two">
+            <circle class="waypoint-wave" cx="1190" cy="526" r="8" />
+            <circle cx="1190" cy="526" r="5" />
+            <circle cx="1190" cy="526" r="2" fill="#79b8cb" stroke="none" />
+          </g>
         </g>
       </svg>
       <div class="entry-motes">
@@ -188,10 +345,10 @@ onBeforeUnmount(() => {
       <span class="entry-orbit orbit-one"></span><span class="entry-orbit orbit-two"></span
       ><span class="entry-orbit orbit-three"></span>
     </div>
-    <header class="entry-header"><BrandLogo /></header>
-    <section class="entry-center" aria-label="选择访问入口">
+    <header class="entry-header"><BrandLogo /><LanguageSwitch class="entry-language" /></header>
+    <section class="entry-center" :aria-label="$t('选择访问入口')">
       <div class="entry-card">
-        <div class="entry-tabs" role="tablist" aria-label="访问方式">
+        <div class="entry-tabs" role="tablist" :aria-label="$t('访问方式')">
           <span
             class="entry-tab-indicator"
             :class="{ admin: entryMode === 'admin' }"
@@ -209,7 +366,7 @@ onBeforeUnmount(() => {
             @keydown.right.prevent="selectEntry('admin', true)"
             @keydown.end.prevent="selectEntry('admin', true)"
           >
-            <el-icon><Guide /></el-icon><span>游客导览</span>
+            <el-icon><Guide /></el-icon><span>{{ $t('游客导览') }}</span>
           </button>
           <button
             id="entry-tab-admin"
@@ -223,10 +380,10 @@ onBeforeUnmount(() => {
             @keydown.left.prevent="selectEntry('visitor', true)"
             @keydown.home.prevent="selectEntry('visitor', true)"
           >
-            <el-icon><User /></el-icon><span>后台登录</span>
+            <el-icon><User /></el-icon><span>{{ $t('后台登录') }}</span>
           </button>
         </div>
-        <Transition name="entry-switch" mode="out-in">
+        <Transition name="entry-switch" mode="out-in" @enter="animateEntryContent">
           <section
             v-if="entryMode === 'visitor'"
             id="entry-panel-visitor"
@@ -237,8 +394,8 @@ onBeforeUnmount(() => {
             tabindex="0"
           >
             <div class="entry-heading">
-              <h1>游客导览</h1>
-              <p>选好路线，跟随数字人出发。</p>
+              <h1>{{ $t('游客导览') }}</h1>
+              <p>{{ $t('选好路线，跟随数字人出发。') }}</p>
             </div>
             <div class="visitor-scene" aria-hidden="true">
               <svg viewBox="0 0 400 170" fill="none">
@@ -255,13 +412,27 @@ onBeforeUnmount(() => {
                     <stop offset="1" stop-color="#a6d8e6" />
                   </linearGradient>
                 </defs>
-                <ellipse cx="200" cy="147" rx="145" ry="15" fill="#e9edf8" />
+                <ellipse class="scene-shadow" cx="200" cy="147" rx="145" ry="15" fill="#e9edf8" />
                 <path
+                  class="scene-mountain-back"
                   d="M50 128L112 54Q118 47 125 54L164 97L204 37Q209 29 217 37L300 128Z"
                   fill="url(#entry-mountain)"
                   opacity=".65"
                 />
-                <path d="M142 129L216 72Q221 68 225 73L271 129Z" fill="#c9d7f3" />
+                <path
+                  class="scene-mountain-front"
+                  d="M142 129L216 72Q221 68 225 73L271 129Z"
+                  fill="#c9d7f3"
+                />
+                <ellipse
+                  class="scene-pin-wave"
+                  cx="294"
+                  cy="133"
+                  rx="21"
+                  ry="5"
+                  stroke="#9c96ed"
+                  stroke-width="2"
+                />
                 <path
                   d="M75 132Q136 110 191 140T323 130"
                   stroke="#7abacc"
@@ -293,16 +464,16 @@ onBeforeUnmount(() => {
             </div>
             <div class="entry-features">
               <span
-                ><el-icon><MapLocation /></el-icon>景区地图</span
+                ><el-icon><MapLocation /></el-icon>{{ $t('景区地图') }}</span
               ><span
-                ><el-icon><Location /></el-icon>路线规划</span
+                ><el-icon><Location /></el-icon>{{ $t('路线规划') }}</span
               >
               <span
-                ><el-icon><ChatDotRound /></el-icon>数字人导览</span
+                ><el-icon><ChatDotRound /></el-icon>{{ $t('数字人导览') }}</span
               >
             </div>
             <el-button type="primary" class="entry-primary" @click="enterAsVisitor"
-              >进入游客导览<el-icon><ArrowRight /></el-icon
+              >{{ $t('进入游客导览') }}<el-icon><ArrowRight /></el-icon
             ></el-button>
           </section>
           <section
@@ -315,8 +486,8 @@ onBeforeUnmount(() => {
             tabindex="0"
           >
             <div class="entry-heading">
-              <h1>后台登录</h1>
-              <p>管理景点、路线与数字人。</p>
+              <h1>{{ $t('后台登录') }}</h1>
+              <p>{{ $t('管理景点、路线与数字人。') }}</p>
             </div>
             <el-form
               ref="formRef"
@@ -327,34 +498,34 @@ onBeforeUnmount(() => {
               class="entry-form"
               @submit.prevent="onSubmit"
             >
-              <el-form-item label="账号" prop="username"
+              <el-form-item :label="$t('账号')" prop="username"
                 ><el-input
                   v-model="loginForm.username"
                   :prefix-icon="User"
-                  placeholder="输入账号"
+                  :placeholder="$t('输入账号')"
                   autocomplete="username"
                   :disabled="isLogining"
               /></el-form-item>
-              <el-form-item label="密码" prop="password"
+              <el-form-item :label="$t('密码')" prop="password"
                 ><el-input
                   v-model="loginForm.password"
                   :prefix-icon="Lock"
                   type="password"
-                  placeholder="输入密码"
+                  :placeholder="$t('输入密码')"
                   autocomplete="current-password"
                   show-password
                   :disabled="isLogining"
               /></el-form-item>
               <div class="entry-options">
-                <el-checkbox v-model="rememberAccount">记住账号</el-checkbox
-                ><button type="button" @click="handleForgotPassword">忘记密码？</button>
+                <el-checkbox v-model="rememberAccount">{{ $t('记住账号') }}</el-checkbox
+                ><button type="button" @click="handleForgotPassword">{{ $t('忘记密码？') }}</button>
               </div>
               <el-button
                 type="primary"
                 native-type="submit"
                 :loading="isLogining"
                 class="entry-primary"
-                >登录后台<el-icon v-if="!isLogining"><ArrowRight /></el-icon
+                >{{ $t('登录后台') }}<el-icon v-if="!isLogining"><ArrowRight /></el-icon
               ></el-button>
             </el-form>
           </section>
@@ -362,11 +533,13 @@ onBeforeUnmount(() => {
         <div class="entry-status" :class="serviceState" role="status">
           <i aria-hidden="true"></i>
           <span>{{
-            serviceState === 'ready'
-              ? '服务可用'
-              : serviceState === 'offline'
-                ? '服务暂不可用，请稍后重试'
-                : '正在连接服务'
+            $t(
+              serviceState === 'ready'
+                ? '服务可用'
+                : serviceState === 'offline'
+                  ? '服务暂不可用，请稍后重试'
+                  : '正在连接服务'
+            )
           }}</span>
         </div>
       </div>
@@ -489,6 +662,9 @@ onBeforeUnmount(() => {
   border: none;
   animation: entry-pin-float 5s ease-in-out infinite;
 }
+.entry-language {
+  margin-left: auto;
+}
 .entry-header {
   display: flex;
   align-items: center;
@@ -515,7 +691,6 @@ onBeforeUnmount(() => {
   box-shadow:
     0 22px 70px -28px rgba(82, 99, 135, 0.22),
     0 2px 6px rgba(255, 255, 255, 0.8);
-  animation: entry-card-reveal 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .entry-tabs {
   position: relative;
@@ -680,6 +855,10 @@ onBeforeUnmount(() => {
 .entry-form :deep(.el-input__inner) {
   font-size: 16px;
 }
+.entry-form :deep(.el-input__inner:focus-visible) {
+  // 焦点边框由带图标的外层统一绘制，避免内部文字区出现错位方框。
+  outline: none;
+}
 .entry-options {
   display: flex;
   align-items: center;
@@ -808,16 +987,6 @@ onBeforeUnmount(() => {
     stroke-dashoffset: -66;
   }
 }
-@keyframes entry-card-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 /* Decorative motion stays behind the stable, readable access panel. */
 .entry-atmosphere {
   inset: -32px;
@@ -839,6 +1008,7 @@ onBeforeUnmount(() => {
 }
 .entry-contour {
   animation-duration: 10s;
+  opacity: 0.09;
 }
 .lake-ripples {
   opacity: 0.4;
@@ -864,17 +1034,17 @@ onBeforeUnmount(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.65;
+  opacity: 0.8;
 }
 .flow-track {
   stroke: #a4abc9;
-  stroke-width: 1;
-  opacity: 0.18;
+  stroke-width: 1.2;
+  opacity: 0.28;
 }
 .flow-stream {
-  stroke-width: 2.5;
-  stroke-dasharray: 75 1125;
-  animation: entry-route-travel 7s linear infinite;
+  stroke-width: 3;
+  stroke-dasharray: 110 1090;
+  animation: entry-route-travel 5.5s linear infinite;
 }
 .stream-purple {
   stroke: #9b8ce8;
@@ -883,7 +1053,7 @@ onBeforeUnmount(() => {
 .stream-blue {
   stroke: #69b9d5;
   animation-delay: -3.5s;
-  animation-duration: 9s;
+  animation-duration: 7s;
   filter: drop-shadow(0 0 5px #9ed9e9);
 }
 .entry-motes {
@@ -933,6 +1103,69 @@ onBeforeUnmount(() => {
 .scene-trail {
   animation-duration: 3s;
 }
+.entry-scenery {
+  position: absolute;
+  width: 100%;
+  height: min(66vh, 640px);
+  left: 0;
+  bottom: 0;
+  overflow: visible;
+}
+.scenery-landmarks {
+  opacity: 0.5;
+}
+.scenery-far,
+.scenery-near,
+.scenery-cloud,
+.scenery-reflection {
+  will-change: transform;
+}
+.waypoint-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: entry-waypoint-wave 3.6s ease-out infinite;
+}
+.waypoint-two .waypoint-wave {
+  animation-delay: -1.8s;
+  stroke: #79b8cb;
+}
+.entry-card {
+  position: relative;
+  isolation: isolate;
+}
+.entry-card::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border: 1px solid rgba(153, 141, 218, 0.2);
+  border-radius: 38px;
+  pointer-events: none;
+  animation: entry-panel-breathe 4.8s ease-in-out infinite;
+}
+.scene-mountain-back,
+.scene-mountain-front,
+.scene-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: entry-scene-drift 5s ease-in-out infinite alternate;
+}
+.scene-mountain-front {
+  animation-direction: alternate-reverse;
+  animation-duration: 4s;
+}
+.scene-shadow {
+  animation-name: entry-scene-shadow;
+}
+.scene-pin-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: entry-waypoint-wave 3s ease-out infinite;
+}
+.motion-paused *,
+.motion-paused *::before,
+.motion-paused *::after {
+  animation-play-state: paused !important;
+}
 .entry-primary.el-button {
   position: relative;
   overflow: hidden;
@@ -958,10 +1191,48 @@ onBeforeUnmount(() => {
 }
 @keyframes entry-route-travel {
   from {
-    stroke-dashoffset: 75;
+    stroke-dashoffset: 110;
   }
   to {
-    stroke-dashoffset: -1125;
+    stroke-dashoffset: -1090;
+  }
+}
+@keyframes entry-waypoint-wave {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.8);
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: scale(2.7);
+  }
+}
+@keyframes entry-panel-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@keyframes entry-scene-drift {
+  from {
+    transform: translate(-3px, 3px);
+  }
+  to {
+    transform: translate(4px, -5px);
+  }
+}
+@keyframes entry-scene-shadow {
+  from {
+    transform: scaleX(0.96);
+    opacity: 0.7;
+  }
+  to {
+    transform: scaleX(1.04);
+    opacity: 1;
   }
 }
 @keyframes entry-mote-rise {
@@ -992,6 +1263,18 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 600px) {
+  .entry-scenery {
+    height: 52vh;
+    opacity: 0.65;
+  }
+  .scenery-landmarks,
+  .scenery-cloud {
+    display: none;
+  }
+  .entry-card::before {
+    inset: -6px;
+    border-radius: 30px;
+  }
   .entry-aurora {
     opacity: 0.28;
   }
@@ -1046,11 +1329,17 @@ onBeforeUnmount(() => {
     top: 80px;
   }
   .entry-features {
-    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
   .entry-features span {
-    font-size: 13px;
-    gap: 4px;
+    flex-direction: column;
+    justify-content: flex-start;
+    font-size: 14px;
+    gap: 7px;
+    white-space: normal;
+    text-align: center;
   }
 }
 @media (max-width: 360px) {
@@ -1075,7 +1364,9 @@ onBeforeUnmount(() => {
   }
   .flow-stream,
   .entry-motes,
-  .entry-primary::after {
+  .entry-primary::after,
+  .waypoint-wave,
+  .scene-pin-wave {
     display: none;
   }
   .entry-page *,

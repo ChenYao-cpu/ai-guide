@@ -126,6 +126,8 @@ app.include_router(scenic_spots.router)
 app.include_router(knowledge_base.router)
 app.include_router(tour_routes.router)
 app.include_router(tour_chat.router)
+from .routers import tour_adaptive
+app.include_router(tour_adaptive.router)
 app.include_router(tts.router)
 app.include_router(feedback_analytics.router)
 app.include_router(digital_guide.router)

@@ -1,4 +1,6 @@
-<script setup lang="ts">
+<script setup lang="ts">import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import { t, locale } from '@/i18n'
+
 import BrandLogo from '@/components/BrandLogo.vue'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
@@ -26,6 +28,7 @@ import type { DigitalGuide } from '@/api/digitalHuman'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
 import QrFloating from '@/components/QrFloating.vue'
 import ScenicVisitContext from '@/components/ScenicVisitContext.vue'
+import VisitorAtmosphere from '@/components/VisitorAtmosphere.vue'
 
 const router = useRouter()
 const mapDiv = ref<HTMLDivElement | null>(null)
@@ -33,6 +36,8 @@ let leafletMap: any = null
 let leafletMarkers: any[] = []
 let mapHasFittedSpots = false
 let mapResizeObserver: ResizeObserver | null = null
+let scenicBounds: any = null
+let mapIsOverview = true
 
 // 高德瓦片（无需 API Key，国内可用）
 const AMAP_TILE = 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
@@ -57,13 +62,21 @@ function initLeafletMap() {
     leafletMap = L.map(mapDiv.value, {
       center: [39.997, 116.269],
       zoom: 14,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      maxBoundsViscosity: 1,
       zoomControl: true,
       attributionControl: false,
     })
     L.tileLayer(AMAP_TILE, { maxZoom: 18 }).addTo(leafletMap)
+    leafletMap.on('zoomstart dragstart', () => { mapIsOverview = false })
     refreshMapMarkers(L)
     if (typeof ResizeObserver !== 'undefined') {
-      mapResizeObserver = new ResizeObserver(() => leafletMap?.invalidateSize({ pan: false }))
+      mapResizeObserver = new ResizeObserver(() => {
+        if (!leafletMap) return
+        leafletMap.invalidateSize({ pan: false })
+        updateScenicViewport(mapIsOverview)
+      })
       mapResizeObserver.observe(mapDiv.value)
     }
     setTimeout(() => { if (leafletMap) leafletMap.invalidateSize() }, 300)
@@ -85,9 +98,9 @@ function refreshMapMarkers(L?: any) {
     const size = isSelected ? 28 : 22
     const icon = Lref.divIcon({
       className: 'spot-marker',
-      html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${isSelected ? '#3b5bff' : '#151925'};border:2px solid #fff;box-shadow:0 4px 12px rgba(18,25,46,.26);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;transition:all .2s">${i + 1}</div>`,
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
+      html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><div style="box-sizing:border-box;width:${size}px;height:${size}px;border-radius:50%;background:${isSelected ? '#3b5bff' : '#151925'};border:2px solid #fff;box-shadow:0 4px 12px rgba(18,25,46,.26);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;transition:background .2s,box-shadow .2s">${i + 1}</div></div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
     })
     const mapPoint = wgs84ToGcj02(Number(s.latitude), Number(s.longitude))
     bounds.extend(mapPoint)
@@ -96,27 +109,48 @@ function refreshMapMarkers(L?: any) {
       // 选择景点只更新样式，保留已打开的位置说明与地图视角。
       marker.setIcon(icon).setLatLng(mapPoint)
     } else {
-      marker = Lref.marker(mapPoint, { icon, title: `${i + 1} ${s.spot_name}` }).addTo(leafletMap)
+      marker = Lref.marker(mapPoint, { icon, title: `${i + 1} ${t(s.spot_name)}` }).addTo(leafletMap)
       marker.spotId = s.spot_id
       const content = document.createElement('div')
       const title = document.createElement('b')
-      title.textContent = `${i + 1} ${s.spot_name}`
-      content.append(title, document.createElement('br'), document.createTextNode(s.location || '景点游览点'))
+      title.textContent = `${i + 1} ${t(s.spot_name)}`
+      content.append(title, document.createElement('br'), document.createTextNode(t(s.location || '景点游览点')))
       marker.bindPopup(content)
       marker.on('click', () => toggleSpot(s.spot_id))
       leafletMarkers.push(marker)
     }
   })
-  if (!mapHasFittedSpots && bounds.isValid()) {
-    leafletMap.fitBounds(bounds.pad(0.2), { maxZoom: 15, animate: false })
+  if (bounds.isValid()) scenicBounds = bounds
+  if (!mapHasFittedSpots && scenicBounds) {
+    updateScenicViewport(true)
     mapHasFittedSpots = true
   }
 }
 
+function updateScenicViewport(showOverview = false) {
+  const L = (window as any).L
+  if (!leafletMap || !scenicBounds || !L) return
+  const size = leafletMap.getSize()
+  // 个性化标签页会隐藏地图，不以 0px 容器计算缩放下限。
+  if (size.x <= 40 || size.y <= 40) return
+  // 范围来自实际景点，少量留边用于完整显示标记；不是官方景区边界。
+  const overviewZoom = Math.min(16, Math.floor(leafletMap.getBoundsZoom(scenicBounds, false, L.point(40, 40)) * 4) / 4)
+  leafletMap.setMinZoom(overviewZoom)
+  leafletMap.setMaxBounds(scenicBounds.pad(0.12))
+  if (showOverview) {
+    leafletMap.closePopup()
+    leafletMap.fitBounds(scenicBounds, { padding: [20, 20], maxZoom: 16, animate: false })
+    mapIsOverview = true
+  }
+}
+
+function showMapOverview() { updateScenicViewport(true) }
+
 function focusMapSpot(id: number) {
   const marker = leafletMarkers.find((m: any) => m.spotId === id)
   if (!marker || !leafletMap) return
-  leafletMap.setView(marker.getLatLng(), 17, { animate: false })
+  mapIsOverview = false
+  leafletMap.setView(marker.getLatLng(), 18, { animate: false })
   marker.openPopup()
 }
 
@@ -152,11 +186,11 @@ const modelCategories = computed(() => {
     else if (path.includes('休闲')) cat = 'casual'
     if (!cats[cat]) {
       const labels: Record<string, { label: string }> = {
-        hanfu: { label: '汉服风华' },
-        suit_female: { label: '商务女导游' },
-        suit_male: { label: '商务男导游' },
-        casual: { label: '休闲风女导游' },
-        other: { label: '默认形象' },
+        hanfu: { label: t("汉服风华") },
+        suit_female: { label: t("商务女导游") },
+        suit_male: { label: t("商务男导游") },
+        casual: { label: t("休闲风女导游") },
+        other: { label: t("默认形象") },
       }
       cats[cat] = { ...labels[cat], models: [] }
     }
@@ -170,6 +204,12 @@ const selectedSpotIds = computed({ get: () => activeDraft.value.spotIds, set: va
 const loading = ref(false)
 const starting = ref(false)
 const guideList = ref<DigitalGuide[]>([])
+const guideChoicePoster = computed(() => {
+  const guide = selectedGuide.value || guideList.value[0]
+  return guide?.poster_image || guide?.avatar || ''
+})
+const guideChoicePosterFailed = ref(false)
+watch(guideChoicePoster, () => { guideChoicePosterFailed.value = false })
 const routeList = ref<any[]>([])
 const selectedRouteId = computed({ get: () => activeDraft.value.routeId, set: value => { activeDraft.value.routeId = value } })
 const spotList = ref<any[]>([])
@@ -205,8 +245,12 @@ const preferenceRecommendationLoading = ref(false)
 const timeBudget = ref(120)
 const walkingPace = ref<'standard' | 'relaxed'>('standard')
 const startArea = ref<'auto' | 'east' | 'north' | 'south'>('auto')
+const endArea = ref<'auto' | 'east' | 'north' | 'south'>('east')
+const queueReserve = ref(10)
+const avoidSpot = ref(0)
 const budgetOptions = [60, 90, 120, 180, 240, 360]
-const planningOptions = computed(() => ({ time_budget_minutes: timeBudget.value, pace: walkingPace.value, start_area: startArea.value }))
+const planningOptions = computed(() => ({ time_budget_minutes: timeBudget.value, pace: walkingPace.value, start_area: startArea.value,
+  end_area: endArea.value, queue_reserve_minutes: queueReserve.value, excluded_spot_ids: avoidSpot.value ? [avoidSpot.value] : [] }))
 const plannerSignature = computed(() => JSON.stringify([selectedPreferences.value, planningOptions.value]))
 const generatedSignature = ref('')
 const planNeedsRefresh = computed(() => !!preferenceRecommendation.value && generatedSignature.value !== plannerSignature.value)
@@ -236,17 +280,18 @@ const categoryLabels: Record<string, string> = {
 const getCategoryLabel = (cat: string) => categoryLabels[cat] || cat
 const categoryOptions = computed(() => {
   const cats = new Set<string>()
-  for (const spot of spotList.value) cats.add(spot.category || '其他')
+  for (const spot of spotList.value) cats.add(spot.category || t("其他"))
   return [...cats]
 })
 const filteredSpotList = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
   return spotList.value.filter((spot) => {
-    const category = spot.category || '其他'
+    const category = spot.category || t("其他")
     if (categoryFilter.value !== 'all' && category !== categoryFilter.value) return false
     if (showSelectedOnly.value && !selectedSpotIds.value.has(spot.spot_id)) return false
     if (!keyword) return true
-    const text = `${spot.spot_name || ''} ${spot.description || ''} ${spot.location || ''} ${getCategoryLabel(category)}`.toLowerCase()
+    const fields = [spot.spot_name, spot.description, spot.location, getCategoryLabel(category)]
+    const text = fields.flatMap(value => [value || '', t(value)]).join(' ').toLowerCase()
     return text.includes(keyword)
   })
 })
@@ -260,9 +305,9 @@ const selectedDuration = computed(() => {
   return Number(estimate) || selectedSpots.value.reduce((sum, spot) => sum + (Number(spot.visit_duration) || 20), 0)
 })
 const selectedSummary = computed(() => {
-  if (!selectedSpotNames.value.length) return '暂未选择景点'
-  const names = selectedSpotNames.value.slice(0, 4).join('、')
-  return selectedSpotNames.value.length > 4 ? `${names} 等 ${selectedSpotNames.value.length} 个` : names
+  if (!selectedSpotNames.value.length) return t("暂未选择景点")
+  const names = selectedSpotNames.value.slice(0, 4).map(name => t(name)).join(locale.value === 'en' ? ', ' : '、')
+  return selectedSpotNames.value.length > 4 ? t("{p0} 等 {p1} 个", {p0: names, p1: selectedSpotNames.value.length}) : names
 })
 
 const toggleSpot = (id: number) => {
@@ -285,8 +330,8 @@ const getCategoryCount = (cat: string) => spotList.value.filter(spot => (spot.ca
 const clearSelection = async () => {
   if (!selectedSpotIds.value.size) return
   const draft = activeDraft.value
-  await ElMessageBox.confirm('确定清空已选景点吗？', '清空选择', { confirmButtonText: '清空', cancelButtonText: '取消', type: 'warning' })
-    .then(() => { draft.spotIds = new Set(); draft.routeId = null; ElMessage.success('已清空选择') })
+  await ElMessageBox.confirm(t("确定清空已选景点吗？"), t("清空选择"), { confirmButtonText: t("清空"), cancelButtonText: t("取消"), type: 'warning' })
+    .then(() => { draft.spotIds = new Set(); draft.routeId = null; ElMessage.success(t("已清空选择")) })
     .catch(() => {})
 }
 const openSpotDetail = (spot: any) => {
@@ -306,7 +351,7 @@ const togglePref = (value: string) => {
 const generatePreferenceRoute = async () => {
   if (preferenceRecommendationLoading.value || aiChatLoading.value) return
   if (!selectedPreferences.value.length) {
-    ElMessage.warning('请先选择至少一个游览偏好')
+    ElMessage.warning(t("请先选择至少一个游览偏好"))
     return
   }
   preferenceRecommendationLoading.value = true
@@ -315,15 +360,15 @@ const generatePreferenceRoute = async () => {
     const response = await getRouteRecommendation([...selectedPreferences.value], { ...planningOptions.value })
     const body = response.data
     if (body.code !== 0 || !body.data?.spot_ids?.length) {
-      ElMessage.error(body.message || '暂无符合偏好的景点')
+      ElMessage.error(body.message || t("暂无符合偏好的景点"))
       return
     }
     preferenceRecommendation.value = body.data
     generatedSignature.value = signature
     drafts.personal.spotIds = new Set(body.data.spot_ids)
-    ElMessage.success(`已生成 ${body.data.spot_count} 个景点的个性化路线`)
+    ElMessage.success(t("已生成 {p0} 个景点的个性化路线", {p0: body.data.spot_count}))
   } catch {
-    ElMessage.error('个性化路线生成失败，请检查后端服务')
+    ElMessage.error(t("个性化路线生成失败，请检查后端服务"))
   } finally {
     preferenceRecommendationLoading.value = false
   }
@@ -351,7 +396,7 @@ const handleAiChatSend = async () => {
     if ((res.data as any).code === 0) {
       const data = (res.data as any).data
       // 显示 AI 回复
-      const reply = data.ai_response || `已为您推荐 ${data.spot_count} 个景点（预计 ${data.total_duration} 分钟）`
+      const reply = data.ai_response || t("已为您推荐 {p0} 个景点（预计 {p1} 分钟）", {p0: data.spot_count, p1: data.total_duration})
       aiChatMessages.value.push({
         role: 'ai',
         content: reply,
@@ -373,10 +418,10 @@ const handleAiChatSend = async () => {
         generatedSignature.value = plannerSignature.value
       }
     } else {
-      aiChatMessages.value.push({ role: 'ai', content: '抱歉，AI推荐失败：' + ((res.data as any).message || '未知错误') })
+      aiChatMessages.value.push({ role: 'ai', content: t("抱歉，AI推荐失败：") + ((res.data as any).message || t("未知错误")) })
     }
   } catch (e) {
-    aiChatMessages.value.push({ role: 'ai', content: '抱歉，AI服务请求失败，请稍后重试' })
+    aiChatMessages.value.push({ role: 'ai', content: t("抱歉，AI服务请求失败，请稍后重试") })
   } finally {
     aiChatLoading.value = false
   }
@@ -407,7 +452,7 @@ const fetchData = async () => {
 const selectRoute = (route: any) => {
   drafts.route.routeId = route.route_id
   drafts.route.spotIds = new Set(route.spot_ids || [])
-  ElMessage.success(`已选择路线「${route.name}」`)
+  ElMessage.success(t("已选择路线「{p0}」", {p0: route.name}))
 }
 
 /**
@@ -421,15 +466,15 @@ const selectGuideModel = (model: { guideId: number }) => {
 
 const startTour = async () => {
   if (activeMenuTab.value === 'personal' && planNeedsRefresh.value) {
-    ElMessage.warning('条件已修改，请重新生成路线')
+    ElMessage.warning(t("条件已修改，请重新生成路线"))
     return
   }
   if (!selectedSpotIds.value.size) {
-    ElMessage.warning('请至少选择 1 个景点后继续')
+    ElMessage.warning(t("请至少选择 1 个景点后继续"))
     return
   }
-  if (!selectedGuide.value) { ElMessage.warning('请选择数字人形象'); return }
-  const name = visitorName.value.trim() || '游客'
+  if (!selectedGuide.value) { ElMessage.warning(t("请选择数字人形象")); return }
+  const name = visitorName.value.trim() || t("游客")
   starting.value = true
   const guideId = selectedGuide.value.guide_id
   const params = new URLSearchParams({
@@ -438,6 +483,7 @@ const startTour = async () => {
     route_id: String(selectedRouteId.value || 0),
     visitor_preferences: activeMenuTab.value === 'personal' ? selectedPreferences.value.join(',') : '',
     spot_ids: JSON.stringify([...selectedSpotIds.value]),
+    ...(activeMenuTab.value === 'personal' ? {planning: JSON.stringify(planningOptions.value)} : {}),
   })
 
   try {
@@ -449,11 +495,11 @@ const startTour = async () => {
       // 模型、姓名、声音均以服务端会话中的 guide_id 为准，防止前后端配置不一致。
       router.push({ path: `${props.tourPathPrefix}${sid}` })
     } else {
-      ElMessage.error('创建会话失败: ' + (json?.message || '未知错误'))
+      ElMessage.error(t("创建会话失败: ") + (json?.message || t("未知错误")))
     }
   } catch (e: any) {
     console.error('[VisitorHome] 创建异常:', e)
-    ElMessage.error('网络异常，请重试')
+    ElMessage.error(t("网络异常，请重试"))
   } finally {
     starting.value = false
   }
@@ -468,6 +514,7 @@ onBeforeUnmount(() => {
 })
 
 // 选中变化时刷新地图标记
+watch(locale, () => { for (const marker of leafletMarkers) marker.remove(); leafletMarkers = []; nextTick(() => refreshMapMarkers()) })
 watch(selectedSpotIds, () => { nextTick(() => refreshMapMarkers()) }, { deep: true })
 // 切到游览路线 tab 时刷新地图尺寸
 watch(activeMenuTab, (tab) => {
@@ -482,31 +529,42 @@ watch(activeMenuTab, (tab) => {
 
 <template>
   <main class="visitor-home">
+    <VisitorAtmosphere />
     <div class="visitor-topbar-shell">
       <header class="visitor-topbar">
         <div class="visitor-brand">
           <h1><BrandLogo /></h1>
         </div>
         <div class="visitor-top-actions">
-          <div class="selection-counter"><el-icon><Location /></el-icon><span>已选景点</span><strong>{{ spotCount }}</strong></div>
-          <el-button plain :icon="ArrowLeft" @click="goBack">返回登录</el-button>
+        <LanguageSwitch />
+          <div class="selection-counter"><el-icon><Location /></el-icon><span>{{ $t("已选景点") }}</span><strong>{{ $t(spotCount) }}</strong></div>
+          <el-button plain :icon="ArrowLeft" @click="goBack">{{ $t("返回登录") }}</el-button>
         </div>
       </header>
     </div>
 
     <div class="visitor-intro">
+      <svg class="planner-landscape" viewBox="0 0 500 140" fill="none" aria-hidden="true">
+        <path d="M0 121Q58 90 92 106L163 40Q173 30 184 42L237 95L286 60Q297 51 307 64L354 112Q425 88 500 119V140H0Z" fill="#d4cdeb" opacity=".5" />
+        <path d="M64 140L162 83Q172 77 182 84L252 131L316 99Q330 91 342 104L392 140Z" fill="#bfd8dc" opacity=".48" />
+        <g stroke="#959ac5" stroke-width="1.3" stroke-linecap="round" opacity=".65">
+          <path d="M296 119Q365 66 434 119M296 126Q365 77 434 126M312 110V120M336 96V106M365 91V101M394 96V106M418 110V120" />
+          <path class="planner-ripple" d="M24 127Q86 119 153 130T292 130M341 135H454" />
+          <path d="M64 37H114M79 28Q99 19 122 28T163 28" opacity=".55" />
+        </g>
+      </svg>
       <div>
-        <h2>规划行程</h2>
+        <h2>{{ $t("规划行程") }}</h2>
       </div>
 
-      <nav class="visitor-menu" aria-label="行程规划方式">
+      <nav class="visitor-menu" :aria-label='$t("行程规划方式")'>
         <button type="button" class="menu-item" :aria-pressed="activeMenuTab === 'route'" :class="{ active: activeMenuTab === 'route' }" @click="activeMenuTab = 'route'">
           <el-icon><Location /></el-icon>
-          <span>浏览路线</span>
+          <span>{{ $t("浏览路线") }}</span>
         </button>
         <button type="button" class="menu-item" :aria-pressed="activeMenuTab === 'personal'" :class="{ active: activeMenuTab === 'personal' }" @click="activeMenuTab = 'personal'">
           <el-icon><User /></el-icon>
-          <span>个性化</span>
+          <span>{{ $t("个性化") }}</span>
         </button>
       </nav>
 
@@ -521,13 +579,13 @@ watch(activeMenuTab, (tab) => {
           <!-- 地图与景区信息各占一列 -->
           <div class="map-overview">
           <div class="content-card map-card">
-            <div class="map-card-heading"><h3>景区地图</h3><span>点击标记选择景点</span></div>
+            <div class="map-card-heading"><h3>{{ $t("景区地图") }}</h3><div class="map-heading-actions"><span>{{ $t("点击标记选择景点") }}</span><button type="button" class="map-overview-button" @click="showMapOverview">{{ $t("景区全景") }}</button></div></div>
             <div class="map-container" ref="mapDiv"></div>
             <div class="map-spots" v-if="spotList.length">
-              <button v-for="(spot, index) in spotList.slice(0, 6)" :key="spot.spot_id" type="button" class="map-spot-tag" @click="focusMapSpot(spot.spot_id)">{{ index + 1 }} {{ spot.spot_name }}</button>
-              <select v-if="spotList.length > 6" class="map-locate-select" aria-label="定位更多景点" @change="focusMapSpot(Number(($event.target as HTMLSelectElement).value))">
-                <option value="" disabled selected>更多景点 · {{ spotList.length - 6 }}</option>
-                <option v-for="(spot, index) in spotList" :key="spot.spot_id" :value="spot.spot_id">{{ index + 1 }} {{ spot.spot_name }}</option>
+              <button v-for="(spot, index) in spotList.slice(0, 6)" :key="spot.spot_id" type="button" class="map-spot-tag" @click="focusMapSpot(spot.spot_id)">{{ $t(index + 1) }} {{ $t(spot.spot_name) }}</button>
+              <select v-if="spotList.length > 6" class="map-locate-select" :aria-label='$t("定位更多景点")' @change="focusMapSpot(Number(($event.target as HTMLSelectElement).value))">
+                <option value="" disabled selected>{{ $t("更多景点 ·") }} {{ $t(spotList.length - 6) }}</option>
+                <option v-for="(spot, index) in spotList" :key="spot.spot_id" :value="spot.spot_id">{{ $t(index + 1) }} {{ $t(spot.spot_name) }}</option>
               </select>
             </div>
           </div>
@@ -535,50 +593,50 @@ watch(activeMenuTab, (tab) => {
           </div>
 
           <!-- 推荐路线 -->
-          <div class="content-card" v-if="routeList.length > 0">
-            <div class="card-title">推荐路线 </div>
+          <div class="content-card recommended-routes" v-if="routeList.length > 0">
+            <div class="card-title">{{ $t("推荐路线") }}</div>
             <div class="routes-grid">
               <div v-for="route in routeList" :key="route.route_id" class="route-card" :class="{ selected: selectedRouteId === route.route_id }" @click="selectRoute(route)">
-                <div v-if="route.cover_image" class="route-cover"><img :src="route.cover_image" :alt="route.name" loading="lazy" /><small v-if="route.cover_generated">AI路线示意图</small></div>
-                <div class="route-card-top"><span class="route-theme-tag">{{ preferenceOptions.find(pref => pref.value === route.theme)?.label || '综合游览' }}</span><span class="route-time">{{ route.estimated_time_minutes || '--' }} 分钟</span></div>
-                <h3 class="route-name">{{ route.name }}</h3>
-                <p class="route-desc">{{ route.description || '综合游览路线' }}</p>
-                <div class="route-spots"><el-icon :size="14"><Location /></el-icon><span>{{ (route.spot_names || []).join(' → ') || `${route.spot_count || 0} 个景点` }}</span></div>
-                <div class="route-card-bottom"><el-tag size="small" round>{{ route.spot_count || 0 }} 个景点</el-tag><span class="route-check" v-if="selectedRouteId === route.route_id"><el-icon><Check /></el-icon> 已选择</span></div>
+                <div v-if="route.cover_image" class="route-cover"><img :src="route.cover_image" :alt="$t(route.name)" loading="lazy" /><small v-if="route.cover_generated">{{ $t("AI路线示意图") }}</small></div>
+                <div class="route-card-top"><span class="route-theme-tag">{{ $t(preferenceOptions.find(pref => pref.value === route.theme)?.label || '综合游览') }}</span><span class="route-time">{{ $t(route.estimated_time_minutes || '--') }} {{ $t("分钟") }}</span></div>
+                <h3 class="route-name">{{ $t(route.name) }}</h3>
+                <p class="route-desc">{{ $t(route.description || '综合游览路线') }}</p>
+                <div class="route-spots"><el-icon :size="14"><Location /></el-icon><span>{{ $t((route.spot_names || []).map((name: string) => $t(name)).join(' → ') || `${route.spot_count || 0} 个景点`) }}</span></div>
+                <div class="route-card-bottom"><el-tag size="small" round>{{ $t(route.spot_count || 0) }} {{ $t("个景点") }}</el-tag><span class="route-check" v-if="selectedRouteId === route.route_id"><el-icon><Check /></el-icon>{{ $t("已选择") }}</span></div>
               </div>
             </div>
           </div>
 
           <!-- 选择景点 -->
-          <section class="content-card spot-card-section" aria-label="选择景点">
+          <section class="content-card spot-card-section" :aria-label='$t("选择景点")'>
             <div class="spot-section-heading">
-              <h3>选择景点</h3>
-              <span class="spot-selection-count"><strong>{{ spotCount }}</strong> / {{ spotList.length }} 已选</span>
+              <h3>{{ $t("选择景点") }}</h3>
+              <span class="spot-selection-count"><strong>{{ $t(spotCount) }}</strong> / {{ $t(spotList.length) }} {{ $t("已选") }}</span>
             </div>
             <div class="spot-selection-tools">
-              <el-input v-model="searchKeyword" :prefix-icon="Search" placeholder="搜索景点" clearable />
-              <el-button :type="showSelectedOnly ? 'primary' : 'default'" :aria-pressed="showSelectedOnly" plain @click="showSelectedOnly = !showSelectedOnly">只看已选</el-button>
-              <el-button plain @click="toggleSpots(filteredSpotList)" :disabled="!filteredSpotList.length">{{ filteredSpotList.length && filteredSpotList.every(spot => selectedSpotIds.has(spot.spot_id)) ? '取消全选' : '全选当前结果' }}</el-button>
-              <el-button plain :icon="Delete" @click="clearSelection" :disabled="spotCount === 0">清空</el-button>
+              <el-input v-model="searchKeyword" :prefix-icon="Search" :placeholder='$t("搜索景点")' clearable />
+              <el-button :type="showSelectedOnly ? 'primary' : 'default'" :aria-pressed="showSelectedOnly" plain @click="showSelectedOnly = !showSelectedOnly">{{ $t("只看已选") }}</el-button>
+              <el-button plain @click="toggleSpots(filteredSpotList)" :disabled="!filteredSpotList.length">{{ $t(filteredSpotList.length && filteredSpotList.every(spot => selectedSpotIds.has(spot.spot_id)) ? '取消全选' : '全选当前结果') }}</el-button>
+              <el-button plain :icon="Delete" @click="clearSelection" :disabled="spotCount === 0">{{ $t("清空") }}</el-button>
             </div>
-            <div class="spot-category-filters" role="group" aria-label="景点分类">
-              <button type="button" :class="{ active: categoryFilter === 'all' }" :aria-pressed="categoryFilter === 'all'" @click="categoryFilter = 'all'">全部<span>{{ spotList.length }}</span></button>
-              <button v-for="cat in categoryOptions" :key="cat" type="button" :class="{ active: categoryFilter === cat }" :aria-pressed="categoryFilter === cat" @click="categoryFilter = cat">{{ getCategoryLabel(cat) }}<span>{{ getCategoryCount(cat) }}</span></button>
+            <div class="spot-category-filters" role="group" :aria-label='$t("景点分类")'>
+              <button type="button" :class="{ active: categoryFilter === 'all' }" :aria-pressed="categoryFilter === 'all'" @click="categoryFilter = 'all'">{{ $t("全部") }}<span>{{ $t(spotList.length) }}</span></button>
+              <button v-for="cat in categoryOptions" :key="cat" type="button" :class="{ active: categoryFilter === cat }" :aria-pressed="categoryFilter === cat" @click="categoryFilter = cat">{{ $t(getCategoryLabel(cat)) }}<span>{{ $t(getCategoryCount(cat)) }}</span></button>
             </div>
-            <div v-if="spotCount" class="spot-selection-summary"><span>已选</span><p>{{ selectedSummary }}</p></div>
-            <div v-if="spotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Location /></el-icon><strong>暂无景点数据</strong></div>
-            <div v-else-if="filteredSpotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Search /></el-icon><strong>{{ showSelectedOnly && !spotCount ? '尚未选择景点' : '未找到相关景点' }}</strong></div>
+            <div v-if="spotCount" class="spot-selection-summary"><span>{{ $t("已选") }}</span><p>{{ $t(selectedSummary) }}</p></div>
+            <div v-if="spotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Location /></el-icon><strong>{{ $t("暂无景点数据") }}</strong></div>
+            <div v-else-if="filteredSpotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Search /></el-icon><strong>{{ $t(showSelectedOnly && !spotCount ? '尚未选择景点' : '未找到相关景点') }}</strong></div>
             <div v-else class="spot-options-grid">
               <article v-for="spot in filteredSpotList" :key="spot.spot_id" :data-spot-id="spot.spot_id" class="spot-option" :class="{ selected: selectedSpotIds.has(spot.spot_id) }">
-                <button class="spot-choice" type="button" :aria-label="(selectedSpotIds.has(spot.spot_id) ? '取消选择 ' : '选择景点 ') + spot.spot_name" :aria-pressed="selectedSpotIds.has(spot.spot_id)" @click="toggleSpot(spot.spot_id)">
+                <button class="spot-choice" type="button" :aria-label="$t(selectedSpotIds.has(spot.spot_id) ? '取消选择 {p0}' : '选择景点 {p0}', {p0: spot.spot_name})" :aria-pressed="selectedSpotIds.has(spot.spot_id)" @click="toggleSpot(spot.spot_id)">
                   <span class="spot-choice-check" aria-hidden="true"><el-icon v-if="selectedSpotIds.has(spot.spot_id)"><Check /></el-icon></span>
                   <img v-if="spot.image_path" :src="spot.image_path" alt="" class="spot-option-photo" loading="lazy" />
                   <span class="spot-choice-copy">
-                    <span class="spot-choice-title"><strong>{{ spot.spot_name }}</strong><em>{{ getCategoryLabel(spot.category || '其他') }}</em></span>
-                    <span class="spot-choice-description">{{ spot.description || spot.location || '景区特色景点' }}</span>
+                    <span class="spot-choice-title"><strong>{{ $t(spot.spot_name) }}</strong><em>{{ $t(getCategoryLabel(spot.category || '其他')) }}</em></span>
+                    <span class="spot-choice-description">{{ $t(spot.description || spot.location || '景区特色景点') }}</span>
                   </span>
                 </button>
-                <button class="spot-option-detail" type="button" :aria-label="spot.spot_name + '详情'" @click="openSpotDetail(spot)">详情<el-icon><ArrowRight /></el-icon></button>
+                <button class="spot-option-detail" type="button" :aria-label="$t('{p0}详情', {p0: spot.spot_name})" @click="openSpotDetail(spot)">{{ $t("详情") }}<el-icon><ArrowRight /></el-icon></button>
               </article>
             </div>
           </section>
@@ -588,23 +646,24 @@ watch(activeMenuTab, (tab) => {
         <div v-show="activeMenuTab === 'personal'" class="tab-content">
           <!-- 游览偏好 -->
           <div class="content-card">
-            <div class="spot-section-heading"><h3>游览偏好</h3><span class="spot-selection-count">{{ spotList.length }} 个景点可规划</span></div>
+            <div class="spot-section-heading"><h3>{{ $t("游览偏好") }}</h3><span class="spot-selection-count">{{ $t(spotList.length) }} {{ $t("个景点可规划") }}</span></div>
             <div class="preference-grid">
               <button v-for="pref in preferenceOptions" :key="pref.value" type="button" class="pref-card" :class="{ selected: selectedPreferences.includes(pref.value) }" :aria-pressed="selectedPreferences.includes(pref.value)" :disabled="preferenceRecommendationLoading || aiChatLoading" @click="togglePref(pref.value)">
-                <span class="pref-name"><el-icon><component :is="pref.icon" /></el-icon>{{ pref.label }}<el-icon v-if="selectedPreferences.includes(pref.value)"><Check /></el-icon></span>
-                <small>{{ pref.hint }}</small><small class="pref-coverage">{{ preferenceCount(pref.value) }} 个匹配景点</small>
+                <span class="pref-name"><el-icon><component :is="pref.icon" /></el-icon>{{ $t(pref.label) }}<el-icon v-if="selectedPreferences.includes(pref.value)"><Check /></el-icon></span>
+                <small>{{ $t(pref.hint) }}</small><small class="pref-coverage">{{ $t(preferenceCount(pref.value)) }} {{ $t("个匹配景点") }}</small>
               </button>
             </div>
-            <p class="preference-note">兴趣可多选；综合游览单独选择。亲子路线降低步行速度并避开台阶较多的景点。</p>
+            <p class="preference-note">{{ $t("兴趣可多选；综合游览单独选择。亲子路线降低步行速度并避开台阶较多的景点。") }}</p>
             <div class="planning-controls">
-              <label>可用时长<select v-model.number="timeBudget" aria-label="可用时长" :disabled="preferenceRecommendationLoading || aiChatLoading"><option v-if="!budgetOptions.includes(timeBudget)" :value="timeBudget">{{ timeBudget }} 分钟</option><option v-for="minutes in budgetOptions" :key="minutes" :value="minutes">{{ minutes }} 分钟</option></select></label>
-              <label>步行节奏<select v-model="walkingPace" aria-label="步行节奏" :disabled="preferenceRecommendationLoading || aiChatLoading"><option value="standard">正常游览</option><option value="relaxed">轻松慢走 · 少台阶</option></select></label>
-              <label>出发区域<select v-model="startArea" aria-label="出发区域" :disabled="preferenceRecommendationLoading || aiChatLoading"><option value="auto">按兴趣选择首站</option><option value="east">东宫门附近 · 仁寿殿</option><option value="north">北宫门附近 · 苏州街</option><option value="south">新建宫门附近 · 铜牛</option></select></label>
+              <label>{{ $t("可用时长") }}<select v-model.number="timeBudget" :aria-label='$t("可用时长")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option v-if="!budgetOptions.includes(timeBudget)" :value="timeBudget">{{ $t(timeBudget) }} {{ $t("分钟") }}</option><option v-for="minutes in budgetOptions" :key="minutes" :value="minutes">{{ $t(minutes) }} {{ $t("分钟") }}</option></select></label>
+              <label>{{ $t("步行节奏") }}<select v-model="walkingPace" :aria-label='$t("步行节奏")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option value="standard">{{ $t("正常游览") }}</option><option value="relaxed">{{ $t("轻松慢走 · 少台阶") }}</option></select></label>
+              <label>{{ $t("出发区域") }}<select v-model="startArea" :aria-label='$t("出发区域")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option value="auto">{{ $t("按兴趣选择首站") }}</option><option value="east">{{ $t("东宫门附近 · 仁寿殿") }}</option><option value="north">{{ $t("北宫门附近 · 苏州街") }}</option><option value="south">{{ $t("新建宫门附近 · 铜牛") }}</option></select></label>
+              <label>{{ $t("离园区域") }}<select v-model="endArea" :aria-label='$t("离园区域")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option value="auto">{{ $t("末站结束 · 不计算离园") }}</option><option value="east">{{ $t("东宫门附近") }}</option><option value="north">{{ $t("北宫门附近") }}</option><option value="south">{{ $t("新建宫门附近") }}</option></select></label>
+              <label>{{ $t("排队预留") }}<select v-model.number="queueReserve" :aria-label='$t("排队预留")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option v-for="minutes in [0,10,20,30,60]" :key="minutes" :value="minutes">{{ $t(minutes) }} {{ $t("分钟 · 自行预留") }}</option></select></label>
+              <label>{{ $t("临时避开") }}<select v-model.number="avoidSpot" :aria-label='$t("临时避开景点")' :disabled="preferenceRecommendationLoading || aiChatLoading"><option :value="0">{{ $t("不避开景点") }}</option><option v-for="spot in spotList" :key="spot.spot_id" :value="spot.spot_id">{{ $t(spot.spot_name) }}</option></select></label>
             </div>
             <div class="preference-action">
-              <el-button type="primary" :loading="preferenceRecommendationLoading" :disabled="aiChatLoading || !selectedPreferences.length" @click="generatePreferenceRoute">
-                生成个性化路线
-              </el-button>
+              <el-button type="primary" :loading="preferenceRecommendationLoading" :disabled="aiChatLoading || !selectedPreferences.length" @click="generatePreferenceRoute">{{ $t("生成个性化路线") }}</el-button>
             </div>
           </div>
         <!-- AI 对话推荐 -->
@@ -612,7 +671,7 @@ watch(activeMenuTab, (tab) => {
           <button type="button" class="ai-chat-header" :aria-expanded="aiChatExpanded" @click="aiChatExpanded = !aiChatExpanded">
             <div class="ai-chat-title">
 
-              <span>AI 推荐</span>
+              <span>{{ $t("AI 推荐") }}</span>
 
             </div>
             <el-icon :class="{ rotated: aiChatExpanded }"><ArrowDown /></el-icon>
@@ -620,16 +679,14 @@ watch(activeMenuTab, (tab) => {
           <div v-show="aiChatExpanded" class="ai-chat-body">
             <!-- 对话消息区 -->
             <div class="ai-chat-messages">
-              <div v-if="!aiChatMessages.length" class="ai-chat-placeholder">
-                试试：带孩子玩2小时，喜欢自然风光
-              </div>
+              <div v-if="!aiChatMessages.length" class="ai-chat-placeholder">{{ $t("试试：带孩子玩2小时，喜欢自然风光") }}</div>
               <div v-for="(msg, i) in aiChatMessages" :key="i" class="ai-msg" :class="msg.role">
                 <div>
                   <div class="ai-msg-bubble">{{ msg.content }}</div>
                   <div v-if="msg.role === 'ai' && msg.meta" class="ai-evidence">
 
-                    <span v-if="msg.meta.selected">精选 {{ msg.meta.selected }} 个景点</span>
-                    <span v-if="msg.meta.excluded">{{ msg.meta.excluded }} 个未纳入本次行程</span>
+                    <span v-if="msg.meta.selected">{{ $t("精选") }} {{ $t(msg.meta.selected) }} {{ $t("个景点") }}</span>
+                    <span v-if="msg.meta.excluded">{{ $t(msg.meta.excluded) }} {{ $t("个未纳入本次行程") }}</span>
                   </div>
                 </div>
               </div>
@@ -641,35 +698,35 @@ watch(activeMenuTab, (tab) => {
             <div class="ai-chat-input">
               <el-input
                 v-model="aiChatMessage"
-                placeholder="描述你的游览需求..."
-                aria-label="游览需求"
+                :placeholder='$t("描述你的游览需求...")'
+                :aria-label='$t("游览需求")'
                 :disabled="aiChatLoading || preferenceRecommendationLoading"
                 @keyup.enter="handleAiChatSend"
                 size="small"
               />
-              <el-button type="primary" size="small" :loading="aiChatLoading" :disabled="!aiChatMessage.trim() || preferenceRecommendationLoading" aria-label="发送游览需求" @click="handleAiChatSend">
+              <el-button type="primary" size="small" :loading="aiChatLoading" :disabled="!aiChatMessage.trim() || preferenceRecommendationLoading" :aria-label='$t("发送游览需求")' @click="handleAiChatSend">
                 <el-icon><Promotion /></el-icon>
               </el-button>
             </div>
           </div>
         </div>
-          <section class="content-card personal-itinerary" aria-label="个性化行程">
-            <div class="spot-section-heading"><h3>{{ preferenceRecommendation?.name || '个性化行程' }}</h3><span class="spot-selection-count">{{ spotCount }} 个景点</span></div>
-            <p v-if="planNeedsRefresh" class="plan-refresh" role="status">条件已修改，请重新生成路线。</p>
+          <section class="content-card personal-itinerary" :aria-label='$t("个性化行程")'>
+            <div class="spot-section-heading"><h3>{{ $t(preferenceRecommendation?.name || '个性化行程') }}</h3><span class="spot-selection-count">{{ $t(spotCount) }} {{ $t("个景点") }}</span></div>
+            <p v-if="planNeedsRefresh" class="plan-refresh" role="status">{{ $t("条件已修改，请重新生成路线。") }}</p>
             <template v-if="preferenceRecommendation?.visit_time_minutes !== undefined">
-              <div class="plan-metrics"><span><strong>{{ preferenceRecommendation.estimated_time_minutes }}</strong> / {{ preferenceRecommendation.requested_time_minutes }} 分钟</span><span>停留 {{ preferenceRecommendation.visit_time_minutes }} 分钟</span><span>步行 {{ preferenceRecommendation.walking_time_minutes }} 分钟 · {{ ((preferenceRecommendation.walking_distance_meters || 0) / 1000).toFixed(1) }} 公里</span><span>休息 {{ preferenceRecommendation.rest_time_minutes }} 分钟</span></div>
-              <p class="plan-explanation">{{ preferenceRecommendation.start_label }} · {{ preferenceRecommendation.recommendation_explanation }}</p>
+              <div class="plan-metrics"><span><strong>{{ $t(preferenceRecommendation.estimated_time_minutes) }}</strong> / {{ $t(preferenceRecommendation.requested_time_minutes) }} {{ $t("分钟") }}</span><span>{{ $t("停留") }} {{ $t(preferenceRecommendation.visit_time_minutes) }} {{ $t("分钟") }}</span><span>{{ $t("步行") }} {{ $t(preferenceRecommendation.walking_time_minutes) }} {{ $t("分钟 ·") }} {{ $t(((preferenceRecommendation.walking_distance_meters || 0) / 1000).toFixed(1)) }} {{ $t("公里") }}</span><span>{{ $t("休息") }} {{ $t(preferenceRecommendation.rest_time_minutes) }} {{ $t("分钟") }}</span><span>{{ $t("离园") }} {{ $t(preferenceRecommendation.exit_time_minutes || 0) }} {{ $t("分钟") }}</span><span>{{ $t("排队预留") }} {{ $t(preferenceRecommendation.queue_reserve_minutes || 0) }} {{ $t("分钟") }}</span></div>
+              <p class="plan-explanation">{{ $t(preferenceRecommendation.start_label) }} · {{ $t(preferenceRecommendation.recommendation_explanation) }}</p>
             </template>
-            <p v-if="!spotCount" class="planning-empty">选择游览偏好或使用 AI 推荐，生成你的行程。</p>
+            <p v-if="!spotCount" class="planning-empty">{{ $t("选择游览偏好或使用 AI 推荐，生成你的行程。") }}</p>
             <ol v-else class="personal-spot-list">
               <li v-for="(spot, index) in selectedSpots" :key="spot.spot_id">
-                <span class="itinerary-order">{{ index + 1 }}</span>
-                <div class="itinerary-copy"><strong>{{ spot.spot_name }}</strong><small>停留 {{ spot.visit_duration || 20 }} 分钟<span v-if="recommendationReasons.get(spot.spot_id)?.walk_from_previous_minutes"> · {{ index ? '上一站' : '出发区域' }}步行约 {{ recommendationReasons.get(spot.spot_id)?.walk_from_previous_minutes }} 分钟</span></small><p v-if="recommendationReasons.get(spot.spot_id)?.reason" class="itinerary-reason">{{ recommendationReasons.get(spot.spot_id)?.reason }}</p></div>
-                <button type="button" :aria-label="spot.spot_name + '详情'" @click="openSpotDetail(spot)">详情</button>
-                <button type="button" :aria-label="'移除 ' + spot.spot_name" @click="toggleSpot(spot.spot_id)"><el-icon><Close /></el-icon></button>
+                <span class="itinerary-order">{{ $t(index + 1) }}</span>
+                <div class="itinerary-copy"><strong>{{ $t(spot.spot_name) }}</strong><small>{{ $t("停留") }} {{ $t(spot.visit_duration || 20) }} {{ $t("分钟") }}<span v-if="recommendationReasons.get(spot.spot_id)?.walk_from_previous_minutes"> · {{ $t(index ? '上一站' : '出发区域') }} {{ $t("步行约") }} {{ $t(recommendationReasons.get(spot.spot_id)?.walk_from_previous_minutes) }} {{ $t("分钟") }}</span></small><p v-if="recommendationReasons.get(spot.spot_id)?.reason" class="itinerary-reason">{{ $t(recommendationReasons.get(spot.spot_id)?.reason) }}</p></div>
+                <button type="button" :aria-label="$t('{p0}详情', {p0: spot.spot_name})" @click="openSpotDetail(spot)">{{ $t("详情") }}</button>
+                <button type="button" :aria-label="$t('移除 {p0}', {p0: spot.spot_name})" @click="toggleSpot(spot.spot_id)"><el-icon><Close /></el-icon></button>
               </li>
             </ol>
-            <details v-if="preferenceRecommendation?.data_basis" class="plan-basis"><summary>推荐依据与时间说明</summary><p>{{ preferenceRecommendation.data_basis }}</p><p>{{ preferenceRecommendation.planning_note }}</p><a v-for="url in preferenceRecommendation.source_urls" :key="url" :href="url" target="_blank" rel="noopener noreferrer">{{ url.includes('openstreetmap.org') ? '步行路网：OpenStreetMap contributors（ODbL）' : '景点资料：北京市公园管理中心' }}</a></details>
+            <details v-if="preferenceRecommendation?.data_basis" class="plan-basis"><summary>{{ $t("推荐依据与时间说明") }}</summary><p>{{ $t(preferenceRecommendation.data_basis) }}</p><p>{{ $t(preferenceRecommendation.end_label) }}。{{ $t(preferenceRecommendation.planning_note) }}</p><p>{{ $t(preferenceRecommendation.accessibility_status) }}</p><a v-for="url in preferenceRecommendation.source_urls" :key="url" :href="url" target="_blank" rel="noopener noreferrer">{{ $t(url.includes('openstreetmap.org') ? '步行路网：OpenStreetMap contributors（ODbL）' : '景点资料：北京市公园管理中心') }}</a></details>
           </section>
         </div>
       </section>
@@ -679,95 +736,104 @@ watch(activeMenuTab, (tab) => {
         <!-- 开始导览 -->
         <div class="start-panel">
           <div class="start-heading">
-          <h2>{{ activeMenuTab === 'route' ? '路线导览' : '个性化导览' }}</h2>
-          <div class="start-summary"><span>{{ spotCount }} 个景点</span><span v-if="spotCount">约 {{ selectedDuration }} 分钟</span></div>
-          <p v-if="!spotCount" class="start-hint">{{ activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程' }}</p>
+          <h2>{{ $t(activeMenuTab === 'route' ? '路线导览' : '个性化导览') }}</h2>
+          <div class="start-summary"><span>{{ $t(spotCount) }} {{ $t("个景点") }}</span><span v-if="spotCount">{{ $t("约") }} {{ $t(selectedDuration) }} {{ $t("分钟") }}</span></div>
+          <p v-if="!spotCount" class="start-hint">{{ $t(activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程') }}</p>
           </div>
-          <section class="start-guide-choice" aria-label="当前数字人">
-            <div v-if="selectedGuide" class="chosen-guide">
-              <img v-if="selectedGuide.poster_image || selectedGuide.avatar" :src="selectedGuide.poster_image || selectedGuide.avatar" :alt="selectedGuide.name" />
-              <strong>{{ selectedGuide.name }}</strong>
+          <section class="start-guide-choice" :class="{ 'has-guide': selectedGuide }" :aria-label='$t("当前数字人")'>
+            <div class="guide-choice-portrait" aria-hidden="true">
+              <span class="guide-choice-aura"></span>
+              <img v-if="guideChoicePoster && !guideChoicePosterFailed" :src="guideChoicePoster" alt="" @error="guideChoicePosterFailed = true" />
+              <el-icon v-else><User /></el-icon>
             </div>
-            <el-button plain @click="openGuidePicker">{{ selectedGuide ? '更换数字人' : '选择数字人' }}</el-button>
+            <div class="guide-choice-main">
+              <div class="guide-choice-heading">
+                <span class="guide-choice-label">{{ $t("数字人导游") }}</span>
+                <span class="guide-choice-state"><el-icon v-if="selectedGuide" aria-hidden="true"><Check /></el-icon>{{ $t(selectedGuide ? '已选择' : '待选择') }}</span>
+              </div>
+              <div v-if="selectedGuide" class="chosen-guide"><strong>{{ $t(selectedGuide.name) }}</strong></div>
+              <p v-else class="guide-choice-caption">{{ $t("形象与声音") }}</p>
+              <el-button plain class="guide-select-button" @click="openGuidePicker">{{ $t(selectedGuide ? '更换数字人' : '选择数字人') }}<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button>
+            </div>
           </section>
-          <el-input v-model="visitorName" placeholder="输入昵称（选填）" aria-label="导览昵称" maxlength="12" />
-          <el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">开始导览</el-button>
+          <el-input v-model="visitorName" :placeholder='$t("输入昵称（选填）")' :aria-label='$t("导览昵称")' maxlength="12" />
+          <el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">{{ $t("开始导览") }}</el-button>
         </div>
       </aside>
     </div>
 
-    <el-dialog v-model="guidePickerVisible" :title="(guidePickerMode === 'route' ? '浏览路线' : '个性化') + ' · 选择数字人'" width="min(760px, calc(100vw - 32px))" class="guide-picker-dialog" align-center>
+    <el-dialog v-model="guidePickerVisible" :title="$t(guidePickerMode === 'route' ? '浏览路线' : '个性化') + ' · ' + $t('选择数字人')" width="min(760px, calc(100vw - 32px))" class="guide-picker-dialog" align-center>
           <div class="content-card">
             <div v-for="cat in modelCategories" :key="cat.label" class="model-cat">
               <div class="model-grid">
                 <button v-for="m in cat.models" :key="m.guideId" type="button" class="model-card" :class="{ selected: drafts[guidePickerMode].guide?.guide_id === m.guideId }" @click="selectGuideModel(m)">
                   <span class="model-preview">
-                    <img v-if="m.poster" :src="m.poster" :alt="m.name" class="guide-selection-photo" /><span v-else>暂无形象照片</span>
+                    <img v-if="m.poster" :src="m.poster" :alt="$t(m.name)" class="guide-selection-photo" /><span v-else>{{ $t("暂无形象照片") }}</span>
                   </span>
-                  <span class="model-name">{{ m.name }}<small>{{ m.voiceLabel }}</small></span>
+                  <span class="model-name">{{ $t(m.name) }}<small>{{ $t(m.voiceLabel) }}</small></span>
                   <el-icon class="selected-icon" v-if="drafts[guidePickerMode].guide?.guide_id === m.guideId"><Check /></el-icon>
                 </button>
               </div>
             </div>
           </div>
-      <p v-if="!guideList.length" class="planning-empty">暂无可用数字人</p>
+      <p v-if="!guideList.length" class="planning-empty">{{ $t("暂无可用数字人") }}</p>
     </el-dialog>
 
     <el-drawer v-model="detailVisible" size="520px" :with-header="false" class="spot-detail-drawer">
       <div v-if="activeSpot" class="spot-detail">
         <header class="spot-detail-hero">
-          <button class="spot-detail-close" type="button" aria-label="关闭景点详情" @click="detailVisible = false">
+          <button class="spot-detail-close" type="button" :aria-label='$t("关闭景点详情")' @click="detailVisible = false">
             <el-icon><Close /></el-icon>
           </button>
-          <span class="spot-category">{{ getCategoryLabel(activeSpot.category || '其他') }}</span>
-          <h2>{{ activeSpot.spot_name }}</h2>
-          <p>{{ activeSpot.description || '暂无景点简介。' }}</p>
+          <span class="spot-category">{{ $t(getCategoryLabel(activeSpot.category || '其他')) }}</span>
+          <h2>{{ $t(activeSpot.spot_name) }}</h2>
+          <p>{{ $t(activeSpot.description || '暂无景点简介。') }}</p>
           <div v-if="getSpotTags(activeSpot).length" class="spot-tag-list">
-            <span v-for="tag in getSpotTags(activeSpot)" :key="tag">{{ tag }}</span>
+            <span v-for="tag in getSpotTags(activeSpot)" :key="tag">{{ $t(tag) }}</span>
           </div>
         </header>
 
         <section class="spot-detail-metrics">
-          <div><small>建议游览</small><strong>{{ activeSpot.visit_duration || 20 }} 分钟</strong></div>
-          <div><small>最佳季节</small><strong>{{ activeSpot.best_season || '四季皆宜' }}</strong></div>
-          <div><small>自动播报</small><strong>{{ Math.round(activeSpot.trigger_radius || 50) }} 米内</strong></div>
+          <div><small>{{ $t("建议游览") }}</small><strong>{{ $t(activeSpot.visit_duration || 20) }} {{ $t("分钟") }}</strong></div>
+          <div><small>{{ $t("最佳季节") }}</small><strong>{{ $t(activeSpot.best_season || '四季皆宜') }}</strong></div>
+          <div><small>{{ $t("自动播报") }}</small><strong>{{ $t(Math.round(activeSpot.trigger_radius || 50)) }} {{ $t("米内") }}</strong></div>
         </section>
 
         <section class="spot-location-card">
           <el-icon><Location /></el-icon>
           <div>
-            <small>景点位置</small>
-            <strong>{{ activeSpot.location || '颐和园景区内' }}</strong>
+            <small>{{ $t("景点位置") }}</small>
+            <strong>{{ $t(activeSpot.location || '颐和园景区内') }}</strong>
             <span v-if="activeSpot.latitude && activeSpot.longitude">
-              {{ formatCoordinate(activeSpot.latitude) }}, {{ formatCoordinate(activeSpot.longitude) }}
+              {{ $t(formatCoordinate(activeSpot.latitude)) }}, {{ $t(formatCoordinate(activeSpot.longitude)) }}
             </span>
           </div>
         </section>
 
         <section v-if="activeSpot.history_detail" class="spot-story-card">
-          <div class="spot-section-title"><el-icon><OfficeBuilding /></el-icon><strong>历史与文化</strong></div>
-          <p>{{ activeSpot.history_detail }}</p>
+          <div class="spot-section-title"><el-icon><OfficeBuilding /></el-icon><strong>{{ $t("历史与文化") }}</strong></div>
+          <p>{{ $t(activeSpot.history_detail) }}</p>
         </section>
 
         <div class="spot-guide-grid">
           <article v-if="activeSpot.photo_tips">
-            <div class="spot-section-title"><el-icon><Camera /></el-icon><strong>推荐取景</strong></div>
-            <p>{{ activeSpot.photo_tips }}</p>
+            <div class="spot-section-title"><el-icon><Camera /></el-icon><strong>{{ $t("推荐取景") }}</strong></div>
+            <p>{{ $t(activeSpot.photo_tips) }}</p>
           </article>
           <article v-if="activeSpot.tour_tips">
-            <div class="spot-section-title"><el-icon><Compass /></el-icon><strong>游览提示</strong></div>
-            <p>{{ activeSpot.tour_tips }}</p>
+            <div class="spot-section-title"><el-icon><Compass /></el-icon><strong>{{ $t("游览提示") }}</strong></div>
+            <p>{{ $t(activeSpot.tour_tips) }}</p>
           </article>
           <article v-if="activeSpot.service_facilities" class="wide">
-            <div class="spot-section-title"><el-icon><Guide /></el-icon><strong>周边服务</strong></div>
-            <p>{{ activeSpot.service_facilities }}</p>
+            <div class="spot-section-title"><el-icon><Guide /></el-icon><strong>{{ $t("周边服务") }}</strong></div>
+            <p>{{ $t(activeSpot.service_facilities) }}</p>
           </article>
         </div>
 
         <footer class="spot-detail-footer">
-          <div><strong>AI 数字导游已就绪</strong><span>加入路线后，可获得位置触发讲解与知识问答服务</span></div>
+          <div><strong>{{ $t("AI 数字导游已就绪") }}</strong><span>{{ $t("加入路线后，可获得位置触发讲解与知识问答服务") }}</span></div>
           <el-button type="primary" size="large" @click="toggleSpot(activeSpot.spot_id)">
-            {{ selectedSpotIds.has(activeSpot.spot_id) ? '移出路线' : '加入路线' }}
+            {{ $t(selectedSpotIds.has(activeSpot.spot_id) ? '移出路线' : '加入路线') }}
           </el-button>
         </footer>
       </div>
@@ -1804,6 +1870,10 @@ watch(activeMenuTab, (tab) => {
 .map-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .map-card-heading h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .map-card-heading span { font-size: 12px; color: var(--text-muted); }
+.map-heading-actions { display: flex; align-items: center; gap: 12px; }
+.map-overview-button { border: 0; border-radius: 12px; background: #eef0ff; color: #5042e8; padding: 8px 14px; font: inherit; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.map-overview-button:hover { background: #e1e4ff; }
+.map-overview-button:focus-visible { outline: 2px solid #5042e8; outline-offset: 2px; }
 .map-overview .map-container { flex: 1; min-height: 350px; height: auto; margin: 0; border-radius: 16px; }
 .map-overview .map-spots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .visitor-start { position: static; top: auto; z-index: auto; display: block; width: 100%; padding: 0; }
@@ -1828,6 +1898,7 @@ watch(activeMenuTab, (tab) => {
   .map-overview .map-card { padding: 18px; }
   .map-card-heading { align-items: flex-start; gap: 8px; }
   .map-card-heading span { max-width: 110px; text-align: right; line-height: 1.5; }
+  .map-heading-actions span { display: none; }
   .map-overview .map-container { height: 280px; }
   .start-panel { grid-template-columns: minmax(0,1fr); gap: 16px; padding: 20px; }
   .start-guide-choice .el-button { flex: 1; }
@@ -1865,9 +1936,239 @@ watch(activeMenuTab, (tab) => {
   .plan-metrics { gap: 10px 16px; }
 }
 /* Keep the full wordmark and navigation actions visible on narrow phones. */
-@media (max-width: 380px) {
+@media (max-width: 600px) {
   .visitor-topbar { height: auto; min-height: 64px; flex-wrap: wrap; row-gap: 8px; padding: 10px 12px; }
   .visitor-brand { flex: 0 0 100%; }
-  .visitor-top-actions { margin-left: auto; }
+  .visitor-top-actions { width: 100%; min-width: 0; gap: 6px; justify-content: space-between; }
+  .visitor-top-actions .el-button { padding-inline: 10px; margin-left: 0; min-width: 0; }
+  .visitor-intro .visitor-menu { width: 100%; min-width: 0; align-self: stretch; gap: 3px; }
+  .visitor-intro .menu-item { flex: 1; min-width: 0; padding-inline: 8px; gap: 4px; white-space: normal; }
+  .map-spot-tag { max-width: 100%; white-space: normal; text-align: left; }
+  .routes-grid { grid-template-columns: minmax(0, 1fr); }
+  .route-card { min-width: 0; }
+  .route-spots span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  .pref-name { white-space: normal; }
+}
+
+/* Quiet scenic identity: colour lives in the canvas and a few supporting surfaces. */
+.visitor-home {
+  position: relative;
+  isolation: isolate;
+}
+.visitor-home > .visitor-topbar-shell,
+.visitor-intro,
+.visitor-main {
+  position: relative;
+}
+.visitor-home .visitor-intro {
+  overflow: hidden;
+  min-height: 106px;
+  background-color: #f3f1fb !important;
+  background-image: linear-gradient(110deg, #f2eefb, #f4f5fb 53%, #edf5f4) !important;
+  box-shadow: 0 8px 30px -16px rgba(73, 69, 112, .2) !important;
+}
+.visitor-intro > div,
+.visitor-intro .visitor-menu {
+  position: relative;
+  z-index: 1;
+}
+.planner-landscape {
+  position: absolute;
+  right: 22%;
+  bottom: -1px;
+  width: 420px;
+  height: 118px;
+  pointer-events: none;
+}
+.planner-ripple {
+  animation: planner-ripple-drift 9s ease-in-out infinite alternate;
+}
+.visitor-home .visitor-intro .visitor-menu {
+  background-color: rgba(255, 255, 255, .74) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 18px -10px rgba(84, 74, 137, .18) !important;
+}
+.visitor-main { min-height: 0; justify-content: flex-start; }
+.tab-content { gap: 18px; }
+.map-overview { margin-bottom: 0; }
+.visitor-home .content-card {
+  box-shadow: 0 8px 26px -14px rgba(53, 66, 98, .19) !important;
+}
+.visitor-home .map-overview :deep(.visit-context) {
+  background-color: #edf4f5 !important;
+  background-image: linear-gradient(145deg, #f1f2fb, #edf6f3) !important;
+}
+.map-overview :deep(.weather-symbol) {
+  background: rgba(255, 255, 255, .78);
+  color: #7088ad;
+  box-shadow: 0 5px 18px -10px rgba(88, 119, 130, .25);
+}
+.map-overview :deep(.context-tip) { background: rgba(255, 255, 255, .7); }
+.map-overview :deep(.context-overview),
+.map-overview :deep(.weather-details) { border-color: rgba(94, 123, 142, .12); }
+.visitor-home .recommended-routes { padding: 22px 24px 24px; }
+.routes-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.visitor-home .route-card {
+  --route-tint: #f1eef9;
+  --route-ink: #67558e;
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  overflow: hidden;
+  background-color: var(--route-tint) !important;
+  background-image: linear-gradient(145deg, rgba(255,255,255,.5), transparent 80%) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(129, 130, 170, .08) !important;
+  border-radius: 18px !important;
+  transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.visitor-home .route-card:nth-child(3n + 2) { --route-tint: #edf3fa; --route-ink: #4c6f94; }
+.visitor-home .route-card:nth-child(3n) { --route-tint: #edf5f0; --route-ink: #466e5e; }
+.visitor-home .route-card:hover {
+  transform: translateY(-3px);
+  background-color: var(--route-tint) !important;
+  border-color: rgba(117, 108, 178, .2) !important;
+  box-shadow: 0 10px 24px -16px rgba(64, 77, 116, .35) !important;
+}
+.visitor-home .route-card.selected {
+  background-color: var(--route-tint) !important;
+  border-color: #9b91d6 !important;
+  box-shadow: inset 0 0 0 1px #9b91d6 !important;
+}
+.route-theme-tag { color: var(--route-ink); background: rgba(255,255,255,.72); font-size: 13px; padding: 4px 10px; }
+.route-time { font-size: 13px; }
+.route-name { margin-top: 14px; font-size: 18px; line-height: 1.5; }
+.route-desc, .route-spots { font-size: 14px; line-height: 1.7; }
+.route-spots span { white-space: normal; }
+.route-card-bottom { margin-top: 16px; border-color: rgba(102, 123, 142, .12); }
+.visitor-home .spot-card-section {
+  background-image: linear-gradient(180deg, #f8f8fd 0, #fff 155px) !important;
+}
+.spot-options-grid { column-gap: 24px; }
+.spot-option { border-bottom-color: rgba(123, 139, 161, .1); }
+.spot-choice-title em { color: #778397; }
+.visitor-home .start-panel {
+  background: linear-gradient(110deg, #f1effa, #f0f6f5);
+  border: 1px solid rgba(123, 136, 161, .08);
+  box-shadow: 0 8px 26px -14px rgba(53, 66, 98, .19);
+}
+@keyframes planner-ripple-drift {
+  from { transform: translateX(-8px); }
+  to { transform: translateX(8px); }
+}
+@media (max-width: 1100px) {
+  .planner-landscape { right: 25%; width: 300px; opacity: .7; }
+  .routes-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .planner-landscape { right: 2%; width: 245px; opacity: .5; }
+  .visitor-home .visitor-intro { min-height: 100px; }
+  .visitor-home .recommended-routes { padding: 20px; }
+  .routes-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .visitor-home .route-card { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner-ripple { animation: none; }
+  .visitor-home .route-card { transition: none; }
+  .visitor-home .route-card:hover { transform: none; }
+}
+
+/* The guide choice is the focal action in the otherwise quiet launch bar. */
+.visitor-home .start-panel {
+  grid-template-columns: minmax(150px, .8fr) minmax(280px, 1.35fr) minmax(160px, 1fr) 180px;
+}
+.visitor-home .start-guide-choice {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cfc6ee;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #eee9fa, #f7f6fc);
+  box-shadow: 0 6px 20px -12px rgba(95, 76, 156, .32);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+.visitor-home .start-guide-choice:hover,
+.visitor-home .start-guide-choice:focus-within {
+  border-color: #a898db;
+  box-shadow: 0 7px 24px -12px rgba(95, 76, 156, .4);
+}
+.guide-choice-portrait {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  flex: 0 0 70px;
+  place-items: center;
+  height: 90px;
+  border: 1px solid rgba(155, 137, 207, .16);
+  border-radius: 16px;
+  background: #faf9fe;
+}
+.guide-choice-portrait img {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.guide-choice-portrait > .el-icon { color: #8a79b5; font-size: 30px; }
+.guide-choice-aura {
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border: 1px solid #b5a2dc;
+  border-radius: 21px;
+  opacity: .3;
+  animation: guide-choice-breathe 4.5s ease-in-out infinite;
+}
+.guide-choice-main { flex: 1; min-width: 0; }
+.guide-choice-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
+.guide-choice-label { color: #5b4c82; font-size: 14px; line-height: 1.5; }
+.guide-choice-state { display: inline-flex; align-items: center; gap: 3px; color: #726588; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.has-guide .guide-choice-state { color: #3d7761; }
+.guide-choice-caption { margin: 7px 0 10px; color: #6d6185; font-size: 14px; line-height: 1.5; }
+.start-guide-choice .chosen-guide { margin: 7px 0 10px; min-height: 21px; color: #3e325d; }
+.start-guide-choice .chosen-guide strong { font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
+.visitor-home .start-guide-choice .guide-select-button.el-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 38px;
+  height: auto;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #6652bd !important;
+  color: #fff !important;
+  box-shadow: 0 5px 14px -7px rgba(83, 63, 156, .5) !important;
+  font-size: 15px;
+  font-weight: 400;
+  white-space: normal;
+  line-height: 1.35;
+}
+.guide-select-button :deep(> span) { min-width: 0; max-width: 100%; white-space: normal; line-height: 1.35; }
+.visitor-home .start-guide-choice .guide-select-button.el-button:hover { background: #5843ad !important; }
+.guide-select-button .el-icon { margin-left: 8px; transition: transform .25s ease; }
+.guide-select-button:hover .el-icon { transform: translateX(3px); }
+.has-guide .guide-choice-aura { animation: none; opacity: .18; }
+@keyframes guide-choice-breathe {
+  0%, 100% { opacity: .18; transform: scale(.98); }
+  50% { opacity: .52; transform: scale(1.04); }
+}
+@media (max-width: 1100px) {
+  .visitor-home .start-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .visitor-home .start-panel { grid-template-columns: minmax(0, 1fr); }
+  .visitor-home .start-guide-choice { gap: 14px; padding: 14px; }
+  .guide-select-button .el-icon { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-choice-aura { animation: none; }
+  .visitor-home .start-guide-choice, .guide-select-button .el-icon { transition: none; }
 }
 </style>

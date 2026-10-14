@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatDate } from '@/i18n'
+
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Cloudy, Drizzling, Refresh, Sunny } from '@element-plus/icons-vue'
 
@@ -23,14 +24,14 @@ const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isF
 const display = (value: number | null) => value === null ? '—' : Math.round(value)
 const condition = computed(() => {
   const code = weather.value?.code
-  if (code === null || code === undefined) return '天气预报'
-  if (code === 0) return '晴'
-  if (code <= 2) return '晴间多云'
-  if (code === 3) return '阴'
-  if (code <= 48) return '雾'
-  if (code <= 67 || (code >= 80 && code <= 82)) return '有雨'
-  if (code <= 77 || (code >= 85 && code <= 86)) return '有雪'
-  return '雷雨'
+  if (code === null || code === undefined) return t("天气预报")
+  if (code === 0) return t("晴")
+  if (code <= 2) return t("晴间多云")
+  if (code === 3) return t("阴")
+  if (code <= 48) return t("雾")
+  if (code <= 67 || (code >= 80 && code <= 82)) return t("有雨")
+  if (code <= 77 || (code >= 85 && code <= 86)) return t("有雪")
+  return t("雷雨")
 })
 const conditionIcon = computed(() => {
   const code = weather.value?.code
@@ -38,17 +39,17 @@ const conditionIcon = computed(() => {
 })
 const dateLabel = computed(() => {
   const date = weather.value?.time.slice(0, 10)
-  return date ? `${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日` : ''
+  return date ? formatDate(date + 'T12:00:00', { month: 'short', day: 'numeric' }) : ''
 })
 const visitTip = computed(() => {
-  if (!weather.value) return '建议穿舒适的步行鞋，湖岸与台阶处注意脚下。'
+  if (!weather.value) return t("建议穿舒适的步行鞋，湖岸与台阶处注意脚下。")
   const { temperature, rain, wind, code } = weather.value
-  if (code !== null && code >= 95) return '有雷雨，留意景区现场提示，避免在空旷湖岸停留。'
-  if ((rain !== null && rain >= 50) || (code !== null && code >= 51)) return '带好雨具，湖岸与石阶湿滑，适当缩短露天停留。'
-  if (wind !== null && wind >= 30) return '湖边风较大，注意保暖，留意现场游船服务公告。'
-  if (temperature >= 28) return '做好防晒并及时补水，长廊沿线适合间歇休息。'
-  if (temperature <= 12) return '湖边体感偏凉，建议携带外套，安排适当休息。'
-  return '建议穿舒适的步行鞋，湖岸与台阶处注意脚下。'
+  if (code !== null && code >= 95) return t("有雷雨，留意景区现场提示，避免在空旷湖岸停留。")
+  if ((rain !== null && rain >= 50) || (code !== null && code >= 51)) return t("带好雨具，湖岸与石阶湿滑，适当缩短露天停留。")
+  if (wind !== null && wind >= 30) return t("湖边风较大，注意保暖，留意现场游船服务公告。")
+  if (temperature >= 28) return t("做好防晒并及时补水，长廊沿线适合间歇休息。")
+  if (temperature <= 12) return t("湖边体感偏凉，建议携带外套，安排适当休息。")
+  return t("建议穿舒适的步行鞋，湖岸与台阶处注意脚下。")
 })
 
 async function refreshWeather() {
@@ -97,39 +98,39 @@ onBeforeUnmount(() => { requestId++; controller?.abort() })
 </script>
 
 <template>
-  <aside class="visit-context content-card" aria-label="景区天气与游览信息">
+  <aside class="visit-context content-card" :aria-label='$t("景区天气与游览信息")'>
     <section class="weather-section" aria-live="polite" :aria-busy="loading">
       <header class="context-heading">
-        <h3>今日天气</h3>
-        <div><span>{{ dateLabel }}</span><button type="button" aria-label="刷新天气" :disabled="loading" @click="refreshWeather"><el-icon :class="{ 'is-loading': loading }"><Refresh /></el-icon></button></div>
+        <h3>{{ $t("今日天气") }}</h3>
+        <div><span>{{ $t(dateLabel) }}</span><button type="button" :aria-label='$t("刷新天气")' :disabled="loading" @click="refreshWeather"><el-icon :class="{ 'is-loading': loading }"><Refresh /></el-icon></button></div>
       </header>
       <template v-if="weather">
         <div class="weather-current">
-          <div><strong>{{ Math.round(weather.temperature) }}<small>°C</small></strong><p>{{ condition }}<span>{{ display(weather.low) }}° / {{ display(weather.high) }}°</span></p></div>
+          <div><strong>{{ $t(Math.round(weather.temperature)) }}<small>°C</small></strong><p>{{ $t(condition) }}<span>{{ $t(display(weather.low)) }}° / {{ $t(display(weather.high)) }}°</span></p></div>
           <span class="weather-symbol"><el-icon><component :is="conditionIcon" /></el-icon></span>
         </div>
         <dl class="weather-details">
-          <div><dt>降水概率</dt><dd>{{ display(weather.rain) }}<small>%</small></dd></div>
-          <div><dt>风速</dt><dd>{{ display(weather.wind) }}<small>km/h</small></dd></div>
-          <div><dt>湿度</dt><dd>{{ display(weather.humidity) }}<small>%</small></dd></div>
+          <div><dt>{{ $t("降水概率") }}</dt><dd>{{ $t(display(weather.rain)) }}<small>%</small></dd></div>
+          <div><dt>{{ $t("风速") }}</dt><dd>{{ $t(display(weather.wind)) }}<small>km/h</small></dd></div>
+          <div><dt>{{ $t("湿度") }}</dt><dd>{{ $t(display(weather.humidity)) }}<small>%</small></dd></div>
         </dl>
-        <p class="weather-source"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a><span>{{ weather.time.slice(11, 16) }} 预报</span></p>
+        <p class="weather-source"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a><span>{{ $t(weather.time.slice(11, 16)) }} {{ $t("预报") }}</span></p>
       </template>
       <div v-else class="weather-empty">
         <el-icon><Cloudy /></el-icon>
-        <p>{{ loading ? '正在获取景区天气' : '天气暂时不可用' }}</p>
-        <button v-if="unavailable" type="button" @click="refreshWeather">重新获取</button>
+        <p>{{ $t(loading ? '正在获取景区天气' : '天气暂时不可用') }}</p>
+        <button v-if="unavailable" type="button" @click="refreshWeather">{{ $t("重新获取") }}</button>
       </div>
     </section>
     <section class="context-overview">
-      <h3>景区概况</h3>
+      <h3>{{ $t("景区概况") }}</h3>
       <dl class="context-counts">
-        <div><dd>{{ spotCount }}</dd><dt>景点</dt></div>
-        <div><dd>{{ routeCount }}</dd><dt>路线</dt></div>
-        <div><dd>{{ guideCount }}</dd><dt>数字人</dt></div>
+        <div><dd>{{ $t(spotCount) }}</dd><dt>{{ $t("景点") }}</dt></div>
+        <div><dd>{{ $t(routeCount) }}</dd><dt>{{ $t("路线") }}</dt></div>
+        <div><dd>{{ $t(guideCount) }}</dd><dt>{{ $t("数字人") }}</dt></div>
       </dl>
     </section>
-    <section class="context-tip"><h3>游览提示</h3><p>{{ visitTip }}</p></section>
+    <section class="context-tip"><h3>{{ $t("游览提示") }}</h3><p>{{ $t(visitTip) }}</p></section>
   </aside>
 </template>
 

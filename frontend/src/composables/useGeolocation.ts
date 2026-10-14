@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * GPS位置追踪 composable
  * 用于景区导览的LBS（Location-Based Service）功能：
@@ -63,7 +64,7 @@ export function useGeolocation() {
   const startTracking = (sid: number = 0, pollInterval: number = 10000) => {
     if (!isSupported()) {
       error.value = '您的设备不支持GPS定位'
-      ElMessage.warning('设备不支持GPS，将使用手动模式')
+      ElMessage.warning(t("设备不支持GPS，将使用手动模式"))
       return
     }
 
@@ -156,10 +157,10 @@ export function useGeolocation() {
 
         // 自动切换通知
         if (data.data.auto_switched) {
-          ElMessage.success(`已自动切换到景点「${data.data.closest_spot?.spot_name}」`)
+          ElMessage.success(t("已自动切换到景点「{p0}」", {p0: data.data.closest_spot?.spot_name}))
         } else if (closestSpot.value && closestSpot.value.within_range &&
                    prevClosest?.spot_id !== closestSpot.value.spot_id) {
-          ElMessage.info(`已进入「${closestSpot.value.spot_name}」范围（${closestSpot.value.distance}米）`)
+          ElMessage.info(t("已进入「{p0}」范围（{p1}米）", {p0: closestSpot.value.spot_name, p1: closestSpot.value.distance}))
         }
       }
     } catch (e) {

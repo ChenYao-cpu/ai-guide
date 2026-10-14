@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, locale } from '@/i18n'
+
 import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
@@ -13,9 +14,10 @@ const props = defineProps<{
 
 function initChart() {
   if (!chartRef.value || !props.data.length) return
-  chartInstance = echarts.init(chartRef.value, 'soft-ui')
+  chartInstance?.dispose()
+  chartInstance = echarts.init(chartRef.value, 'soft-ui', { locale: locale.value === 'en' ? 'EN' : 'ZH' })
 
-  const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  const days = [t("周一"), t("周二"), t("周三"), t("周四"), t("周五"), t("周六"), t("周日")]
   const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
   // 构建热力图矩阵
@@ -23,7 +25,7 @@ function initChart() {
   for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
     const row: number[] = []
     for (let hour = 0; hour < 24; hour++) {
-      const item = props.data.find(d => d.day === days[dayIdx] && d.hour === `${String(hour).padStart(2, '0')}:00`)
+      const item = props.data.find(d => (d.day === ['周一','周二','周三','周四','周五','周六','周日'][dayIdx] || d.day === days[dayIdx]) && d.hour === `${String(hour).padStart(2, '0')}:00`)
       row.push(item?.count || 0)
     }
     matrix.push(row)
@@ -34,14 +36,14 @@ function initChart() {
 
   const option: echarts.EChartsOption = {
     title: props.title ? {
-      text: props.title,
+      text: t(props.title),
       left: 'center',
       textStyle: { fontSize: 16, fontWeight: 600 },
     } : undefined,
     tooltip: {
       position: 'top',
       formatter: (params: any) => {
-        return `${params.value[1]} ${params.value[0]}<br/>活跃度: ${params.value[2]}次`
+        return `${params.value[1]} ${params.value[0]}<br/>${t('活跃度: {p0}次', {p0: params.value[2]})}`
       },
     },
     grid: {
@@ -106,6 +108,7 @@ watch(() => props.data, () => {
 }, { deep: true })
 
 onMounted(() => { initChart() })
+watch(locale, () => initChart())
 </script>
 
 <template>

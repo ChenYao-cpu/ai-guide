@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref, watchEffect } from 'vue'
 import { ElMessage, type UploadProps, type UploadProgressEvent } from 'element-plus'
 import { Plus, Document } from '@element-plus/icons-vue'
@@ -41,24 +42,24 @@ const beforeFileUploadUpload: UploadProps['beforeUpload'] = (rawFile) => {
   console.log(rawFile)
 
   if (props.fileType === 'image' && rawFile.type !== 'image/png' && rawFile.type !== 'image/jpeg') {
-    ElMessage.error('商品图片必须是 PNG / JPG 格式!')
+    ElMessage.error(t("商品图片必须是 PNG / JPG 格式!"))
     return false
   } else if (props.fileType === 'doc' && !rawFile.name.endsWith('.md')) {
-    ElMessage.error('商品说明书必须是 markdown 格式!')
+    ElMessage.error(t("商品说明书必须是 markdown 格式!"))
     return false
   } else if (props.fileType === 'video' && rawFile.type !== 'video/mp4') {
-    ElMessage.error('主播视频必须是 mp4 格式!')
+    ElMessage.error(t("主播视频必须是 mp4 格式!"))
     return false
   } else if (props.fileType === 'audio' && rawFile.type !== 'audio/wav') {
-    ElMessage.error('主播音频必须是 wav 格式!')
+    ElMessage.error(t("主播音频必须是 wav 格式!"))
     return false
   }
 
   if (props.fileType === 'video' && rawFile.size / 1024 / 1024 > 20) {
-    ElMessage.error('主播视频文件大小不能超过 20MB!')
+    ElMessage.error(t("主播视频文件大小不能超过 20MB!"))
     return false
   } else if (props.fileType !== 'video' && rawFile.size / 1024 / 1024 > 10) {
-    ElMessage.error('文件大小不能超过 10MB!')
+    ElMessage.error(t("文件大小不能超过 10MB!"))
     return false
   }
 
@@ -68,7 +69,7 @@ const beforeFileUploadUpload: UploadProps['beforeUpload'] = (rawFile) => {
 
 // 文件上传成功后的 callback
 const handleFileUploadFail: UploadProps['onError'] = (error: Error) => {
-  ElMessage.error('上传文件失败')
+  ElMessage.error(t("上传文件失败"))
   console.error(error)
   isShowProgress.value = false
 }
@@ -121,7 +122,7 @@ const handleUploadProgress = (evt: UploadProgressEvent) => {
 
       <!-- 视频上传 -->
       <el-button v-else-if="props.fileType === 'video' || props.fileType === 'audio'" type="danger">
-        {{ fileUrl === '' ? '上传' : '更换' }}{{ props.fileType === 'video' ? '视频' : '音频' }}
+        {{ $t(fileUrl === '' ? '上传' : '更换') }} {{ $t(props.fileType === 'video' ? '视频' : '音频') }}
       </el-button>
 
       <!-- 拖动上传框 -->

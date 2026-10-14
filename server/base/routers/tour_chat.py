@@ -12,11 +12,12 @@ import json
 import os
 import re
 import uuid
+import time
 from types import SimpleNamespace
 from pathlib import Path
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, Header, HTTPException, Request
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -30,16 +31,20 @@ from ..database.tour_session_db import (
     save_visitor_message,
     start_tour_session,
     update_session_video_path,
+    get_dialogue_context,
+    save_dialogue_context,
 )
 from ..models.tour_models import TourChatItem
 from ..modules.rag import rag_worker
 from ..modules.json_utils import extract_json_object
 from ..modules.issue_analysis import normalize_issue_analysis
-from ..modules.guide_identity import resolve_model_path, resolve_voice_style
+from ..modules.guide_identity import resolve_model_path, resolve_guide_voice
 from ..modules.xingyun_access import selectable, issue_tour_avatar_token
 from ..modules.session_report import normalize_session_report
 from ..modules.sentiment_analyzer import analyze_sentiment
 from ..modules.text_utils import strip_repeated_name_prefixes
+from ..modules.tour_dialogue import (resolve_turn, local_answer, generation_policy, REPLY_POLICY,
+                                    spoken_answer, updated_memory, reference_spot_names, scoped_history)
 from ..routers.llm import combine_history, gen_guide_base_prompt, get_llm_res
 from ..server_info import SERVER_PLUGINS_INFO
 from ..utils import ResultCode, make_return_data
@@ -55,7 +60,8 @@ router = APIRouter(
 def _llm_is_configured() -> bool:
     """真实模型密钥存在时才调用远程模型，避免演示环境长时间超时。"""
     api_key = os.getenv("LLM_API_KEY", "").strip()
-    return bool(api_key) and api_key not in {"local-demo-disabled", "replace-with-your-provider-key"}
+    return bool(api_key) and api_key.isascii() and not any(c.isspace() for c in api_key) and api_key not in {
+        "local-demo-disabled", "replace-with-your-provider-key"}
 
 
 def _load_spot_context(spot_id: int | None = None, spot_name: str = "") -> dict | None:
@@ -74,63 +80,6 @@ def _load_spot_context(spot_id: int | None = None, spot_name: str = "") -> dict 
             statement = statement.where(ScenicSpotInfo.spot_name == spot_name)
         spot = session.exec(statement).first()
         return spot.model_dump() if spot else None
-
-
-def _build_local_knowledge_answer(
-    spot: dict | None,
-    question: str,
-    next_spot: dict | None = None,
-) -> str:
-    """模型不可用时，基于景点档案给出可溯源的本地知识回答。"""
-    if not spot:
-        return (
-            "欢迎来到颐和园。你可以询问仁寿殿、长廊、佛香阁、昆明湖、"
-            "十七孔桥或苏州街的历史、位置、游览时长和拍摄建议。"
-        )
-
-    name = spot.get("spot_name", "当前景点")
-    description = spot.get("description", "")
-    history = spot.get("history_detail", "")
-    location = spot.get("location", "")
-    season = spot.get("best_season", "")
-    duration = spot.get("visit_duration", 20)
-    photo_tips = spot.get("photo_tips", "")
-    service_facilities = spot.get("service_facilities", "")
-    tour_tips = spot.get("tour_tips", "")
-    text = question.strip()
-
-    from ..modules.tour_intent import PHOTO_WORDS, HISTORY_WORDS, NATURE_WORDS
-    # 推荐问题采用高优先级意图，避免“附近”“哪里”等词把问题误判为位置查询。
-    if any(word in text for word in ("服务设施", "卫生间", "厕所", "洗手间", "休息", "餐饮", "商店", "游客中心", "寄存")):
-        detail = service_facilities or f"{name}周边服务信息请以园内导览牌和游客服务点公告为准。"
-    elif any(word in text for word in ("下一站", "接下来", "然后去哪", "之后去哪")):
-        if next_spot:
-            detail = (
-                f"下一站推荐前往{next_spot.get('spot_name', '路线中的下一处景点')}，"
-                f"位于{next_spot.get('location', '当前游览路线前方')}，"
-                f"建议停留约 {next_spot.get('visit_duration', 20)} 分钟。"
-                f"{next_spot.get('description', '')}"
-            )
-        else:
-            detail = "当前已是本路线最后一个景点，可以结束导览或返回路线页选择新的主题路线。"
-    elif any(word in text for word in PHOTO_WORDS):
-        detail = photo_tips or f"建议从{name}视野开阔的一侧取景，并避让正常游览人流。"
-    elif any(word in text for word in ("特色", "亮点", "看什么", "介绍")):
-        detail = "".join(part for part in (description, tour_tips) if part)
-    elif any(word in text for word in HISTORY_WORDS):
-        detail = history or description
-    elif any(word in text for word in NATURE_WORDS):
-        detail = description or tour_tips or f"{name}暂无自然景观资料。"
-    elif any(word in text for word in ("位置", "在哪", "怎么走", "路线")):
-        detail = f"{name}位于{location}。建议结合当前路线顺序和园内指示前往。"
-    elif any(word in text for word in ("多久", "时间", "逛", "游览")):
-        detail = f"{name}建议停留约 {duration} 分钟，可根据拍照和休息需求灵活调整。"
-    elif any(word in text for word in ("季节", "什么时候")):
-        detail = f"{name}的推荐游览季节是{season or '四季皆宜'}。"
-    else:
-        detail = description or history
-
-    return f"{detail} 以上内容来自景区知识档案。"
 
 
 @router.get("/list", summary="获取导览会话列表（管理员查看全部）")
@@ -241,6 +190,7 @@ async def visitor_create_session(
     name: str = "",
     guide_id: int = 0,
     visitor_preferences: str = "",
+    planning: str = "",
     spot_ids: str = "",  # JSON: "[1,3,5]"
     route_id: int = 0,
     authorization: str | None = Header(default=None),
@@ -256,6 +206,13 @@ async def visitor_create_session(
             raise ValueError()
     except (ValueError, TypeError):
         return make_return_data(False, ResultCode.FAIL, "景点选择格式不正确", "")
+    selected_ids = list(dict.fromkeys(selected_ids))
+    if len(selected_ids) > 20: raise HTTPException(422, '路线最多支持20站，请先精简行程')
+    plan_data = None
+    if planning:
+        from ..models.tour_models import RouteRecommendRequest
+        try: plan_data = RouteRecommendRequest(**json.loads(planning)).model_dump()
+        except (ValueError, TypeError): raise HTTPException(422, '行程条件格式不正确')
     with Session(DB_ENGINE) as db:
         guide=db.get(DigitalGuideInfo, guide_id)
         if not selectable(db, guide):
@@ -263,7 +220,7 @@ async def visitor_create_session(
         if not selected_ids and route_id:
             route=db.get(TourRoute,route_id)
             if route:
-                selected_ids=[s.spot_id for s in route.route_spots]
+                selected_ids=[s.spot_id for s in sorted(route.route_spots, key=lambda s: s.spot_order)]
         if not selected_ids:
             return make_return_data(False, ResultCode.FAIL, "请选择地点或路线", "")
         if any(not db.get(ScenicSpotInfo, i) or db.get(ScenicSpotInfo, i).delete for i in selected_ids):
@@ -286,6 +243,7 @@ async def visitor_create_session(
         "city": selected_city,
         "owner_user_id": owner_id,
     }
+    if plan_data: prefs_data["planning"] = plan_data
     session = await create_tour_session(
         name=name or f"游客导览_{uuid.uuid4().hex[:8]}",
         route_id=route_id or None,  # 未选择路线时不绑定，景点已存在 visitor_preferences 中
@@ -293,6 +251,7 @@ async def visitor_create_session(
         user_id=owner_id,  # 登录导览归属本人，匿名导览不挂到其他账号
         visitor_preferences=json.dumps(prefs_data, ensure_ascii=False),
     )
+    await start_tour_session(session.session_id)
     return make_return_data(True, ResultCode.SUCCESS, "创建成功", {"session_id": session.session_id, "avatar_access_token": issue_tour_avatar_token(session)})
 
 
@@ -374,7 +333,8 @@ async def set_random_durations():
 
 @router.post("/ai-chat-recommend", summary="自然语言个性化路线推荐")
 async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minutes: int = 120,
-                            pace: str = "standard", start_area: str = "auto"):
+                            pace: str = "standard", start_area: str = "auto", end_area: str = "auto",
+                            queue_reserve_minutes: int = 0, excluded_spot_ids: str = ""):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -394,7 +354,9 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
     requested_city = normalize_city(city) or next((c for c in sorted(known_cities) if c in message), "")
     # The same engine owns both recommendation entrances. Models cannot replace
     # its final IDs/order with a plan that ignores walking time or stairs.
-    result = await recommend_route(preferences, spots, budget, requested_city, pace, start_area)
+    excluded=[int(s) for s in excluded_spot_ids.split(',') if s.strip().isdigit()][:100]
+    result = await recommend_route(preferences, spots, budget, requested_city, pace, start_area,
+                                   end_area, queue_reserve_minutes, excluded)
     if not result["spot_ids"]:
         return make_return_data(False, ResultCode.FAIL, "当前时长下暂无匹配路线，请增加时长或调整偏好、出发区域", "")
     reasons = "；".join(f"{d['spot_name']}：{d['reason']}" for d in result["score_details"][:3])
@@ -512,7 +474,7 @@ async def get_visitor_guides():
             "avatar": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.avatar.lstrip('/')) if g.avatar and not g.avatar.startswith(('http://','https://')) else (g.avatar or ""),
             "poster_image": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.poster_image.lstrip('/')) if g.poster_image and not g.poster_image.startswith(('http://','https://')) else (g.poster_image or ""),
             "base_mp4_path": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.base_mp4_path.lstrip('/')) if g.base_mp4_path and not g.base_mp4_path.startswith(('http://','https://')) else (g.base_mp4_path or ""),
-            "voice_style": resolve_voice_style(g.voice_style, model_path),
+            "voice_style": resolve_guide_voice(g.voice_style, model_path, g.render_mode),
             "voice_speed": g.voice_speed,
             "live2d_model_path": model_path,
             "render_mode": g.render_mode,
@@ -549,19 +511,29 @@ async def get_tour_live_info(sessionId: int):
 
 
 @router.put("/chat", summary="游客对话接口")
-async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
+async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks, request: Request = None):
+    from ..modules.tour_requests import run_turn
+    return await run_turn(chat_item.sessionId, request, lambda: _tour_chat(chat_item, background_tasks))
+
+
+async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     """核心对话接口：游客提问 → RAG检索 → LLM生成 → TTS合成 → 数字人视频
 
     请求体: { sessionId: int, message: str }
     """
+    started_at = time.perf_counter()
     session_id = chat_item.sessionId
     user_message = chat_item.message.strip()
+    if not user_message or len(user_message)>2000:
+        return make_return_data(False,ResultCode.FAIL,"请输入2000字以内的问题","")
     user_id = 1  # 游客端免登录，统一用默认用户
 
     # 1. 获取会话信息
     live_info = await get_session_live_info(session_id)
     if not live_info:
         return make_return_data(False, ResultCode.FAIL, "会话不存在", "")
+    if live_info.get("route_error"):
+        return make_return_data(False, ResultCode.FAIL, live_info["route_error"], "")
 
     guide_info_data = live_info.get("guide_info")
     if not guide_info_data or not guide_info_data.get("is_enabled"):
@@ -586,16 +558,65 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     if "nextSpotId" in chat_item.model_fields_set:
         next_spot_info_data = requested_next_spot
 
+    active_spot_id = (spot_info_data or {}).get("spot_id")
+    from ..modules.tour_language import retrieval_question, translate_answer, ENGLISH_POLICY, ENGLISH_PLACE_NAMES, ENGLISH_UNAVAILABLE
+    retrieval_message = await retrieval_question(user_message, get_llm_res if _llm_is_configured() else None) if chat_item.language == "en" else user_message
+    dialogue_memory = get_dialogue_context(session_id)
+    # Explicit scenic names resolve questions about another POI without moving
+    # the visitor's actual itinerary. Namesakes are checked by dossier_for().
+    from ..modules.conversation_focus import focus_names, remember_subjects
+    from ..modules.tour_knowledge import load_book
+    retrieval_message, named_spots, ambiguous_comparison = focus_names(
+        retrieval_message, spot_info_data, dialogue_memory, load_book()['spots'])
+    if len(named_spots) == 1:
+        named_context = _load_spot_context(spot_name=named_spots[0])
+        if named_context: spot_info_data = named_context
+    if dialogue_memory.get('persona', 'modern') != chat_item.persona:
+        dialogue_memory = {'recent_subjects':dialogue_memory.get('recent_subjects',[]),
+                           'needs':dialogue_memory.get('needs',[])}
+
     guide_name = guide_info_data.get("name", "景区导游") if guide_info_data else "景区导游"
     guide_character = guide_info_data.get("character", "博学、亲切、热情") if guide_info_data else "博学、亲切、热情"
     spot_name = spot_info_data.get("spot_name", "") if spot_info_data else ""
-    direct_answer = ""
-    if spot_info_data and re.search(r'位置|在哪|哪里|哪儿|什么地方|怎么走|如何到|怎么到', user_message):
-        location = spot_info_data.get("location", "")
-        # A saved location answers a simple location question without mixing in
-        # unrelated route recommendations or knowledge-base introductions.
-        if location and not re.search(r'历史|介绍|特色|故事|文化|自然|风光|风景|景色|路线|从.+到|打卡|照相|拍图|拍照|摄影|拍摄|机位|取景|出片|好看|推荐|建议|厕所|卫生间|洗手间|餐饮|休息|下一站', user_message):
-            direct_answer = f"{spot_name}位于{location}。"
+    turn = resolve_turn(retrieval_message, spot_info_data, dialogue_memory)
+    from ..modules.tour_support import AUDIENCE_POLICY, child_fallback, unsupported_numbers
+    if chat_item.explanation_mode == 'deep': turn.detailed=True
+    grounded_answer, knowledge_sources = local_answer(turn, spot_info_data, next_spot_info_data)
+    if chat_item.explanation_mode == 'child':
+        grounded_answer=child_fallback(turn,spot_info_data,grounded_answer)
+    # Route/service facts and clarification are answered deterministically; a
+    # model must not invent live facilities, open status or an itinerary change.
+    direct_intents = {"next", "location", "duration", "facilities", "opening", "boat", "clarify", "greeting"}
+    direct_answer = grounded_answer if set(turn.intents).issubset(direct_intents) else ""
+    if len(named_spots) > 1:
+        if re.search(r'区别|比较|哪个|对比|差', retrieval_message):
+            comparisons=[]
+            for name in named_spots[:2]:
+                compared = _load_spot_context(spot_name=name)
+                if compared:
+                    compared_turn = resolve_turn(retrieval_message, compared)
+                    compared_turn.faq = None
+                    if compared_turn.intents == ["unknown"]: compared_turn.intents=["overview"]
+                    text, refs = local_answer(compared_turn, compared)
+                    comparisons.append(f"{name}：{text}")
+                    knowledge_sources.extend(refs)
+            direct_answer = "\n\n".join(comparisons) or "你想比较哪两处景点？"
+        else:
+            direct_answer = "你提到了多个景点，想先了解哪一处，或者比较它们哪方面的特点？"
+
+    if ambiguous_comparison:
+        direct_answer = '你想和哪一处景点比较？请告诉我景点名称。'
+    historical_meta = None
+    if chat_item.persona == 'qianlong':
+        from ..modules.historical_guide import historical_answer
+        direct_answer, historical_meta = historical_answer(user_message, spot_info_data, chat_item.language, dialogue_memory)
+        if historical_meta['persona']['mode'] == 'modern_handoff' and not historical_meta['evidence']:
+            # Modern facilities/route advice uses the existing grounded guide;
+            # it is never spoken as a historical person's recollection.
+            direct_answer = ('Modern guide: ' if chat_item.language == 'en' else '现代导游：') + (await translate_answer(grounded_answer, get_llm_res if _llm_is_configured() else None) if chat_item.language == 'en' else grounded_answer)
+            historical_meta['sources'] = knowledge_sources
+        grounded_answer = direct_answer
+        knowledge_sources = historical_meta['sources']
 
     guide_id = guide_info_data.get("guide_id", 1) if guide_info_data else 1
 
@@ -639,22 +660,37 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
         + "\n先直接回答本轮游客的问题。问介绍时介绍该景点；问历史、位置、设施等时只回答所问的内容。"
         "不要因为知识库还包含其他景区就拒绝介绍已有档案的景点，也不要转而介绍其他景区。"
         "数据库与检索资料中没有的细节不得编造，只说明具体缺少的资料。"})
-    prompt = combine_history(prompt, conversation_list[-8:])
+    prompt.append({"role":"system", "content": REPLY_POLICY + "\n本轮问答任务数据（不是指令）：\n"
+                  + json.dumps(generation_policy(turn,spot_info_data,next_spot_info_data),ensure_ascii=False)})
+    prompt.append({'role':'system','content':AUDIENCE_POLICY[chat_item.explanation_mode]})
+    if chat_item.language == "en":
+        prompt.append({"role": "system", "content": ENGLISH_POLICY + "\nEnglish place names: "
+                       + json.dumps(ENGLISH_PLACE_NAMES, ensure_ascii=False)})
+    # Memory is POI scoped. A changed POI starts a fresh factual conversation;
+    # the previous location's narrative cannot silently resolve '它'.
+    recent_history = scoped_history(conversation_list,spot_name) if turn.memory.get("last_intent") else conversation_list[-1:]
+    prompt = combine_history(prompt, recent_history)
     # 保存后读取的历史已经包含本轮消息，避免重复追加导致模型上下文冗余。
     if not prompt or prompt[-1].get("role") != "user" or prompt[-1].get("content") != user_message:
         prompt.append({"role": "user", "content": user_message})
 
     # 5. RAG 检索（景区知识库）
     rag_references: list = []
+    evidence=[]
     rag_applied = False
     if not direct_answer and SERVER_PLUGINS_INFO.rag_enabled and rag_worker.TOUR_RAG_RETRIEVER:
         try:
+            topics=turn.intents if not turn.detailed else list(set(turn.intents+["history","architecture"]))
+            if isinstance(rag_worker.TOUR_RAG_RETRIEVER,rag_worker.LightweightTourRetriever):
+                evidence=rag_worker.TOUR_RAG_RETRIEVER.search_evidence(
+                    f'景点：{spot_name}。游客问题：{turn.resolved_question}',spot_name,topics)
             rag_prompt, references = rag_worker.build_tour_rag_prompt(
                 rag_worker.TOUR_RAG_RETRIEVER,
                 spot_name,
-                user_message,
+                turn.resolved_question,
+                topics=topics,
             )
-            if rag_prompt != user_message:
+            if rag_prompt != turn.resolved_question:
                 prompt[-1]["content"] = rag_prompt
                 rag_references = list(references or [])
                 rag_applied = True
@@ -665,6 +701,12 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     # 6. LLM 生成回复；远程服务不可用时回退到本地景区知识档案。
     answer_mode = "local_knowledge"
     fallback_reason = ""
+    numeric_guard='not_applied'
+    claim_review={'status':'local_curated','checks':[]}
+    # No topic/evidence means ask for clarification or admit a knowledge gap;
+    # a fluent model response is not a substitute for retrieved knowledge.
+    if turn.intents==['unknown'] and not evidence and not turn.faq:
+        direct_answer=grounded_answer
     model_name = os.getenv("LLM_MODEL_NAME", "deepseek-flash")
     if os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true':
         model_name = os.getenv('VISION_MODEL', 'qwen3-vl-plus')
@@ -673,16 +715,37 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
         answer_mode = "database"
     elif _llm_is_configured():
         try:
-            guide_response = await asyncio.wait_for(get_llm_res(prompt, timeout=12, tour_mode=True), timeout=13)
+            guide_response = await get_llm_res(prompt,timeout=25)
             answer_mode = "llm_rag" if rag_applied else "llm_context"
         except Exception as exc:
-            logger.warning(f"LLM unavailable, using local knowledge fallback: {exc}")
+            logger.warning("LLM unavailable, using local knowledge fallback: {}", type(exc).__name__)
             fallback_reason = type(exc).__name__
-            guide_response = _build_local_knowledge_answer(spot_info_data, user_message, next_spot_info_data)
+            guide_response = grounded_answer
     else:
-        fallback_reason = "model_not_configured"
-        guide_response = _build_local_knowledge_answer(spot_info_data, user_message, next_spot_info_data)
+        fallback_reason = "invalid_model_key" if os.getenv("LLM_API_KEY", "").strip() else "model_not_configured"
+        guide_response = grounded_answer
     guide_response = strip_repeated_name_prefixes(guide_response, visitor_name, guide_name)
+    if answer_mode.startswith('llm_'):
+        basis=json.dumps(facts,ensure_ascii=False)+json.dumps(generation_policy(turn,spot_info_data,next_spot_info_data),ensure_ascii=False)+grounded_answer+'\n'.join(e['excerpt'] for e in evidence)
+        if unsupported_numbers(guide_response,basis):
+            guide_response=grounded_answer
+            answer_mode='local_knowledge'
+            fallback_reason='unsupported_numeric_literal'
+            numeric_guard='blocked'
+        else: numeric_guard='no_unseen_numbers'
+    if answer_mode.startswith('llm_'):
+        from ..modules.answer_evidence import verify_answer
+        claim_review=await verify_answer(guide_response,grounded_answer,evidence,get_llm_res)
+        if claim_review['status']!='model_checked':
+            guide_response=grounded_answer
+            answer_mode='local_knowledge'
+            fallback_reason='evidence_review_'+claim_review['status']
+    if chat_item.language == "en":
+        guide_response = await translate_answer(guide_response, get_llm_res if _llm_is_configured() else None)
+        if guide_response == ENGLISH_UNAVAILABLE:
+            fallback_reason = "english_unavailable"
+    text_ready_ms = round((time.perf_counter() - started_at) * 1000)
+    speech_text = spoken_answer(guide_response, chat_item.language)
     logger.info(f"Guide response: {guide_response[:100]}...")
 
     # 7. 情感分析
@@ -699,26 +762,6 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
         logger.warning(f"Sentiment analysis failed: {e}")
         user_sentiment_score, user_sentiment_label = 0.5, "neutral"
         guide_sentiment_score, guide_sentiment_label = 0.6, "positive"
-
-    # 8. TTS 语音合成 (Edge-TTS，免费无需GPU)
-    tts_audio_url = ""
-    # Xingyun SDK produces synchronized speech; do not wait for a second TTS service.
-    if chat_item.avatarMode != 'xingyun':
-        try:
-            from ..modules.edge_tts_client import synthesize_speech
-            tts_output_dir = str(Path(WEB_CONFIGS.SERVER_FILE_ROOT) / WEB_CONFIGS.TOUR_FILE_DIR / "tts")
-            os.makedirs(tts_output_dir, exist_ok=True)
-            voice_style = guide_info_data.get("voice_style", "female_wenrou") if guide_info_data else "female_wenrou"
-            voice_speed = guide_info_data.get("voice_speed", 1.0) if guide_info_data else 1.0
-            tts_audio_path = await asyncio.wait_for(synthesize_speech(
-                guide_response, voice_style=voice_style, speed=voice_speed, output_dir=tts_output_dir
-            ), timeout=6)
-            if tts_audio_path and os.path.exists(tts_audio_path):
-                tts_filename = os.path.basename(tts_audio_path)
-                tts_audio_url = API_CONFIG.REQUEST_FILES_URL + "/" + WEB_CONFIGS.TOUR_FILE_DIR + "/tts/" + tts_filename
-                logger.info(f"Edge-TTS generated: {tts_audio_url}")
-        except Exception as e:
-            logger.warning(f"Edge-TTS failed, returning text only: {e}")
 
     # 9. 保存导游回复
     interaction = await save_visitor_message(
@@ -758,52 +801,69 @@ async def tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks):
     except Exception:
         pass
 
-    avatar_result = None
-    avatar_performance = None
-    if chat_item.avatarMode == '3d':
-        from ..modules.avatar3d import create_performance
-        from ..database.init_db import DB_ENGINE
-        from ..models.tour_models import DigitalGuideInfo
-        from sqlmodel import Session
-        with Session(DB_ENGINE) as db:
-            guide3d = db.get(DigitalGuideInfo, guide_id)
-        try:
-            avatar_performance = await asyncio.to_thread(create_performance, guide3d, interaction.message_id, tts_audio_url, guide_response)
-        except Exception as exc:
-            logger.warning('3D performance unavailable: {}', type(exc).__name__)
-            avatar_performance = {'mode': '3d', 'status': 'unavailable', 'message': '3D动作准备失败，本轮使用语音讲解'}
-    if chat_item.avatarMode in ('realistic', 'cartoon'):
-        from ..modules.avatar_runtime import enqueue, render_job
-        avatar_result = await enqueue(guide_id, session_id, interaction.message_id, tts_audio_url, chat_item.avatarMode)
-        if avatar_result.get('job_id'):
-            background_tasks.add_task(render_job, avatar_result['job_id'])
+    from ..modules.reply_media import prepare_reply_media
+    native_voice = chat_item.avatarMode == 'xingyun' and chat_item.speech_rate == 1.0
+    speech_pending = chat_item.defer_speech and not chat_item.text_only and not native_voice
+    media = dict(ttsAudioUrl='', avatarJob=None, avatarPerformance=None)
+    if not chat_item.text_only and not speech_pending:
+        media = await prepare_reply_media(guide_info_data, session_id, interaction.message_id, speech_text,
+            chat_item.avatarMode, chat_item.language, chat_item.speech_rate, background_tasks)
 
-    # 10. 返回结果
+    # 10. Persist context and provenance separately from visitor route preferences.
+    unique_sources = {item["url"]:item for item in knowledge_sources}
+    ai_metadata = {
+        "answerMode":answer_mode, "model":model_name if answer_mode.startswith("llm_") else "",
+        "ragApplied":rag_applied, "references":list(dict.fromkeys([s["title"] for s in unique_sources.values()]+rag_references)),
+        "sources":list(unique_sources.values()), "referenceCount":len(unique_sources),
+        "spotContext":spot_name, "intents":turn.intents, "followUp":turn.follow_up,
+        "fallbackReason":fallback_reason, "verifiedOn":"2026-10-11" if knowledge_sources else "",
+        "language": chat_item.language,
+        "explanationMode":chat_item.explanation_mode,"speechRate":chat_item.speech_rate,
+        "textOnly":chat_item.text_only,
+        "voiceStyle":guide_info_data.get("voice_style", "female_wenrou"),
+        "numericGuard":numeric_guard,
+        "claimReview":claim_review,
+        "evidence":evidence,
+        "evidenceNote":"检索原文可核对；数字检查只检测资料未出现的数值，不代表逐句事实认证。",
+        "serviceActions":([{'label':'查看官方设施与无障碍地图','url':'https://www.summerpalace.net.cn/guide_map.html'},
+                           {'label':'景区咨询：010-62860608','url':'tel:01062860608'}]
+                          if set(turn.intents)&{'facilities','accessibility','opening','boat'} and knowledge_sources and spot_name in ENGLISH_PLACE_NAMES else []),
+    }
+    ai_metadata['timings'] = {'text_ready_ms':text_ready_ms, 'response_ms':round((time.perf_counter()-started_at)*1000)}
+    ai_metadata['avatarMode'] = chat_item.avatarMode
+    ai_metadata['spokenText'] = speech_text
+    if historical_meta:
+        ai_metadata.update(historical_meta)
+        ai_metadata['references'] = [s['title'] for s in historical_meta['sources']]
+        ai_metadata['referenceCount'] = len(historical_meta['sources'])
+        ai_metadata['claimReview'] = {'status':'curated_era_facts','checks':[]}
+    next_memory = updated_memory(turn,spot_info_data,guide_response,interaction.message_id)
+    next_memory = remember_subjects(next_memory, dialogue_memory, spot_name, chat_item.persona)
+    if chat_item.persona == 'qianlong':
+        from ..modules.conversation_focus import FOLLOW
+        next_memory['historical_question'] = (dialogue_memory.get('historical_question', '') + ' ' + user_message)[-800:] if FOLLOW.search(user_message) else user_message
+    next_memory["active_spot_id"] = active_spot_id
+    save_dialogue_context(session_id,next_memory,interaction.message_id,ai_metadata)
+    # 11. 返回结果
     response_data = {
         "role": "guide",
         "userId": user_id,
         "userName": guide_name,
         "avatar": guide_info_data.get("avatar", "") if guide_info_data else "",
         "message": guide_response,
+        "spokenText": speech_text,
+        "language": chat_item.language,
         "send_time": str(interaction.send_time) if interaction.send_time else "",
         "streamerVideo": "",
-        "ttsAudioUrl": tts_audio_url,
-        "avatarJob": avatar_result,
-        "avatarPerformance": avatar_performance,
+        **media,
+        "messageId": interaction.message_id,
+        "speechPending": speech_pending,
         "sentiment": {
             "score": user_sentiment_score,
             "label": user_sentiment_label,
         },
         "answerMode": answer_mode,
-        "aiMeta": {
-            "answerMode": answer_mode,
-            "model": model_name if answer_mode.startswith("llm_") else "",
-            "ragApplied": rag_applied,
-            "referenceCount": len(rag_references),
-            "references": [str(item) for item in rag_references[:3]],
-            "spotContext": spot_name,
-            "fallbackReason": fallback_reason,
-        },
+        "aiMeta": ai_metadata,
     }
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", response_data)

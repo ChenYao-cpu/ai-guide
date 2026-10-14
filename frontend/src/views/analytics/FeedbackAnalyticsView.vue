@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatTableCell } from '@/i18n'
+
 import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus/es'
 import { getSentimentReport, type SentimentReport } from '@/api/analytics'
@@ -16,13 +17,13 @@ const loadData = async () => {
     if (data.code === 0) {
       sentimentReport.value = data.data
     } else {
-      ElMessage.error('获取数据失败：' + data.message)
+      ElMessage.error(t("获取数据失败：") + data.message)
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('加载失败：' + error.message)
+      ElMessage.error(t("加载失败：") + error.message)
     } else {
-      ElMessage.error('未知错误')
+      ElMessage.error(t("未知错误"))
     }
   } finally {
     loading.value = false
@@ -35,31 +36,31 @@ const statCards = computed(() => {
   const r = sentimentReport.value
   return [
     {
-      title: '总互动次数',
+      title: t("总互动次数"),
       value: r?.total_interactions ?? 0,
-      unit: '次',
+      unit: t("次"),
       color: '#818cf8',
       bgColor: 'rgba(99,102,241,0.08)',
-      sub: '游客提问总数',
+      sub: t("游客提问总数"),
     },
     {
-      title: '好评率',
+      title: t("好评率"),
       value: r ? (r.positive_ratio * 100).toFixed(1) : '0.0',
       unit: '%',
       color: '#059669',
       bgColor: 'rgba(99,102,241,0.08)',
-      sub: `${r?.positive_count ?? 0} 条正面`,
+      sub: t("{p0} 条正面", {p0: r?.positive_count ?? 0}),
     },
     {
-      title: '负面反馈',
+      title: t("负面反馈"),
       value: r?.negative_count ?? 0,
-      unit: '条',
+      unit: t("条"),
       color: '#e11d48',
       bgColor: 'rgba(99,102,241,0.08)',
-      sub: `占比 ${r ? (r.negative_ratio * 100).toFixed(1) : '0'}%`,
+      sub: t("占比 {p0}%", {p0: r ? (r.negative_ratio * 100).toFixed(1) : '0'}),
     },
     {
-      title: '整体趋势',
+      title: t("整体趋势"),
       value: sentimentTrendLabel.value,
       unit: '',
       color: '#4f46e5',
@@ -72,17 +73,17 @@ const statCards = computed(() => {
 
 const sentimentTrendLabel = computed(() => {
   const s = sentimentReport.value?.overall_sentiment
-  if (s === 'positive') return '上升向好'
-  if (s === 'neutral') return '整体平稳'
-  if (s === 'negative') return '需关注'
-  return '暂无数据'
+  if (s === 'positive') return t("上升向好")
+  if (s === 'neutral') return t("整体平稳")
+  if (s === 'negative') return t("需关注")
+  return t("暂无数据")
 })
 
 const sentimentTrendSub = computed(() => {
   const s = sentimentReport.value?.overall_sentiment
-  if (s === 'positive') return '游客情绪以正面为主'
-  if (s === 'neutral') return '正负面基本持平'
-  if (s === 'negative') return '负面占比较高，需改进'
+  if (s === 'positive') return t("游客情绪以正面为主")
+  if (s === 'neutral') return t("正负面基本持平")
+  if (s === 'negative') return t("负面占比较高，需改进")
   return ''
 })
 
@@ -95,9 +96,9 @@ const sentimentBars = computed(() => {
   const neutralPercent = Math.round(r.neutral_ratio * 100)
   const negativePercent = Math.round(r.negative_ratio * 100)
   return [
-    { label: '正面评价', percent: positivePercent, count: r.positive_count, color: '#059669' },
-    { label: '中性评价', percent: neutralPercent, count: r.neutral_count, color: '#4f46e5' },
-    { label: '负面评价', percent: negativePercent, count: r.negative_count, color: '#e11d48' },
+    { label: t("正面评价"), percent: positivePercent, count: r.positive_count, color: '#059669' },
+    { label: t("中性评价"), percent: neutralPercent, count: r.neutral_count, color: '#4f46e5' },
+    { label: t("负面评价"), percent: negativePercent, count: r.negative_count, color: '#e11d48' },
   ]
 })
 
@@ -145,16 +146,16 @@ onMounted(() => {
       <el-col v-for="(card, idx) in statCards" :key="idx" :span="6">
         <div class="stat-card" :style="{ backgroundColor: card.bgColor }">
           <div class="stat-card-header">
-            <span class="stat-card-title">{{ card.title }}</span>
+            <span class="stat-card-title">{{ $t(card.title) }}</span>
           </div>
           <div class="stat-card-body">
             <span v-if="!card.isText" class="stat-card-value" :style="{ color: card.color }">
-              {{ card.value }}
+              {{ $t(card.value) }}
             </span>
             <span v-else class="stat-card-value stat-card-text" :style="{ color: card.color }">
-              {{ card.value }}
+              {{ $t(card.value) }}
             </span>
-            <span v-if="card.unit" class="stat-card-unit">{{ card.unit }}</span>
+            <span v-if="card.unit" class="stat-card-unit">{{ $t(card.unit) }}</span>
           </div>
 
         </div>
@@ -167,21 +168,21 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title">游客情感分布</span>
+            <span class="chart-title">{{ $t("游客情感分布") }}</span>
           </template>
           <div v-if="sentimentBars.length > 0" class="bar-chart">
             <div v-for="(bar, idx) in sentimentBars" :key="idx" class="bar-item">
-              <span class="bar-label">{{ bar.label }}</span>
+              <span class="bar-label">{{ $t(bar.label) }}</span>
               <div class="bar-track">
                 <div class="bar-fill" :style="{ width: bar.percent + '%', backgroundColor: bar.color }">
-                  <span v-if="bar.percent > 10" class="bar-percent">{{ bar.percent }}%</span>
+                  <span v-if="bar.percent > 10" class="bar-percent">{{ $t(bar.percent) }}%</span>
                 </div>
-                <span v-if="bar.percent <= 10" class="bar-percent outside">{{ bar.percent }}%</span>
+                <span v-if="bar.percent <= 10" class="bar-percent outside">{{ $t(bar.percent) }}%</span>
               </div>
-              <span class="bar-count">{{ bar.count }} 条</span>
+              <span class="bar-count">{{ $t(bar.count) }} {{ $t("条") }}</span>
             </div>
           </div>
-          <el-empty v-else description="暂无情感数据" :image-size="80" />
+          <el-empty v-else :description='$t("暂无情感数据")' :image-size="80" />
         </el-card>
       </el-col>
 
@@ -189,7 +190,7 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title">热门话题分类</span>
+            <span class="chart-title">{{ $t("热门话题分类") }}</span>
           </template>
           <el-table
             v-if="hotTopics.length > 0"
@@ -199,14 +200,14 @@ onMounted(() => {
             stripe
             size="small"
           >
-            <el-table-column prop="topic" label="话题类别" min-width="140">
+            <el-table-column prop="topic" :label='$t("话题类别")' min-width="140">
               <template #default="{ row }">
-                <el-tag size="small" effect="plain" type="primary">{{ row.topic }}</el-tag>
+                <el-tag size="small" effect="plain" type="primary">{{ $t(row.topic) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="count" label="提及次数" width="110" align="center" sortable />
+            <el-table-column :formatter="formatTableCell" prop="count" :label='$t("提及次数")' width="110" align="center" sortable />
           </el-table>
-          <el-empty v-else description="暂无话题数据" :image-size="80" />
+          <el-empty v-else :description='$t("暂无话题数据")' :image-size="80" />
         </el-card>
       </el-col>
     </el-row>
@@ -217,16 +218,16 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title"> 热门提问 TOP8</span>
+            <span class="chart-title">{{ $t("热门提问 TOP8") }}</span>
           </template>
           <div v-if="hotQuestions.length > 0" class="hot-questions-list">
             <div v-for="(q, idx) in hotQuestions" :key="idx" class="hot-q-item">
-              <span class="hot-q-rank" :class="idx < 3 ? 'top3' : ''">{{ idx + 1 }}</span>
-              <span class="hot-q-text">{{ q.question }}</span>
-              <span class="hot-q-count">{{ q.count }} 次</span>
+              <span class="hot-q-rank" :class="idx < 3 ? 'top3' : ''">{{ $t(idx + 1) }}</span>
+              <span class="hot-q-text">{{ $t(q.question) }}</span>
+              <span class="hot-q-count">{{ $t(q.count) }} {{ $t("次") }}</span>
             </div>
           </div>
-          <el-empty v-else description="暂无提问数据" :image-size="80" />
+          <el-empty v-else :description='$t("暂无提问数据")' :image-size="80" />
         </el-card>
       </el-col>
 
@@ -234,20 +235,20 @@ onMounted(() => {
       <el-col :span="12">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title"> 服务优化建议</span>
+            <span class="chart-title">{{ $t("服务优化建议") }}</span>
           </template>
           <div v-if="serviceSuggestions.length > 0" class="suggestions-list">
             <el-alert
               v-for="(s, idx) in serviceSuggestions"
               :key="idx"
-              :title="s"
+              :title="$t(s)"
               :type="idx === 0 ? 'warning' : 'info'"
               :closable="false"
               show-icon
               class="suggestion-item"
             />
           </div>
-          <el-empty v-else description="暂无建议" :image-size="80" />
+          <el-empty v-else :description='$t("暂无建议")' :image-size="80" />
         </el-card>
       </el-col>
     </el-row>
@@ -257,22 +258,22 @@ onMounted(() => {
       <el-col :span="24">
         <el-card shadow="never" class="chart-card">
           <template #header>
-            <span class="chart-title"> 游客留言精选</span>
+            <span class="chart-title">{{ $t("游客留言精选") }}</span>
           </template>
           <div v-if="commentHighlights.length > 0" class="comments-grid">
             <div v-for="(item, idx) in commentHighlights" :key="idx" class="comment-item">
               <div class="comment-header">
                 <span class="sentiment-dot" :style="{ backgroundColor: sentimentColorMap[item.sentiment] || '#64748b' }" />
                 <span class="comment-sentiment-label">
-                  {{ item.sentiment === 'positive' ? '正面' : item.sentiment === 'negative' ? '负面' : '中性' }}
+                  {{ $t(item.sentiment === 'positive' ? '正面' : item.sentiment === 'negative' ? '负面' : '中性') }}
                 </span>
-                <el-tag size="small" effect="plain" type="info">{{ item.role === 'user' ? '游客' : '导游' }}</el-tag>
-                <span class="comment-time">{{ item.time?.slice(0, 16) || '' }}</span>
+                <el-tag size="small" effect="plain" type="info">{{ $t(item.role === 'user' ? '游客' : '导游') }}</el-tag>
+                <span class="comment-time">{{ $t(item.time?.slice(0, 16) || '') }}</span>
               </div>
-              <p class="comment-text">&ldquo;{{ item.comment }}&rdquo;</p>
+              <p class="comment-text">&ldquo;{{ $t(item.comment) }}&rdquo;</p>
             </div>
           </div>
-          <el-empty v-else description="暂无留言数据" :image-size="80" />
+          <el-empty v-else :description='$t("暂无留言数据")' :image-size="80" />
         </el-card>
       </el-col>
     </el-row>

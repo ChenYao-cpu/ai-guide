@@ -7,9 +7,9 @@ const router = useRouter()
   <main class="not-found">
     <section>
       <span class="status-code">404</span>
-      <h1>页面不存在</h1>
-      <p>请检查地址，或返回首页。</p>
-      <el-button type="primary" @click="router.push('/home')">返回首页</el-button>
+      <h1>{{ $t("页面不存在") }}</h1>
+      <p>{{ $t("请检查地址，或返回首页。") }}</p>
+      <el-button type="primary" @click="router.push('/home')">{{ $t("返回首页") }}</el-button>
     </section>
   </main>
 </template>

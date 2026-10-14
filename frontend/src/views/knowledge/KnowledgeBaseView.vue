@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatTableCell } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import { Delete, Document, Refresh, DataAnalysis, Upload, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -11,6 +12,7 @@ import {
   deleteDoc,
   rebuildIndex,
   testAccuracy,
+  previewDoc, reviewDoc, type KnowledgePreview,
   type KnowledgeDocListData,
   type AccuracyTestResult,
 } from '@/api/knowledgeBase'
@@ -32,9 +34,10 @@ const queriedResult = ref<KnowledgeDocListData>({} as KnowledgeDocListData)
 
 // 状态标签映射
 const statusLabelMap: Record<string, string> = {
-  pending: '待处理',
+  pending: '待审核',
   processing: '处理中',
-  completed: '已完成',
+  completed: '已收录',
+  rejected: '已驳回',
   failed: '失败',
 }
 
@@ -47,6 +50,30 @@ const statusTagTypeMap: Record<string, string> = {
 
 const getStatusLabel = (status: string) => {
   return statusLabelMap[status] || status
+}
+const preview = ref<KnowledgePreview | null>(null)
+const reviewVisible = ref(false)
+const reviewLoading = ref(false)
+const reviewNote = ref('')
+async function openReview(id: number) {
+  reviewVisible.value=true; reviewLoading.value=true; preview.value=null; reviewNote.value=''
+  try {
+    const { data }=await previewDoc(id)
+    if(data.success) preview.value=data.data
+    else ElMessage.error(data.message)
+  } catch { ElMessage.error(t("文档预览失败")) }
+  finally { reviewLoading.value=false }
+}
+async function submitReview(decision:'publish'|'reject'|'withdraw') {
+  if(!preview.value || reviewLoading.value) return
+  if(reviewNote.value.trim().length<3){ElMessage.warning(t("请填写至少3个字的审核说明"));return}
+  reviewLoading.value=true
+  try {
+    const {data}=await reviewDoc(preview.value.doc_id,decision,reviewNote.value.trim(),preview.value.expected_hash)
+    if(data.success){ElMessage.success(t("审核完成，问答索引已更新"));reviewVisible.value=false;await fetchDocList()}
+    else ElMessage.error(data.message)
+  }catch{ElMessage.error(t("审核失败，请重试"))}
+  finally{reviewLoading.value=false}
 }
 
 const getStatusTagType = (status: string): '' | 'success' | 'warning' | 'danger' | 'info' => {
@@ -68,15 +95,15 @@ const fetchDocList = async () => {
     if (data.code === 0) {
       queriedResult.value = data.data
     } else {
-      ElMessage.error('知识库接口错误')
-      throw new Error('知识库接口错误')
+      ElMessage.error(t("知识库接口错误"))
+      throw new Error(t("知识库接口错误"))
     }
   } catch (error: unknown) {
     tableLoading.value = false
     if (error instanceof AxiosError) {
-      ElMessage.error('知识库接口失败: ' + error.message)
+      ElMessage.error(t("知识库接口失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -88,21 +115,21 @@ onMounted(() => {
 // 删除文档
 const isDeleting = ref(false)
 const handleDelete = async (id: number, title: string) => {
-  ElMessageBox.confirm('确定要删除文档 "' + title + '" 吗？', '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定要删除文档 \"") + title + t("\" 吗？"), t("警告"), {
+    confirmButtonText: t("确定"),
+    cancelButtonText: t("取消"),
     type: 'warning',
     showClose: false,
   })
     .then(async () => {
-      ElMessage.success('正在删除 ' + title + '，请稍候')
+      ElMessage.success(t("正在删除 ") + title + t("，请稍候"))
       isDeleting.value = true
       const { data } = await deleteDoc(id)
       if (data.code === 0) {
-        ElMessage.success('删除成功')
+        ElMessage.success(t("删除成功"))
         fetchDocList()
       } else {
-        ElMessage.error('删除失败')
+        ElMessage.error(t("删除失败"))
       }
       isDeleting.value = false
     })
@@ -113,13 +140,13 @@ const handleDelete = async (id: number, title: string) => {
 
 // 文件上传成功回调
 const handleUploadSuccess: UploadProps['onSuccess'] = () => {
-  ElMessage.success('文档上传成功，正在构建索引...')
+  ElMessage.success(t("已上传，审核发布后进入问答索引"))
   fetchDocList()
 }
 
 // 文件上传失败回调
 const handleUploadFail: UploadProps['onError'] = (error: Error) => {
-  ElMessage.error('上传文件失败: ' + (error.message || '请稍后重试'))
+  ElMessage.error(t("上传文件失败: ") + (error.message || t("请稍后重试")))
 }
 
 // 自定义上传（使用 knowledge-base/upload API）
@@ -131,16 +158,16 @@ const customUpload = async (options: UploadRequestOptions) => {
   try {
     const { data } = await uploadDoc(formData)
     if (data.code === 0) {
-      ElMessage.success('文档上传成功！系统正在自动构建索引，请稍候刷新')
+      ElMessage.success(t("已上传，请预览并审核后发布"))
       fetchDocList()
     } else {
-      ElMessage.error('上传失败: ' + (data.message || '未知错误'))
+      ElMessage.error(t("上传失败: ") + (data.message || t("未知错误")))
     }
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      ElMessage.error('上传失败: ' + error.message)
+      ElMessage.error(t("上传失败: ") + error.message)
     } else {
-      ElMessage.error('上传失败')
+      ElMessage.error(t("上传失败"))
     }
   }
 }
@@ -152,12 +179,12 @@ const beforeUpload: UploadProps['beforeUpload'] = (rawFile) => {
   const isValid = allowedExtensions.some((ext) => fileName.endsWith(ext))
 
   if (!isValid) {
-    ElMessage.error('只支持 PDF、Word、TXT、Markdown 格式的文档!')
+    ElMessage.error(t("只支持 PDF、Word、TXT、Markdown 格式的文档!"))
     return false
   }
 
   if (rawFile.size / 1024 / 1024 > 20) {
-    ElMessage.error('文档文件大小不能超过 20MB!')
+    ElMessage.error(t("文档文件大小不能超过 20MB!"))
     return false
   }
 
@@ -168,31 +195,31 @@ const beforeUpload: UploadProps['beforeUpload'] = (rawFile) => {
 const isRebuilding = ref(false)
 const handleRebuildIndex = async () => {
   ElMessageBox.confirm(
-    '重建索引将重新处理所有文档，可能需要几分钟时间。确定要继续吗？',
-    '确认操作',
+    t("重建索引将重新处理所有文档，可能需要几分钟时间。确定要继续吗？"),
+    t("确认操作"),
     {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+      confirmButtonText: t("确定"),
+      cancelButtonText: t("取消"),
       type: 'warning',
       showClose: false,
     },
   )
     .then(async () => {
       isRebuilding.value = true
-      ElMessage.success('正在重建索引，请稍候...')
+      ElMessage.success(t("正在重建索引，请稍候..."))
       try {
         const { data } = await rebuildIndex()
         if (data.code === 0) {
-          ElMessage.success('索引重建完成')
+          ElMessage.success(t("索引重建完成"))
           fetchDocList()
         } else {
-          ElMessage.error('索引重建失败: ' + data.message)
+          ElMessage.error(t("索引重建失败: ") + data.message)
         }
       } catch (error: unknown) {
         if (error instanceof AxiosError) {
-          ElMessage.error('索引重建失败: ' + error.message)
+          ElMessage.error(t("索引重建失败: ") + error.message)
         } else {
-          ElMessage.error('未知错误：' + error)
+          ElMessage.error(t("未知错误：") + error)
         }
       }
       isRebuilding.value = false
@@ -219,12 +246,12 @@ const handleAccuracyTest = async () => {
     if (data.code === 0 && data.data) {
       accuracyResult.value = data.data
     } else {
-      accuracyError.value = data.message || '评测执行失败'
+      accuracyError.value = data.message || t("评测执行失败")
       ElMessage.error(accuracyError.value)
     }
   } catch (error: unknown) {
     accuracyError.value = error instanceof AxiosError ? error.message : String(error)
-    ElMessage.error('评测执行失败: ' + accuracyError.value)
+    ElMessage.error(t("评测执行失败: ") + accuracyError.value)
   } finally {
     accuracyLoading.value = false
   }
@@ -251,13 +278,10 @@ const handleAccuracyTest = async () => {
               <el-icon class="el-icon--upload" :size="24">
                 <Upload />
               </el-icon>
-              <div class="el-upload__text">
-                将文档拖到此处，或<em>点击上传</em>
+              <div class="el-upload__text">{{ $t("将文档拖到此处，或") }}<em>{{ $t("点击上传") }}</em>
               </div>
               <template #tip>
-                <div class="el-upload__tip">
-                  支持 PDF / Word / TXT / Markdown 格式，单个文件不超过 20MB
-                </div>
+                <div class="el-upload__tip">{{ $t("支持 PDF / Word / TXT / Markdown 格式，单个文件不超过 20MB") }}</div>
               </template>
             </el-upload>
           </div>
@@ -268,49 +292,46 @@ const handleAccuracyTest = async () => {
               :icon="Refresh"
               @click="handleRebuildIndex"
               :loading="isRebuilding"
-            >
-              全部重建索引
-            </el-button>
+            >{{ $t("全部重建索引") }}</el-button>
             <!-- 知识问答真实评测 -->
             <el-button
               type="success"
               :icon="DataAnalysis"
               @click="handleAccuracyTest"
-            >
-              知识问答评测
-            </el-button>
+            >{{ $t("知识问答评测") }}</el-button>
           </div>
         </div>
       </template>
 
       <!-- 文档列表表格 -->
       <el-table :data="queriedResult.doc_list" max-height="1000" v-loading="tableLoading">
-        <el-table-column prop="title" label="文档标题" align="center" min-width="200px" />
+        <el-table-column :formatter="formatTableCell" prop="title" :label='$t("文档标题")' align="center" min-width="200px" />
 
-        <el-table-column prop="file_type" label="文件类型" align="center" width="120px">
+        <el-table-column prop="file_type" :label='$t("文件类型")' align="center" width="120px">
           <template #default="scope">
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px">
               <el-icon :size="18" color="var(--champagne-text)">
                 <Document />
               </el-icon>
-              <span>{{ scope.row.file_type ? scope.row.file_type.toUpperCase() : '-' }}</span>
+              <span>{{ $t(scope.row.file_type ? scope.row.file_type.toUpperCase() : '-') }}</span>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column prop="chunk_count" label="分块数量" align="center" width="100px" />
+        <el-table-column :formatter="formatTableCell" prop="chunk_count" :label='$t("分块数量")' align="center" width="100px" />
 
-        <el-table-column prop="upload_time" label="上传时间" align="center" width="170px" />
+        <el-table-column :formatter="formatTableCell" prop="upload_time" :label='$t("上传时间")' align="center" width="170px" />
 
-        <el-table-column prop="status" label="状态" align="center" width="110px">
+        <el-table-column prop="status" :label='$t("状态")' align="center" width="110px">
           <template #default="scope">
             <el-tag :type="getStatusTagType(scope.row.status)" size="small">
-              {{ getStatusLabel(scope.row.status) }}
+              {{ $t(getStatusLabel(scope.row.status)) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" v-slot="{ row }" align="center" width="100px">
+        <el-table-column :label='$t("操作")' v-slot="{ row }" align="center" width="180px">
+          <el-button @click="openReview(row.doc_id)">{{ $t("预览审核") }}</el-button>
           <el-button
             type="danger"
             @click="handleDelete(row.doc_id, row.title)"
@@ -336,10 +357,29 @@ const handleAccuracyTest = async () => {
       </template>
     </el-card>
 
+    <el-dialog v-model="reviewVisible" class="review-dialog" :title='$t("知识内容审核")' width="min(900px, 92vw)" top="5vh">
+      <div v-loading="reviewLoading" class="knowledge-review">
+        <template v-if="preview">
+          <h3>{{ $t(preview.title) }}</h3>
+          <p>{{ $t("内容版本：") }} {{ preview.content_hash }}</p>
+          <p v-if="!preview.reviews.length">{{ $t("历史收录资料尚无审核记录；当前内容未经本次流程人工审核。") }}</p>
+          <pre>{{ preview.text }}</pre>
+          <p v-if="preview.truncated">{{ $t("预览已截取前12000字，请打开完整文档核对后审核。") }}</p>
+          <a :href="preview.file_url" target="_blank" rel="noopener noreferrer">{{ $t("打开完整文档") }}</a>
+          <h4>{{ $t("最近审核记录（最多50条）") }}</h4>
+          <p v-for="item in preview.reviews" :key="item.review_id">{{ $t(item.reviewed_at) }} · {{ $t(getStatusLabel(item.status)) }} {{ $t("· 审核人") }} {{ $t(item.reviewer_id) }}：{{ item.note }}</p>
+          <el-input v-model="reviewNote" type="textarea" :rows="2" maxlength="500" :aria-label='$t("审核说明")' :placeholder='$t("填写资料来源、事实核对或驳回原因")' />
+        </template>
+      </div>
+      <template #footer>
+        <el-button v-if="preview?.status === 'completed'" :disabled="reviewLoading" @click="submitReview('withdraw')">{{ $t("撤回收录") }}</el-button>
+        <template v-else-if="preview"><el-button :disabled="reviewLoading" @click="submitReview('reject')">{{ $t("驳回") }}</el-button><el-button type="primary" :disabled="reviewLoading" @click="submitReview('publish')">{{ $t("审核并发布") }}</el-button></template>
+      </template>
+    </el-dialog>
     <!-- 知识问答评测弹窗 -->
     <el-dialog
       v-model="accuracyDialogVisible"
-      title="知识问答评测结果"
+      :title='$t("知识问答评测结果")'
       width="800px"
       top="5vh"
       :close-on-press-escape="true"
@@ -349,38 +389,38 @@ const handleAccuracyTest = async () => {
         <el-icon :size="48" style="animation: spin 1s linear infinite; color: var(--champagne-text)">
           <Loading />
         </el-icon>
-        <p style="margin-top: 16px; color: var(--text-muted)">正在执行 RAG 检索与大模型回答评测，请稍候...</p>
+        <p style="margin-top: 16px; color: var(--text-muted)">{{ $t("正在执行 RAG 检索与大模型回答评测，请稍候...") }}</p>
       </div>
 
-      <el-alert v-else-if="accuracyError" :title="accuracyError" type="error" show-icon :closable="false" />
+      <el-alert v-else-if="accuracyError" :title="$t(accuracyError)" type="error" show-icon :closable="false" />
 
       <template v-else-if="accuracyResult">
         <!-- 测试概览 -->
         <el-descriptions :column="2" border style="margin-bottom: 20px">
-          <el-descriptions-item label="测试总数">{{ accuracyResult.total }}</el-descriptions-item>
-          <el-descriptions-item label="正确数量">{{ accuracyResult.correct }}</el-descriptions-item>
-          <el-descriptions-item :label="accuracyResult.metric_name">
+          <el-descriptions-item :label='$t("测试总数")'>{{ $t(accuracyResult.total) }}</el-descriptions-item>
+          <el-descriptions-item :label='$t("正确数量")'>{{ $t(accuracyResult.correct) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t(accuracyResult.metric_name)">
             <el-tag :type="accuracyResult.passed ? 'success' : 'danger'" size="large" effect="dark">
-              {{ accuracyResult.accuracy.toFixed(1) }}%
+              {{ $t(accuracyResult.accuracy.toFixed(1)) }}%
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="测试结果">
+          <el-descriptions-item :label='$t("测试结果")'>
             <el-tag :type="accuracyResult.passed ? 'success' : 'danger'" size="large" effect="dark">
-              {{ accuracyResult.passed ? '通过' : '未通过' }}（阈值 {{ accuracyResult.pass_threshold }}%）
+              {{ $t(accuracyResult.passed ? '通过' : '未通过') }} {{ $t("（阈值") }} {{ $t(accuracyResult.pass_threshold) }}%）
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="模型">{{ accuracyResult.model_name }}</el-descriptions-item>
-          <el-descriptions-item label="耗时">{{ (accuracyResult.duration_ms / 1000).toFixed(1) }} 秒</el-descriptions-item>
-          <el-descriptions-item label="判定方法" :span="2">{{ accuracyResult.evaluation_method }}</el-descriptions-item>
+          <el-descriptions-item :label='$t("模型")'>{{ $t(accuracyResult.model_name) }}</el-descriptions-item>
+          <el-descriptions-item :label='$t("耗时")'>{{ $t((accuracyResult.duration_ms / 1000).toFixed(1)) }} {{ $t("秒") }}</el-descriptions-item>
+          <el-descriptions-item :label='$t("判定方法")' :span="2">{{ $t(accuracyResult.evaluation_method) }}</el-descriptions-item>
         </el-descriptions>
 
         <!-- 详细结果列表 -->
         <div v-if="accuracyResult.details && accuracyResult.details.length > 0">
-          <h4 style="margin-bottom: 12px">测试详情</h4>
+          <h4 style="margin-bottom: 12px">{{ $t("测试详情") }}</h4>
           <el-table :data="accuracyResult.details" max-height="420" size="small" border>
             <el-table-column type="index" label="#" width="50" align="center" />
-            <el-table-column prop="question" label="预设问题" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="expected_keywords" label="预设关键词" width="130">
+            <el-table-column :formatter="formatTableCell" prop="question" :label='$t("预设问题")' min-width="160" show-overflow-tooltip />
+            <el-table-column prop="expected_keywords" :label='$t("预设关键词")' width="130">
               <template #default="scope">
                 <div style="display: flex; flex-wrap: wrap; gap: 2px">
                   <el-tag
@@ -391,29 +431,29 @@ const handleAccuracyTest = async () => {
                     effect="plain"
                     style="margin: 1px"
                   >
-                    {{ kw.trim() }}
+                    {{ $t(kw.trim()) }}
                   </el-tag>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="expected_answer" label="预期答案" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="actual_answer" label="RAG 回答" min-width="140" show-overflow-tooltip>
+            <el-table-column :formatter="formatTableCell" prop="expected_answer" :label='$t("预期答案")' min-width="140" show-overflow-tooltip />
+            <el-table-column prop="actual_answer" :label='$t("RAG 回答")' min-width="140" show-overflow-tooltip>
               <template #default="scope">
                 <span :style="{ color: scope.row.error ? 'var(--danger)' : 'var(--text)' }">
-                  {{ scope.row.error || scope.row.actual_answer }}
+                  {{ $t(scope.row.error || scope.row.actual_answer) }}
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="覆盖" width="95" align="center">
+            <el-table-column :label='$t("覆盖")' width="95" align="center">
               <template #default="scope">
-                {{ scope.row.matched_count }}/{{ scope.row.required_count }}
-                <div style="font-size: 11px; color: var(--text-muted)">{{ scope.row.keyword_coverage }}%</div>
+                {{ $t(scope.row.matched_count) }}/{{ $t(scope.row.required_count) }}
+                <div style="font-size: 11px; color: var(--text-muted)">{{ $t(scope.row.keyword_coverage) }}%</div>
               </template>
             </el-table-column>
-            <el-table-column prop="is_correct" label="结果" width="80" align="center">
+            <el-table-column prop="is_correct" :label='$t("结果")' width="80" align="center">
               <template #default="scope">
                 <el-tag :type="scope.row.is_correct ? 'success' : 'danger'" size="small" effect="dark">
-                  {{ scope.row.is_correct ? '通过' : '未通过' }}
+                  {{ $t(scope.row.is_correct ? '通过' : '未通过') }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -423,8 +463,8 @@ const handleAccuracyTest = async () => {
 
       <template #footer>
         <div style="display: flex; justify-content: center; gap: 12px">
-          <el-button @click="handleAccuracyTest" type="primary"> 重新测试</el-button>
-          <el-button @click="accuracyDialogVisible = false">关闭</el-button>
+          <el-button @click="handleAccuracyTest" type="primary">{{ $t("重新测试") }}</el-button>
+          <el-button @click="accuracyDialogVisible = false">{{ $t("关闭") }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -432,6 +472,10 @@ const handleAccuracyTest = async () => {
 </template>
 
 <style lang="scss" scoped>
+:global(.review-dialog){max-height:90dvh;display:flex;flex-direction:column}
+:global(.review-dialog .el-dialog__body){overflow:auto;min-height:0}
+.knowledge-review{font-size:16px;line-height:1.7;overflow-wrap:anywhere}
+.knowledge-review pre{white-space:pre-wrap;max-height:42vh;overflow:auto;font:inherit;background:#f8fafc;padding:16px;border-radius:14px}
 .el-card {
   border-radius: 12px;
 }

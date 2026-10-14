@@ -1,28 +1,29 @@
 <template>
   <div class="qr-float">
     <!-- 悬浮按钮 -->
-    <button class="qr-fab" @click="show = !show" :title="show ? '关闭' : '扫码体验手机版'">
-      {{ show ? '✕' : '扫码' }}
+    <button class="qr-fab" @click="show = !show" :title="$t(show ? '关闭' : '扫码体验手机版')">
+      {{ $t(show ? '✕' : '扫码') }}
     </button>
 
     <!-- 弹出面板 -->
     <Transition name="slide-up">
       <div v-if="show" class="qr-panel">
-        <h3> 手机扫码</h3>
+        <h3>{{ $t("手机扫码") }}</h3>
 
-        <p v-if="!autoDetected">填写局域网地址</p>
+        <p v-if="!autoDetected">{{ $t("填写局域网地址") }}</p>
         <el-input v-model="editUrl" size="small" placeholder="http://x.x.x.x:5173/m/home" style="margin-bottom:8px;" />
         <div class="qr-img-wrap">
-          <img :src="qrUrl" alt="扫码打开" />
+          <img :src="qrUrl" :alt='$t("扫码打开")' />
         </div>
-        <div class="qr-url" @click="copyUrl">{{ mobileUrl }}</div>
+        <div class="qr-url" @click="copyUrl">{{ $t(mobileUrl) }}</div>
 
       </div>
     </Transition>
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { serverIP, serverPort } from 'virtual:server-info'
@@ -48,7 +49,7 @@ const qrUrl = computed(() => {
 
 function copyUrl() {
   navigator.clipboard.writeText(mobileUrl.value).then(() => {
-    ElMessage.success('链接已复制！')
+    ElMessage.success(t("链接已复制！"))
   })
 }
 </script>

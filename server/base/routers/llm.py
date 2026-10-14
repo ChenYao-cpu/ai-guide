@@ -87,8 +87,7 @@ async def gen_guide_base_prompt(
         "你精通本景区的历史文化、自然地理、建筑特色等各方面知识。"
         f"{visitor_greeting}"
         "请根据景点信息和知识库资料，为游客提供专业、准确、生动、有温度的导览讲解。"
-        "你的回答应该：1) 准确有据（基于知识库资料）；2) 生动有趣（用自己的知识补充合理的细节，"
-        "让讲解真实自然）；3) 热情友好（让游客感受到温暖）。"
+        "你的回答应该准确有据，采用短句和具体观察引导；不得用自己的印象补充未核实的历史细节。"
         "★ 严禁出现【XX】格式的占位符，每个描述都要写具体。关键事实和数据须基于资料，"
         "未在资料中出现的雕刻纹样、典故和设施位置不要编造。"
         "先直接回答游客的问题，通常用2至4句、80至150字口语讲解；游客要求详细时再展开。"
@@ -153,7 +152,7 @@ async def gen_guide_base_prompt(
         {"role": "system", "content": system_str},
         {"role": "user", "content": first_input},
     ]
-    logger.info(f"Guide prompt: {prompt}")
+    logger.debug("Guide prompt prepared: {} messages",len(prompt))
 
     return prompt
 
@@ -222,7 +221,7 @@ async def gen_poduct_base_prompt(
     # sales_doc_prompt = first_input_template.replace("{product_info}", product_info_str)
 
     prompt = [{"role": "system", "content": system_str}, {"role": "user", "content": sales_doc_prompt}]
-    logger.info(prompt)
+    logger.debug("LLM request: {} messages; prompt text omitted", len(prompt))
 
     return prompt
 
@@ -250,7 +249,7 @@ async def get_agent_res(prompt, departure_place, delivery_company):
     return agent_response
 
 
-async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 20, tour_mode: bool = False):
+async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
     """获取 LLM 推理返回
 
     Args:
@@ -259,7 +258,7 @@ async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 20, tour
     Returns:
         _type_: _description_
     """
-    logger.info(prompt)
+    logger.debug("LLM request: {} messages; prompt text omitted",len(prompt))
     model_name = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
 
     import asyncio
@@ -288,17 +287,13 @@ async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 20, tour
         if json_mode:
             request_kwargs["response_format"] = {"type": "json_object"}
         try:
-            try:
-                return client.chat.completions.create(**request_kwargs)
-            except Exception:
-                if not json_mode:
-                    raise
-                logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
-                request_kwargs.pop("response_format", None)
-                return client.chat.completions.create(**request_kwargs)
-        finally:
-            if owned_client:
-                owned_client.close()
+            return LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0).chat.completions.create(**request_kwargs)
+        except Exception:
+            if not json_mode:
+                raise
+            logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
+            request_kwargs.pop("response_format", None)
+            return LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0).chat.completions.create(**request_kwargs)
 
     # OpenAI SDK 是同步客户端，放入工作线程避免阻塞 FastAPI 事件循环。
     response = await asyncio.to_thread(_request)

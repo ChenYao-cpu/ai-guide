@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t, formatTableCell } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Delete, Edit, Search } from '@element-plus/icons-vue'
@@ -74,15 +75,15 @@ const fetchSpotList = async () => {
     if (data.code === 0) {
       queriedResult.value = data.data
     } else {
-      ElMessage.error('景点接口错误')
-      throw new Error('景点接口错误')
+      ElMessage.error(t("景点接口错误"))
+      throw new Error(t("景点接口错误"))
     }
   } catch (error: unknown) {
     tableLoading.value = false
     if (error instanceof AxiosError) {
-      ElMessage.error('景点接口失败: ' + error.message)
+      ElMessage.error(t("景点接口失败: ") + error.message)
     } else {
-      ElMessage.error('未知错误：' + error)
+      ElMessage.error(t("未知错误：") + error)
     }
   }
 }
@@ -101,21 +102,21 @@ const getCategoryTagType = (category: string): '' | 'success' | 'warning' | 'inf
 
 const isDeleting = ref(false)
 const handleDelete = async (id: number, spotName: string) => {
-  ElMessageBox.confirm('确定要删除景点 "' + spotName + '" 吗？', '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(t("确定要删除景点 \"") + spotName + t("\" 吗？"), t("警告"), {
+    confirmButtonText: t("确定"),
+    cancelButtonText: t("取消"),
     type: 'warning',
     showClose: false,
   })
     .then(async () => {
-      ElMessage.success('正在删除 ' + spotName + '，请稍候')
+      ElMessage.success(t("正在删除 ") + spotName + t("，请稍候"))
       isDeleting.value = true
       const { data } = await deleteSpot(id)
       if (data.code === 0) {
-        ElMessage.success('删除成功')
+        ElMessage.success(t("删除成功"))
         fetchSpotList()
       } else {
-        ElMessage.error('删除失败')
+        ElMessage.error(t("删除失败"))
       }
       isDeleting.value = false
     })
@@ -133,25 +134,25 @@ const handleDelete = async (id: number, spotName: string) => {
         <div class="card-header">
           <div>
             <el-form :inline="true">
-              <el-form-item label="搜索">
+              <el-form-item :label='$t("搜索")'>
                 <el-input
                   style="width: 240px"
                   v-model="queryCondition.spotName"
-                  placeholder="景点名称"
+                  :placeholder='$t("景点名称")'
                   clearable
                 />
               </el-form-item>
-              <el-form-item label="分类">
+              <el-form-item :label='$t("分类")'>
                 <el-select
                   v-model="queryCondition.category"
-                  placeholder="景点分类"
+                  :placeholder='$t("景点分类")'
                   clearable
                   style="width: 160px"
                 >
                   <el-option
                     v-for="item in categoryOptions"
                     :key="item.value"
-                    :label="item.label"
+                    :label="$t(item.label)"
                     :value="item.value"
                   />
                 </el-select>
@@ -160,9 +161,7 @@ const handleDelete = async (id: number, spotName: string) => {
                 <el-button type="primary" @click="fetchSpotList">
                   <el-icon style="margin-right: 5px">
                     <Search />
-                  </el-icon>
-                  查询
-                </el-button>
+                  </el-icon>{{ $t("查询") }}</el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -171,18 +170,16 @@ const handleDelete = async (id: number, spotName: string) => {
             <el-button type="primary" @click="router.push({ name: 'ScenicSpotCreate' })">
               <el-icon style="margin-right: 5px">
                 <Plus />
-              </el-icon>
-              添加景点
-            </el-button>
+              </el-icon>{{ $t("添加景点") }}</el-button>
           </div>
         </div>
       </template>
 
       <!-- 中部表格信息 -->
       <el-table :data="queriedResult.spot_list" max-height="1000" v-loading="tableLoading">
-        <el-table-column prop="spot_id" label="景点ID" align="center" width="80px" />
+        <el-table-column :formatter="formatTableCell" prop="spot_id" :label='$t("景点ID")' align="center" width="100px" />
 
-        <el-table-column prop="image_path" label="图片" align="center" width="100px">
+        <el-table-column prop="image_path" :label='$t("图片")' align="center" width="100px">
           <template #default="scope">
             <div style="display: flex; align-items: center; justify-content: center">
               <el-image
@@ -195,36 +192,38 @@ const handleDelete = async (id: number, spotName: string) => {
           </template>
         </el-table-column>
 
-        <el-table-column prop="spot_name" label="景点名称" align="center" min-width="140px" />
+        <el-table-column :formatter="formatTableCell" prop="spot_name" :label='$t("景点名称")' align="center" min-width="190px" show-overflow-tooltip />
 
-        <el-table-column prop="category" label="分类" align="center" width="110px">
+        <el-table-column prop="category" :label='$t("分类")' align="center" width="150px">
           <template #default="scope">
             <el-tag :type="getCategoryTagType(scope.row.category)" size="small">
-              {{ getCategoryLabel(scope.row.category) }}
+              {{ $t(getCategoryLabel(scope.row.category)) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column prop="tags" label="标签" align="center" min-width="160px">
+        <el-table-column prop="tags" :label='$t("标签")' align="center" min-width="200px">
           <template #default="scope">
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center">
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-height: 96px; overflow: auto">
               <el-tag
                 v-for="(tag, index) in (scope.row.tags ? scope.row.tags.split(';').filter(Boolean) : [])"
                 :key="index"
                 size="small"
                 type="info"
+                :title="$t(tag)"
+                style="max-width: 100%; overflow: hidden; text-overflow: ellipsis"
               >
-                {{ tag }}
+                {{ $t(tag) }}
               </el-tag>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column prop="location" label="所在位置" align="center" min-width="140px" />
-        <el-table-column prop="best_season" label="最佳季节" align="center" width="110px" />
-        <el-table-column prop="upload_date" label="上传时间" align="center" width="160px" />
+        <el-table-column :formatter="formatTableCell" prop="location" :label='$t("所在位置")' align="center" min-width="180px" show-overflow-tooltip />
+        <el-table-column :formatter="formatTableCell" prop="best_season" :label='$t("最佳季节")' align="center" width="160px" show-overflow-tooltip />
+        <el-table-column :formatter="formatTableCell" prop="upload_date" :label='$t("上传时间")' align="center" width="180px" />
 
-        <el-table-column label="操作" v-slot="{ row }" align="center" width="230px">
+        <el-table-column :label='$t("操作")' v-slot="{ row }" align="center" width="230px">
           <div class="control-item">
             <el-button
               :type="row.instruction ? 'success' : 'warning'"
@@ -238,9 +237,7 @@ const handleDelete = async (id: number, spotName: string) => {
                   row.spot_id,
                 )
               "
-            >
-              游览说明
-            </el-button>
+            >{{ $t("游览说明") }}</el-button>
 
             <!-- 编辑按钮 -->
             <el-button

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t, locale } from '@/i18n'
 import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
@@ -14,11 +15,12 @@ const props = defineProps<{
 
 function initChart() {
   if (!chartRef.value) return
-  chartInstance = echarts.init(chartRef.value, 'soft-ui')
+  chartInstance?.dispose()
+  chartInstance = echarts.init(chartRef.value, 'soft-ui', { locale: locale.value === 'en' ? 'EN' : 'ZH' })
 
   const option: echarts.EChartsOption = {
     title: props.title ? {
-      text: props.title,
+      text: t(props.title),
       left: 'center',
       textStyle: { fontSize: 16, fontWeight: 600 },
     } : undefined,
@@ -27,12 +29,12 @@ function initChart() {
     },
     legend: {
       bottom: 5,
-      data: props.data.map(d => d.name),
+      data: props.data.map(d => t(d.name)),
     },
     radar: {
       center: ['50%', '52%'],
       radius: '65%',
-      indicator: props.indicators,
+      indicator: props.indicators.map(item => ({...item, name: t(item.name)})),
       axisName: {
         color: '#64748b',
         fontSize: 12,
@@ -41,7 +43,7 @@ function initChart() {
     series: [{
       type: 'radar',
       data: props.data.map((d, idx) => ({
-        name: d.name,
+        name: t(d.name),
         value: d.value,
         areaStyle: { opacity: 0.15 },
         lineStyle: { width: 2 },
@@ -58,6 +60,7 @@ watch(() => props.data, () => {
 }, { deep: true })
 
 onMounted(() => { initChart() })
+watch(locale, () => initChart())
 </script>
 
 <template>

@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts">import { t } from '@/i18n'
+
 import { ref, onMounted } from 'vue'
 import { request_handler, type ResultPackage } from '@/api/base'
 import { header_authorization } from '@/api/user'
@@ -35,7 +36,7 @@ const loadStatus = async () => {
       else loadError.value = pkg.message
     }
   } catch (e: any) {
-    loadError.value = e.message || '加载失败'
+    loadError.value = e.message || t("加载失败")
   } finally {
     loading.value = false
   }
@@ -43,20 +44,20 @@ const loadStatus = async () => {
 
 const statusTag = (s: string) => s === 'connected' || s === 'available' ? 'success' : 'danger'
 const statusLabel = (s: string) => {
-  if (s === 'connected' || s === 'available') return '正常'
-  if (s === 'unavailable') return '未启用'
-  return '异常'
+  if (s === 'connected' || s === 'available') return t("正常")
+  if (s === 'unavailable') return t("未启用")
+  return t("异常")
 }
 
 const services = computed(() => {
   if (!status.value) return []
   return [
-    { name: '数据库 PostgreSQL', status: status.value.database.status, detail: status.value.database.error ? `异常: ${status.value.database.error}` : '连接正常', statusKey: 'connected' },
-    { name: 'LLM 大模型', status: status.value.llm.status, detail: `${status.value.llm.model} @ ${status.value.llm.api_base}`, extra: status.value.llm.key_configured ? ' Key已配置' : ' Key未配置' },
-    { name: 'TTS 语音合成', status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS', statusKey: 'available' },
-    { name: 'ASR 语音识别', status: status.value.asr.status, detail: 'FunASR Paraformer', statusKey: 'available' },
-    { name: 'RAG 知识检索', status: status.value.rag.status, detail: '向量数据库 + 景区知识库', statusKey: 'available' },
-    { name: '数字人驱动', status: status.value.digital_human.status, detail: 'MuseTalk 口型同步', statusKey: 'available' },
+    { name: t("数据库 PostgreSQL"), status: status.value.database.status, detail: status.value.database.error ? t("异常: {p0}", {p0: status.value.database.error}) : t("连接正常"), statusKey: 'connected' },
+    { name: t("LLM 大模型"), status: status.value.llm.status, detail: `${status.value.llm.model} @ ${status.value.llm.api_base}`, extra: status.value.llm.key_configured ? t(" Key已配置") : t(" Key未配置") },
+    { name: t("TTS 语音合成"), status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS', statusKey: 'available' },
+    { name: t("ASR 语音识别"), status: status.value.asr.status, detail: 'FunASR Paraformer', statusKey: 'available' },
+    { name: t("RAG 知识检索"), status: status.value.rag.status, detail: t("向量数据库 + 景区知识库"), statusKey: 'available' },
+    { name: t("数字人驱动"), status: status.value.digital_human.status, detail: t("MuseTalk 口型同步"), statusKey: 'available' },
   ]
 })
 
@@ -68,11 +69,11 @@ onMounted(() => { loadStatus() })
 <template>
   <div class="overview-container" v-loading="loading">
     <div class="page-header">
-      <h2> 系统概览</h2>
-      <el-button :icon="'Refresh'" @click="loadStatus" :loading="loading">刷新状态</el-button>
+      <h2>{{ $t("系统概览") }}</h2>
+      <el-button :icon="'Refresh'" @click="loadStatus" :loading="loading">{{ $t("刷新状态") }}</el-button>
     </div>
 
-    <el-alert v-if="loadError" :title="'加载失败: ' + loadError" type="error" show-icon closable style="margin-bottom:16px" />
+    <el-alert v-if="loadError" :title="$t('加载失败: ') + $t(loadError)" type="error" show-icon closable style="margin-bottom:16px" />
 
     <!-- 服务状态卡片 -->
     <el-row :gutter="16" class="service-row">
@@ -80,32 +81,32 @@ onMounted(() => { loadStatus() })
         <el-card shadow="hover" class="service-card">
           <div class="svc-header">
 
-            <span class="svc-name">{{ svc.name }}</span>
+            <span class="svc-name">{{ $t(svc.name) }}</span>
             <el-tag :type="svc.status === (svc.statusKey || 'connected') ? 'success' : 'danger'" size="small" effect="dark">
-              {{ svc.status === (svc.statusKey || 'connected') ? '● 正常' : '✕ 异常' }}
+              {{ $t(svc.status === (svc.statusKey || 'connected') ? '● 正常' : '✕ 异常') }}
             </el-tag>
           </div>
-          <div class="svc-detail">{{ svc.detail }}</div>
-          <div v-if="svc.extra" class="svc-extra" :class="{ warn: svc.extra.includes('未配置') }">{{ svc.extra }}</div>
+          <div class="svc-detail">{{ $t(svc.detail) }}</div>
+          <div v-if="svc.extra" class="svc-extra" :class="{ warn: svc.extra.includes('未配置') }">{{ $t(svc.extra) }}</div>
         </el-card>
       </el-col>
     </el-row>
 
     <!-- 环境信息 -->
     <el-card shadow="never" class="env-card" v-if="status">
-      <template #header><span class="card-title">运行环境</span></template>
+      <template #header><span class="card-title">{{ $t("运行环境") }}</span></template>
       <el-descriptions :column="3" border size="small">
-        <el-descriptions-item label="Python 版本">{{ status.python_version }}</el-descriptions-item>
-        <el-descriptions-item label="LLM 模型">{{ status.llm.model }}</el-descriptions-item>
-        <el-descriptions-item label="API 网关">{{ status.llm.api_base }}</el-descriptions-item>
-        <el-descriptions-item label="数据库状态">
-          <el-tag :type="statusTag(status.database.status)" size="small">{{ statusLabel(status.database.status) }}</el-tag>
+        <el-descriptions-item :label='$t("Python 版本")'>{{ $t(status.python_version) }}</el-descriptions-item>
+        <el-descriptions-item :label='$t("LLM 模型")'>{{ $t(status.llm.model) }}</el-descriptions-item>
+        <el-descriptions-item :label='$t("API 网关")'>{{ $t(status.llm.api_base) }}</el-descriptions-item>
+        <el-descriptions-item :label='$t("数据库状态")'>
+          <el-tag :type="statusTag(status.database.status)" size="small">{{ $t(statusLabel(status.database.status)) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="TTS 服务">
-          <el-tag :type="statusTag(status.tts.status)" size="small">{{ statusLabel(status.tts.status) }}</el-tag>
+        <el-descriptions-item :label='$t("TTS 服务")'>
+          <el-tag :type="statusTag(status.tts.status)" size="small">{{ $t(statusLabel(status.tts.status)) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="ASR 服务">
-          <el-tag :type="statusTag(status.asr.status)" size="small">{{ statusLabel(status.asr.status) }}</el-tag>
+        <el-descriptions-item :label='$t("ASR 服务")'>
+          <el-tag :type="statusTag(status.asr.status)" size="small">{{ $t(statusLabel(status.asr.status)) }}</el-tag>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>

@@ -9,12 +9,12 @@ import { type StreamerInfo } from '@/api/streamerInfo'
 import FileUpload from '@/components/FileUpload.vue'
 
 // 定义 和父组件通信的双向绑定 model
-const modelSteamerInfo = defineModel({ default: {} as StreamerInfo })
+const modelSteamerInfo = defineModel<StreamerInfo>({ default: () => ({} as StreamerInfo) })
 
 // 定义组件入参类型以及默认值
 export interface Props {
   disableChange: boolean
-  optionList: StreamerInfo[]
+  optionList?: StreamerInfo[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -75,35 +75,35 @@ const labelPosition = ref('top')
     <el-row :gutter="20">
       <el-col :span="12">
         <el-card shadow="never" v-if="props.optionList.length >= 1">
-          <h2>选择主播</h2>
+          <h2>{{ $t("选择主播") }}</h2>
           <el-divider />
           <el-select
             v-model="modelSteamerInfo"
-            placeholder="选择主播"
+            :placeholder='$t("选择主播")'
             size="large"
             style="width: 240px"
           >
             <el-option
               v-for="item in props.optionList"
               :key="item.streamer_id"
-              :label="item.name"
+              :label="$t(item.name)"
               :value="item"
             />
           </el-select>
         </el-card>
 
         <el-card shadow="never">
-          <h2>基本信息</h2>
+          <h2>{{ $t("基本信息") }}</h2>
           <el-divider />
           <el-form :label-position="labelPosition" :label-width="formLabelWidth">
-            <el-form-item label="姓名">
+            <el-form-item :label='$t("姓名")'>
               <el-input
                 v-model="modelSteamerInfo.name"
                 size="large"
                 :disabled="props.disableChange"
               />
             </el-form-item>
-            <el-form-item label="主播性格">
+            <el-form-item :label='$t("主播性格")'>
               <el-tag
                 v-for="(characterItem, index) in characterList"
                 :key="index"
@@ -114,7 +114,7 @@ const labelPosition = ref('top')
                 size="large"
                 style="margin: 3px"
               >
-                {{ characterItem }}
+                {{ $t(characterItem) }}
               </el-tag>
 
               <el-input
@@ -139,10 +139,10 @@ const labelPosition = ref('top')
         </el-card>
 
         <el-card shadow="never">
-          <h2>TTS 配置</h2>
+          <h2>{{ $t("TTS 配置") }}</h2>
           <el-divider />
           <el-form :label-position="labelPosition" :label-width="formLabelWidth">
-            <el-form-item label="音频文件">
+            <el-form-item :label='$t("音频文件")'>
               <div class="make-center">
                 <audio
                   v-if="modelSteamerInfo.tts_reference_audio"
@@ -150,7 +150,7 @@ const labelPosition = ref('top')
                   controls
                   style="margin-right: 20px"
                 ></audio>
-                <el-tag v-else size="large" type="danger"> 未找到音频 </el-tag>
+                <el-tag v-else size="large" type="danger">{{ $t("未找到音频") }}</el-tag>
                 <FileUpload
                   v-show="!props.disableChange"
                   v-model="modelSteamerInfo.tts_reference_audio"
@@ -159,7 +159,7 @@ const labelPosition = ref('top')
               </div>
             </el-form-item>
 
-            <el-form-item label="音频对应文字">
+            <el-form-item :label='$t("音频对应文字")'>
               <el-input
                 v-model="modelSteamerInfo.tts_reference_sentence"
                 size="large"

@@ -138,7 +138,9 @@ async def get_route_recommendation(
 
     # 调用推荐算法
     result = await recommend_route(request.preferences, spot_list, request.time_budget_minutes,
-                                   city=request.city, pace=request.pace, start_area=request.start_area)
+                                   city=request.city, pace=request.pace, start_area=request.start_area,
+                                   end_area=request.end_area, queue_reserve_minutes=request.queue_reserve_minutes,
+                                   excluded_spot_ids=request.excluded_spot_ids)
     if not result['spot_ids']:
         return make_return_data(False,ResultCode.FAIL,'当前时间与步行节奏下暂无匹配路线，请增加时长或调整出发区域','')
 

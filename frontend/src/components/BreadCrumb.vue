@@ -26,7 +26,7 @@ const handleLink = (item: RouteRecordNormalized) => {
       :to="{ path: item.path }"
     >
       <a @click.prevent="handleLink(item)">
-        {{ item.meta.title }}
+        {{ $t(item.meta.title) }}
       </a>
     </el-breadcrumb-item>
   </el-breadcrumb>
