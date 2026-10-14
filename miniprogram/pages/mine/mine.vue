@@ -9,7 +9,6 @@
 
     <!-- 自定义导航栏（毛体标题） -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
-      <text class="nav-title">我的</text>
     </view>
 
     <!-- 头像卡片 -->
@@ -76,7 +75,6 @@
         <view class="dp-hd"><text class="dp-title">关于我们</text><text class="dp-close" @tap="showAbout=false">✕</text></view>
         <view class="dp-content about-content">
           <text class="about-intro">景区数字人导览与路线规划。</text>
-          <text class="about-credit">西南民族大学 · 李英玲 · 苗加纯 刘梓轩 陈瑶</text>
         </view>
       </view>
     </view>

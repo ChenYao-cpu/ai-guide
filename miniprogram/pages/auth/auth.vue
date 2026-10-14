@@ -8,7 +8,19 @@
       <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
       <view class="welcome-tags"><text>行程规划</text><text>景点讲解</text><text>沿途问答</text></view>
     <view class="login-area">
-      <button class="primary" :disabled="logining" @tap="beginLogin">{{ logining ? '正在登录…' : developmentLogin ? '开发测试登录' : '微信授权登录' }}</button>
+      <view v-if="appLogin">
+        <input v-if="registering" class="nickname-input" style="margin-bottom:20rpx" v-model="nickname" placeholder="昵称（用于登录）" maxlength="40" :disabled="logining" />
+        <input class="nickname-input" v-model="account" :placeholder="registering ? '邮箱地址' : '昵称'" maxlength="254" :disabled="logining" />
+        <input class="nickname-input" style="margin:20rpx 0" v-model="password" password placeholder="密码" :disabled="logining" />
+        <input v-if="registering" class="nickname-input" style="margin:20rpx 0" v-model="confirmPassword" password placeholder="再次输入密码（至少8位）" :disabled="logining" />
+        <view v-if="registering">
+          <input class="nickname-input" v-model="emailCode" type="number" maxlength="6" placeholder="邮箱验证码" :disabled="logining" />
+          <button class="dialog-cancel" style="margin:20rpx 0" :disabled="sendingCode || logining || codeRetryAt>0" @tap="sendEmailCode">{{ sendingCode ? '正在发送…' : codeRetryAt>0 ? '请稍后再发送' : '发送验证码' }}</button>
+        </view>
+      </view>
+      <button class="primary" :disabled="logining" @tap="beginLogin">{{ logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录' }}</button>
+      <button v-if="appLogin" class="dialog-cancel" style="margin-top:20rpx" :disabled="logining" @tap="toggleRegistration">{{ registering ? '已有账号，去登录' : '没有账号？邮箱注册' }}</button>
+      <text v-if="appLogin && registering && codeNotice" class="notice">{{ codeNotice }}</text>
       <text v-if="error && !showProfileDialog" class="error">{{ error }}</text>
       <text v-if="developmentLogin" class="notice">开发模式</text>
     </view>
@@ -37,11 +49,12 @@
 </template>
 <script>
 import BrandLogo from '../../components/BrandLogo.vue'
-import { BASE_URL, DEVELOPMENT_LOGIN, LOGIN_PROVIDER } from '../../common/config.js'
+import { BASE_URL, DEVELOPMENT_LOGIN, LOGIN_PROVIDER, APP_LOGIN } from '../../common/config.js'
 export default {
   components: { BrandLogo },
-  data() { return {logining:false,error:'',developmentLogin:DEVELOPMENT_LOGIN,avatarPath:'',nickname:'',showProfileDialog:false} },
+  data() { return {appLogin:APP_LOGIN,emailCode:'',sendingCode:false,codeRetryAt:0,codeNotice:'',registering:false,confirmPassword:'',account:'',password:'',logining:false,error:'',developmentLogin:DEVELOPMENT_LOGIN,avatarPath:'',nickname:'',showProfileDialog:false} },
   onShow() { uni.setNavigationBarColor({frontColor:'#000000',backgroundColor:'#f8fafc',animation:{duration:0,timingFunc:'linear'}}) },
+  onUnload() { clearTimeout(this._emailCodeTimer);clearTimeout(this._wxLoginTimer) },
   onLoad() {
     if(uni.getStorageSync('login_provider')===LOGIN_PROVIDER && !uni.getStorageSync('login_auto_disabled')) {
       if(uni.getStorageSync('token'))this.restoreSession()
@@ -68,10 +81,10 @@ export default {
       uni.request({url:BASE_URL+'/user/me',header:{Authorization:'Bearer '+uni.getStorageSync('token')},timeout:15000,
         success:r=>{
           this.logining=false
-          if(r.statusCode===401){uni.removeStorageSync('token');this.handleWxLogin();return}
+          if(r.statusCode===401){uni.removeStorageSync('token');if(!APP_LOGIN)this.handleWxLogin();else this.error='登录已过期，请重新输入账号密码';return}
           const d=r.data||{}
           if(r.statusCode!==200||!d.success||!d.data){this.error=d.detail||d.message||'登录状态验证失败';return}
-          if(d.data.avatar||DEVELOPMENT_LOGIN)this.finishLogin(d.data)
+          if(d.data.avatar||DEVELOPMENT_LOGIN||APP_LOGIN)this.finishLogin(d.data)
           else this.openProfileDialog()
         },
         fail:e=>{this.logining=false;this.networkError(e)}})
@@ -79,8 +92,63 @@ export default {
     enterDevelopment() {this.handleWxLogin()},
     beginLogin() {
       if(this.logining)return
+      if(APP_LOGIN){if(this.registering)this.registerWithEmail();else this.loginWithPassword();return}
       if(uni.getStorageSync('token')&&uni.getStorageSync('login_provider')===LOGIN_PROVIDER)this.restoreSession()
       else this.handleWxLogin()
+    },
+    toggleRegistration() {
+      this.registering=!this.registering;this.error='';this.password='';this.confirmPassword='';this.emailCode=''
+    },
+    sendEmailCode() {
+      if(this.sendingCode)return
+      if(Date.now()<this.codeRetryAt){this.error='请等待60秒后再发送验证码';return}
+      const email=this.account.trim().toLowerCase()
+      if(!email){this.error='请先填写注册邮箱';return}
+      this.sendingCode=true;this.error='';this.codeNotice=''
+      uni.request({url:BASE_URL+'/user/email-code',method:'POST',data:{email},timeout:25000,
+        success:r=>{
+          const d=r.data||{}
+          if(r.statusCode!==200||!d.success){this.error=typeof d.detail==='string'?d.detail:'验证码发送失败';return}
+          this.codeNotice=d.message;this.codeRetryAt=Date.now()+(d.retry_after||60)*1000
+          clearTimeout(this._emailCodeTimer)
+          this._emailCodeTimer=setTimeout(()=>{this.codeRetryAt=0},(d.retry_after||60)*1000)
+        },fail:e=>this.networkError(e),complete:()=>{this.sendingCode=false}})
+    },
+    registerWithEmail() {
+      const email=this.account.trim().toLowerCase()
+      const nickname=this.nickname.trim()
+      if(!nickname||nickname.includes('@')){this.error='请填写昵称，不能包含 @';return}
+      if(!email||!this.password){this.error='请输入邮箱和密码';return}
+      if(this.password.length<8){this.error='密码至少8位';return}
+      if(this.password!==this.confirmPassword){this.error='两次输入的密码不一致';return}
+      if(!/^\d{6}$/.test(this.emailCode)){this.error='请输入6位邮箱验证码';return}
+      this.logining=true;this.error=''
+      uni.request({url:BASE_URL+'/user/register',method:'POST',data:{email,nickname,password:this.password,code:this.emailCode},timeout:15000,
+        success:r=>{
+          this.logining=false
+          const d=r.data||{}
+          if(r.statusCode!==200||!d.success){this.error=typeof d.detail==='string'?d.detail:'注册失败，请稍后重试';return}
+          this.account=nickname;this.registering=false;this.confirmPassword=''
+          this.loginWithPassword()
+        },
+        fail:e=>{this.logining=false;this.networkError(e)}})
+    },
+    loginWithPassword() {
+      const username=this.account.trim()
+      if(!username||!this.password){this.error='请输入账号和密码';return}
+      this.logining=true;this.error=''
+      uni.request({url:BASE_URL+'/user/login',method:'POST',
+        header:{'Content-Type':'application/x-www-form-urlencoded'},
+        data:'username='+encodeURIComponent(username)+'&password='+encodeURIComponent(this.password),timeout:15000,
+        success:r=>{
+          const d=r.data||{}
+          if(r.statusCode!==200||!d.access_token){this.logining=false;this.error=r.statusCode===401?'账号或密码错误':typeof d.detail==='string'?d.detail:'登录失败，请稍后重试';return}
+          uni.setStorageSync('token',d.access_token)
+          uni.setStorageSync('login_provider',LOGIN_PROVIDER)
+          this.password=''
+          this.restoreSession()
+        },
+        fail:e=>{this.logining=false;this.networkError(e)}})
     },
     openProfileDialog() {this.error='';this.showProfileDialog=true},
     onChooseAvatar(e) {
@@ -100,6 +168,7 @@ export default {
         fail:e=>{this.networkError(e)},complete:()=>{this.logining=false}})
     },
     handleWxLogin() {
+      if(APP_LOGIN)return
       if(this.logining)return
       if(DEVELOPMENT_LOGIN){let code=uni.getStorageSync('development_login_code');if(!code){code='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);uni.setStorageSync('development_login_code',code)}this.doLogin(code,'开发测试用户');return}
       this.logining=true;this.error=''

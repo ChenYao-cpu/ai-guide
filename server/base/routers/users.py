@@ -12,10 +12,11 @@
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from loguru import logger
 from passlib.context import CryptContext
+from pydantic import BaseModel
 
 from ...web_configs import WEB_CONFIGS
 from ..database.user_db import get_db_user_info
@@ -78,7 +79,7 @@ def authenticate_user(username: str, password: str) -> bool:
         return False
 
     # 校验密码
-    if not verify_password(password, user_info.hashed_password):
+    if user_info.delete or not verify_password(password, user_info.hashed_password):
         logger.info(f"verify_password fail")
         # 密码校验失败
         return False
@@ -118,6 +119,103 @@ def get_current_user_info(token: str = Depends(oauth2_scheme)):
     return user_id
 
 
+class EmailRegistration(BaseModel):
+    email: str
+    nickname: str
+    password: str
+    code: str
+
+
+class EmailCodeRequest(BaseModel):
+    email: str
+
+
+@router.post("/email-code", summary="发送邮箱注册验证码")
+def request_email_code(data: EmailCodeRequest, request: Request):
+    import secrets
+    import time
+    from sqlalchemy import text
+    from sqlmodel import Session, select
+    from ..database.init_db import DB_ENGINE
+    from ..models.user_model import UserInfo, EmailVerification
+    from ..modules.email_registration import normalize_email, code_digest, send_registration_code
+
+    email = normalize_email(data.email)
+    now = int(time.time())
+    ip = request.client.host if request.client else 'unknown'
+    with Session(DB_ENGINE) as session:
+        # Serialize requests, including the first insert, across server workers.
+        session.exec(text("SELECT pg_advisory_xact_lock(73192841)"))
+        if session.exec(select(UserInfo).where((UserInfo.username == email) | (UserInfo.email == email))).first():
+            raise HTTPException(409, "该邮箱已注册，请登录")
+        previous = session.get(EmailVerification, email)
+        if previous and now - previous.sent_at < 60:
+            raise HTTPException(429, "请等待60秒后再发送验证码")
+        recent = session.exec(select(EmailVerification).where(
+            EmailVerification.sender_ip == ip, EmailVerification.sent_at > now - 600
+        )).all()
+        if len(recent) >= 10:
+            raise HTTPException(429, "验证码请求过于频繁，请稍后再试")
+        code = f'{secrets.randbelow(1000000):06d}'
+        digest = code_digest(email, code)
+        send_registration_code(email, code)
+        record = previous or EmailVerification(email=email, code_hash=digest,
+            expires_at=now+600, sent_at=now, sender_ip=ip)
+        record.code_hash=digest; record.expires_at=now+600
+        record.sent_at=now; record.sender_ip=ip; record.attempts=0
+        session.add(record)
+        session.commit()
+    return {"success": True, "message": "验证码已发送，有效期10分钟", "retry_after": 60}
+
+
+@router.post("/register", summary="验证邮箱并注册")
+def register_email(data: EmailRegistration):
+    import hmac
+    import time
+    from sqlalchemy.exc import IntegrityError
+    from sqlmodel import Session, select
+    from ..database.init_db import DB_ENGINE
+    from ..models.user_model import UserInfo, EmailVerification
+    from ..modules.email_registration import normalize_email, code_digest
+
+    email = normalize_email(data.email)
+    nickname = data.nickname.strip()
+    if not nickname or len(nickname) > 40 or '@' in nickname:
+        raise HTTPException(400, '昵称需为1至40个字符，不能包含 @')
+    # bcrypt 最多支持 72 字节，避免静默截断密码。
+    if len(data.password) < 8 or len(data.password.encode('utf-8')) > 72:
+        raise HTTPException(400, "密码至少 8 位，UTF-8 编码不超过 72 字节")
+    if not WEB_CONFIGS.TOKEN_JWT_SECURITY_KEY:
+        raise HTTPException(503, "登录服务未配置 JWT 密钥")
+    with Session(DB_ENGINE) as session:
+        verification = session.exec(select(EmailVerification).where(
+            EmailVerification.email == email).with_for_update()).first()
+        if not verification or verification.expires_at <= int(time.time()) or verification.attempts >= 5:
+            raise HTTPException(400, "验证码已失效，请重新获取")
+        if not hmac.compare_digest(verification.code_hash, code_digest(email, data.code)):
+            verification.attempts += 1
+            session.add(verification)
+            session.commit()
+            raise HTTPException(400, "验证码错误")
+        existing = session.exec(select(UserInfo).where(
+            (UserInfo.username == email) | (UserInfo.email == email)
+        )).first()
+        if existing:
+            raise HTTPException(409, "该邮箱已注册，请登录")
+        if session.exec(select(UserInfo).where(UserInfo.username == nickname)).first():
+            raise HTTPException(409, '该昵称已被使用，请换一个')
+        session.add(UserInfo(username=nickname, email=email,
+                             hashed_password=get_password_hash(data.password),
+                             create_time=datetime.now(timezone.utc), delete=False))
+        session.delete(verification)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise HTTPException(409, "邮箱或昵称已被使用，请登录或更换")
+    return {"success": True, "message": "注册成功，请使用昵称和密码登录"}
+
+
 @router.post("/login", summary="登录接口")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if not WEB_CONFIGS.TOKEN_JWT_SECURITY_KEY:
@@ -125,7 +223,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=503, detail="Authentication service is not configured")
     try:
         # 校验用户名和密码
-        user_info = authenticate_user(form_data.username, form_data.password)
+        username = form_data.username.strip()
+        if '@' in username:
+            username = username.lower()
+        user_info = authenticate_user(username, form_data.password)
 
         if not user_info:
             raise HTTPException(status_code=401, detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})

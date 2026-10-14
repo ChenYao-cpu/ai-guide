@@ -250,7 +250,7 @@ async def get_agent_res(prompt, departure_place, delivery_company):
     return agent_response
 
 
-async def get_llm_res(prompt, json_mode: bool = False):
+async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 20, tour_mode: bool = False):
     """获取 LLM 推理返回
 
     Args:
@@ -265,8 +265,19 @@ async def get_llm_res(prompt, json_mode: bool = False):
     import asyncio
 
     def _request():
+        client = LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0)
+        owned_client = None
+        selected_model = model_name
+        if tour_mode and os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true':
+            from openai import OpenAI
+            import httpx
+            owned_client = OpenAI(api_key=os.environ['VISION_API_KEY'],
+                base_url=os.environ['VISION_API_BASE'], timeout=timeout, max_retries=0,
+                http_client=httpx.Client(timeout=timeout, trust_env=False))
+            client = owned_client
+            selected_model = os.getenv('VISION_MODEL', 'qwen3-vl-plus')
         request_kwargs = dict(
-            model=model_name,
+            model=selected_model,
             messages=prompt,
             stream=False,
             temperature=0.1 if json_mode else 0.35,
@@ -277,13 +288,17 @@ async def get_llm_res(prompt, json_mode: bool = False):
         if json_mode:
             request_kwargs["response_format"] = {"type": "json_object"}
         try:
-            return LLM_MODEL_HANDLER.chat.completions.create(**request_kwargs)
-        except Exception:
-            if not json_mode:
-                raise
-            logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
-            request_kwargs.pop("response_format", None)
-            return LLM_MODEL_HANDLER.chat.completions.create(**request_kwargs)
+            try:
+                return client.chat.completions.create(**request_kwargs)
+            except Exception:
+                if not json_mode:
+                    raise
+                logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
+                request_kwargs.pop("response_format", None)
+                return client.chat.completions.create(**request_kwargs)
+        finally:
+            if owned_client:
+                owned_client.close()
 
     # OpenAI SDK 是同步客户端，放入工作线程避免阻塞 FastAPI 事件循环。
     response = await asyncio.to_thread(_request)

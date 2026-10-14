@@ -32,7 +32,7 @@ def get_db_user_info(id: int = -1, username: str = "", all_info: bool = False) -
         # 使用 ID 的方式进行查询
         query = select(UserInfo).where(UserInfo.user_id == id)
     else:
-        query = select(UserInfo).where(UserInfo.username == username)
+        query = select(UserInfo).where((UserInfo.username == username) | (UserInfo.email == username)) if '@' in username else select(UserInfo).where(UserInfo.username == username)
 
     # 查询数据库
     with Session(DB_ENGINE) as session:
