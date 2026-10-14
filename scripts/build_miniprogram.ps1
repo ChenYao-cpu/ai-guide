@@ -21,7 +21,7 @@ if ($taskWifi) {
     if ($taskWifiAddress) {
         $taskConfigPath = Join-Path $project 'common/config.js'
         $taskConfigText = [System.IO.File]::ReadAllText($taskConfigPath)
-        $taskConfigText = $taskConfigText -replace "export const LAN_SERVER_ORIGIN = 'http://[^']+'", "export const LAN_SERVER_ORIGIN = 'http://$($taskWifiAddress.Address):8000'"
+        $taskConfigText = $taskConfigText -replace "export const LAN_SERVER_ORIGIN = 'http://[^']+'", "export const LAN_SERVER_ORIGIN = 'http://$($taskWifiAddress.Address):18000'"
         [System.IO.File]::WriteAllText($taskConfigPath, $taskConfigText, (New-Object System.Text.UTF8Encoding($false)))
     }
 }

@@ -264,8 +264,19 @@ async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
     import asyncio
 
     def _request():
+        client = LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0)
+        owned_client = None
+        selected_model = model_name
+        if tour_mode and os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true':
+            from openai import OpenAI
+            import httpx
+            owned_client = OpenAI(api_key=os.environ['VISION_API_KEY'],
+                base_url=os.environ['VISION_API_BASE'], timeout=timeout, max_retries=0,
+                http_client=httpx.Client(timeout=timeout, trust_env=False))
+            client = owned_client
+            selected_model = os.getenv('VISION_MODEL', 'qwen3-vl-plus')
         request_kwargs = dict(
-            model=model_name,
+            model=selected_model,
             messages=prompt,
             stream=False,
             temperature=0.1 if json_mode else 0.35,

@@ -61,11 +61,11 @@ def issue_tour_avatar_token(tour):
                       WEB_CONFIGS.TOKEN_JWT_SECURITY_KEY, algorithm="HS256")
 
 
-def authorize_tour(db, tour_id, guide_id, access_token, authorization):
+def authorize_tour(db, tour_id, guide_id, access_token, authorization, allow_ended=False):
     tour = db.get(TourSessionInfo, tour_id)
     if not tour or tour.delete or tour.guide_id != guide_id:
         raise HTTPException(403, "导览与所选数字人不匹配")
-    if tour.status and tour.status.live_status == 2:
+    if not allow_ended and tour.status and tour.status.live_status == 2:
         raise HTTPException(409, "导览已结束，请重新选择数字人开始导览")
     if access_token:
         try:

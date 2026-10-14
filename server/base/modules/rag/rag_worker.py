@@ -164,6 +164,18 @@ async def _load_lightweight_tour_retriever(user_id: int, file_paths=None) -> Lig
         if text and text.strip():
             records.append((source_path.name, text.strip()))
 
+    from sqlmodel import Session, select
+    from ...database.init_db import DB_ENGINE
+    from ...models.tour_models import ScenicSpotInfo
+    with Session(DB_ENGINE) as db:
+        spots = db.exec(select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)).all()
+        for spot in spots:
+            for field, topic in (('history_detail', '历史文化 历史沿革'), ('photo_tips', '最佳打卡点 最佳拍摄点 摄影机位'),
+                                 ('description', '自然风光 景观特色 介绍'), ('tour_tips', '游览建议'),
+                                 ('service_facilities', '服务设施'), ('location', '景点位置')):
+                value = getattr(spot, field, '')
+                if value:
+                    records.append((f'景点档案：{spot.spot_name} / {field}', f'{spot.spot_name} {topic}：{value}'))
     retriever = LightweightTourRetriever(records)
     logger.info(f"Lightweight tour RAG loaded: {len(records)} documents, {len(retriever.records)} chunks")
     return retriever
@@ -211,6 +223,17 @@ def build_tour_rag_prompt(rag_retriever: Any, spot_name: str, prompt: str, topic
         logger.info(f" @@@ Tour RAG not ready: {real_retriever}")
         return prompt, []
 
+    # 保留完整问题，同时补充口语问题对应的检索主题。
+    from ..tour_intent import retrieval_topics
+    topics = retrieval_topics(prompt)
+    for words, topic in (
+        (("拍照", "摄影", "拍摄", "机位", "取景", "出片"), "拍摄建议 最佳拍照位置 机位"),
+        (("历史", "故事", "典故", "由来"), "历史典故"),
+        (("厕所", "卫生间", "洗手间", "餐饮", "休息"), "服务设施"),
+        (("怎么走", "怎么到", "路线", "下一站"), "游览路线 交通位置"),
+    ):
+        if any(word in prompt for word in words):
+            topics.append(topic)
     query_text = f"景点：{spot_name}。游客问题：{prompt}"
     kwargs=dict(context_max_length=TOUR_CONTEXT_MAX_LENGTH-len(TOUR_GENERATE_TEMPLATE))
     if isinstance(real_retriever,LightweightTourRetriever): kwargs.update(spot_name=spot_name,topics=topics)

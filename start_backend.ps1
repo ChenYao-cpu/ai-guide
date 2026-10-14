@@ -1,7 +1,7 @@
 # Backend launcher compatible with Windows PowerShell 5 and PowerShell 7.
 # Usage: powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 
-param([switch]$DevelopmentLogin)
+param([switch]$DevelopmentLogin, [int]$Port = 18000)
 $ErrorActionPreference = "Stop"
 if ($DevelopmentLogin) { $env:ALLOW_DEV_LOGIN = 'true' }
 
@@ -31,13 +31,14 @@ foreach ($requiredName in @("POSTGRES_PASSWORD", "LLM_API_KEY", "TOKEN_JWT_SECUR
 
 $env:HTTP_PROXY = ""
 $env:HTTPS_PROXY = ""
+$env:FILES_URL_BASE = "http://localhost:$Port/api/v1"
 if (-not $env:POSTGRES_SERVER) { $env:POSTGRES_SERVER = "127.0.0.1" }
 if (-not $env:POSTGRES_PORT) { $env:POSTGRES_PORT = "15432" }
 if (-not $env:POSTGRES_DB) { $env:POSTGRES_DB = "streamer_sales_db" }
 
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host "  Scenic AI Guide - Backend" -ForegroundColor Cyan
-Write-Host "  http://127.0.0.1:8000" -ForegroundColor Green
+Write-Host "  http://127.0.0.1:$Port" -ForegroundColor Green
 Write-Host "======================================" -ForegroundColor Cyan
 
-uvicorn server.base.base_server:app --host 0.0.0.0 --port 8000
+uvicorn server.base.base_server:app --host 0.0.0.0 --port $Port

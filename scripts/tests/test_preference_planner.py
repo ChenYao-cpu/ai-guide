@@ -13,6 +13,13 @@ SPOTS=[dict(spot_id=i+1,spot_name=name,city='北京',visit_duration=duration,**p
 def plan(preferences,budget=120,**kwargs):return asyncio.run(recommend_route(preferences,SPOTS,budget,**kwargs))
 
 class PreferencePlannerTests(unittest.TestCase):
+    def test_unspecified_city_uses_a_feasible_plan(self):
+        oversized=[dict(spot_id=100+i,spot_name=f'公园{i}',city='成都',category='natural',tags='自然',latitude=30.6,longitude=104.0,visit_duration=360) for i in range(20)]
+        result=asyncio.run(recommend_route(['family','nature'],oversized+SPOTS,120))
+        self.assertEqual(result['city'],'北京')
+        self.assertTrue(result['spot_ids'])
+        self.assertLessEqual(result['estimated_time_minutes'],120)
+
     def test_distinct_preferences_have_distinct_itineraries(self):
         plans=[plan([p]) for p in ['history','nature','photography','family']]
         self.assertEqual(len({tuple(sorted(p['spot_ids'])) for p in plans}),4)

@@ -2,6 +2,12 @@
 from sqlmodel import Field, SQLModel
 
 
+class XingyunBootstrapState(SQLModel, table=True):
+    """持久化初始化记录，管理员删除导游后不再自动创建。"""
+    key: str = Field(primary_key=True)
+    guide_id: int
+
+
 class XingyunGuideBinding(SQLModel, table=True):
     guide_id: int = Field(primary_key=True, foreign_key="digital_guide_info.guide_id")
     app_id: str

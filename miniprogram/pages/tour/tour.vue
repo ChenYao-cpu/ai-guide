@@ -1,68 +1,14 @@
 <template>
   <view class="page">
 
-    <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
+    <view class="tour-gradient" aria-hidden="true"></view>
 
     <NocturneConfirm v-if="showEndConfirm" title="结束导览" content="确定要结束本次导览吗？" @cancel="showEndConfirm=false" @confirm="endTour" />
     <!-- 导航栏 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <view class="nav-back" @tap="goBack"><text>‹</text></view>
-      <text class="nav-title">{{ guideName || 'AI导游' }}</text>
-      <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
-      <view class="nav-gps" :class="{on:gpsTracking}" @tap="toggleGps"><text class="iconfont icon-zuobiao"></text></view>
-    </view>
-
-    <!-- 数字导游 -->
-    <view class="guide-stage">
-      <image v-if="currentSpot.image_path" :src="fixImg(currentSpot.image_path)" class="spot-bg-img" mode="aspectFill" />
-      <view class="spot-bg-shade"></view>
-      <!-- 实时小地图 -->
-      <view class="mini-map" v-if="gpsTracking" @tap="mapExpanded=!mapExpanded" :class="{expanded:mapExpanded}">
-        <map v-if="hasSpotCoords"
-          class="mm-canvas"
-          :latitude="userLat || spotCenterLat"
-          :longitude="userLng || spotCenterLng"
-          :scale="16"
-          :markers="mapMarkers"
-          :show-location="true"
-          enable-zoom
-          enable-scroll
-        ></map>
-        <view v-else class="mm-no-coords">
-          <text class="mm-nc-text">暂无景点坐标</text>
-        </view>
-        <view class="mm-info" v-if="!mapExpanded">
-          <text class="mm-dist" v-if="nearestDistance > 0">距{{ nearestSpotName }} {{ nearestDistance }}m</text>
-          <text class="mm-dist" v-else>GPS定位中</text>
-        </view>
-        <view class="mm-close" v-if="mapExpanded" @tap.stop="gpsTracking=false"><text>✕</text></view>
-      </view>
-      <!-- 知识卡片弹出 -->
-      <view class="know-card" v-if="knowCard.visible" @tap="dismissKnowCard">
-        <view class="kc-inner">
-          <text class="kc-tag"> 景点知识</text>
-          <text class="kc-text">{{ knowCard.text }}</text>
-          <image v-if="knowCard.image" :src="knowCard.image" class="kc-img" mode="aspectFill"></image>
-        </view>
-      </view>
-      <view v-if="avatarMode==='3d'&&threeDModelUrl&&!threeDError" class="native-3d-stage">
-        <tour-avatar-3d v-if="avatarWidth>0&&avatarHeight>0" id="guide-avatar-3d" :motion-url="threeDModelUrl" :motion-started-at="motionStartedAt" :portrait="true" :width="Math.round(avatarWidth*avatarPixelRatio)" :height="Math.round(avatarHeight*avatarPixelRatio)" :key="threeDSceneUrl||threeDModelUrl" :scene-url="threeDSceneUrl||threeDModelUrl" :animation="threeDAnimation" :progress="threeDProgress" :duration="threeDDuration" :speaking="speaking" :style="{width:avatarWidth+'px',height:avatarHeight+'px',display:'block'}" @ready="threeDReady" @error="threeDFailed" />
-      </view>
-      <video v-else-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
-      <image v-else-if="guideAvatar" :src="fixImg(guideAvatar)" class="selected-guide-image" mode="widthFix" @error="guideAvatar=''" />
-      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || '数字导游' }}</text><text class="avatar-notice">形象未配置</text></view>
-      <view class="speaking-wave" v-if="speaking">
-        <view v-for="i in 5" :key="i" class="sw-bar" :style="{animationDelay:(i*0.12)+'s'}"></view>
-      </view>
-      <view class="stage-status" :class="{on:speaking}">
-        <text>{{ speaking ? ' 讲解中' : '待命中' }}</text>
-      </view>
-    </view>
-
-    <view class="avatar-runtime-status"><text>{{ avatarMessage }}</text></view>
-    <button v-if="guideProvider==='xingyun'" class="xingyun-open" @tap="openXingyun">打开数字人导览</button>
     <!-- 游览进度时间轴 -->
-    <view class="tour-progress" v-if="spotCards.length > 1">
+    <view class="tour-progress nav-progress" v-if="spotCards.length > 1">
       <scroll-view scroll-x class="tp-track" :scroll-into-view="'tpn-' + spotIdx" scroll-with-animation>
         <view class="tp-nodes">
           <view v-for="(s, i) in spotCards" :key="s.spot_id" :id="'tpn-' + i" class="tp-node" :class="{done: i < spotIdx, active: i === spotIdx}" @tap="jumpSpot(i)">
@@ -71,43 +17,58 @@
           </view>
         </view>
       </scroll-view>
-      <view class="tp-stats">
-        <text class="tp-stat">已游览 {{ spotIdx + 1 }}/{{ spotCards.length }} 景点</text>
+
+    </view>
+      <view v-if="spotCards.length <= 1" class="nav-spacer"></view>
+      <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
+    </view>
+
+    <!-- 数字导游 -->
+    <view class="guide-stage">
+      <view v-if="spotCards.length" class="tp-stats stage-progress">
         <text class="tp-stat" v-if="remainingDuration > 0">预计剩余约 {{ remainingDuration }} 分钟</text>
         <text class="tp-stat done" v-else>路线游览完毕</text>
       </view>
+      <text v-if="guideDisplayName" class="stage-guide-name">{{ guideDisplayName }}</text>
+      <!-- #ifdef APP-PLUS -->
+      <tour-xingyun v-if="guideProvider==='xingyun'" :payload="xingyunPayload" @state="onXingyunState" />
+      <!-- #endif -->
+      <image v-if="currentSpot.image_path" :src="fixImg(currentSpot.image_path)" class="spot-bg-img" mode="aspectFill" />
+      <view class="spot-bg-shade"></view>
+      <!-- 知识卡片弹出 -->
+      <view class="know-card" v-if="knowCard.visible" @tap="dismissKnowCard">
+        <view class="kc-inner">
+          <text class="kc-tag"> 景点知识</text>
+          <text class="kc-text">{{ knowCard.text }}</text>
+          <image v-if="knowCard.image" :src="knowCard.image" class="kc-img" mode="aspectFill"></image>
+        </view>
+      </view>
+      <template v-if="!(appXingyun && guideProvider==='xingyun' && xingyunConnected)">
+      <view v-if="avatarMode==='3d'&&threeDModelUrl&&!threeDError" class="native-3d-stage">
+        <tour-avatar-3d v-if="avatarWidth>0&&avatarHeight>0" id="guide-avatar-3d" :motion-url="threeDModelUrl" :motion-started-at="motionStartedAt" :portrait="true" :width="Math.round(avatarWidth*avatarPixelRatio)" :height="Math.round(avatarHeight*avatarPixelRatio)" :key="threeDSceneUrl||threeDModelUrl" :scene-url="threeDSceneUrl||threeDModelUrl" :animation="threeDAnimation" :progress="threeDProgress" :duration="threeDDuration" :speaking="speaking" :style="{width:avatarWidth+'px',height:avatarHeight+'px',display:'block'}" @ready="threeDReady" @error="threeDFailed" />
+      </view>
+      <video v-else-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
+      <image v-else-if="guideAvatar" :src="fixImg(guideAvatar)" class="selected-guide-image" mode="widthFix" @error="guideAvatar=''" />
+      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || '数字导游' }}</text><text class="avatar-notice">形象未配置</text></view>
+      </template>
+      <view class="stage-status" :class="{on:speaking}">
+        <text>{{ speaking ? '讲解中' : appXingyun&&guideProvider==='xingyun' ? (xingyunConnected ? '已连接' : xingyunFailed ? '连接失败' : '连接中…') : '待命中' }}</text>
+      </view>
     </view>
-    <!-- 景点沉浸式媒体 -->
-    <view class="spot-media" v-if="currentSpot.image_path || currentSpot.photo_tips || currentSpot.tour_tips">
-      <view class="sm-bar" @tap="mediaExpanded = !mediaExpanded">
-        <image v-if="currentSpot.image_path" :src="fixImg(currentSpot.image_path)" class="sm-thumb" mode="aspectFill"></image>
-        <view v-else class="sm-thumb-df"></view>
-        <view class="sm-bar-info">
-          <text class="sm-bar-title" v-if="currentSpot.photo_tips">最佳拍摄点</text>
-          <text class="sm-bar-title" v-else>景点详情</text>
 
-        </view>
-        <text class="sm-arrow" :class="{open: mediaExpanded}">›</text>
-      </view>
-      <view class="sm-body" v-if="mediaExpanded">
-        <view class="sm-section" v-if="currentSpot.photo_tips">
-          <text class="sm-section-title">最佳拍摄</text>
-          <text class="sm-section-text">{{ currentSpot.photo_tips }}</text>
-        </view>
-        <view class="sm-section" v-if="currentSpot.tour_tips">
-          <text class="sm-section-title">游览贴士</text>
-          <text class="sm-section-text">{{ currentSpot.tour_tips }}</text>
-        </view>
-        <view class="sm-section" v-if="currentSpot.service_facilities">
-          <text class="sm-section-title">服务设施</text>
-          <text class="sm-section-text">{{ currentSpot.service_facilities }}</text>
-        </view>
-        <view class="sm-section" v-if="currentSpot.best_season">
-          <text class="sm-section-title">推荐季节</text>
-          <text class="sm-section-text">{{ currentSpot.best_season }}</text>
-        </view>
-      </view>
+    <view v-if="avatarMessage" class="stage-footer">
+      <view class="avatar-runtime-status"><text>{{ avatarMessage }}</text></view>
+
     </view>
+    <!-- #ifdef APP-PLUS -->
+    <button v-if="guideProvider==='xingyun'&&xingyunFailed" class="xingyun-open" @tap="connectXingyun">重新连接数字人</button>
+    <!-- #endif -->
+    <!-- #ifndef APP-PLUS -->
+    <button v-if="guideProvider==='xingyun'" class="xingyun-open" @tap="openXingyun">打开数字人导览</button>
+    <!-- #endif -->
+    <!-- #ifdef MP-WEIXIN -->
+    <tour-xfyun ref="xfyun" :tour-id="sid" />
+    <!-- #endif -->
     <!-- 景点切换卡片 -->
     <view class="spot-switch" v-if="spotCards.length">
       <view class="ss-arrow" @tap="prevSpot"><text>‹</text></view>
@@ -145,11 +106,14 @@
     <!-- 底部输入区 -->
     <view class="bottom-bar">
       <view class="input-row">
-        <view class="voice-btn" :class="{rec:recording}" @touchstart="startRecord" @touchend="stopRecord">
-          <text class="iconfont icon-yuyin"></text>
+        <view class="voice-btn" :class="{rec:voiceMode}" @tap="toggleVoiceMode">
+          <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
         </view>
-        <input v-model="text" class="msg-input" placeholder="输入你想了解的问题..." confirm-type="send" @confirm="onConfirm" />
-        <view class="send-btn" @tap="onSend" :class="{disabled:!text||loading}">发送</view>
+        <input v-if="!voiceMode" v-model="text" class="msg-input" placeholder="输入你想了解的问题..." confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
+        <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart="startRecord" @touchend="stopRecord" @touchcancel="cancelRecord">
+          <text>{{ transcribing ? '正在识别…' : loading ? '正在回答…' : voicePressing ? '松开发送' : '按住说话' }}</text>
+        </view>
+        <view v-if="!voiceMode" class="send-btn" @tap="onSend" :class="{disabled:!text||loading||transcribing}">发送</view>
       </view>
     </view>
   </view>
@@ -157,6 +121,10 @@
 
 <script>
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
+import TourXingyun from '../../components/tour-xingyun.vue'
+// #ifdef MP-WEIXIN
+import TourXfyun from '../../components/tour-xfyun.vue'
+// #endif
 import { BASE_URL, assetUrl } from '../../common/config.js'
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
 
@@ -174,7 +142,7 @@ function request(options) {
       success: function(res) {
         if (res.statusCode === 200) resolve({ data: res.data })
         else if (res.statusCode === 401) { uni.reLaunch({url:'/pages/auth/auth'}) }
-        else reject(new Error('HTTP ' + res.statusCode))
+        else reject(new Error(res.data && (res.data.detail || res.data.message) || '服务请求失败（HTTP ' + res.statusCode + '）'))
       },
       fail: reject
     })
@@ -185,28 +153,37 @@ var api = {
   sendMessage: function(sid, message, avatarMode, currentSpotId, nextSpotId) { return request({ url: '/tour-session/chat', method: 'PUT', timeout: 90000, data: { sessionId: sid, message: message, avatarMode: avatarMode, currentSpotId: currentSpotId, nextSpotId: nextSpotId } }) },
   aiChatRecommend: function(msg) { return request({ url: '/tour-session/ai-chat-recommend?message=' + encodeURIComponent(msg||''), method: 'POST' }) },
   endSession: function(sid) { return request({ url: '/tour-session/end/' + sid, method: 'PUT' }) },
-  checkNearby: function(lat, lng, sid) { return request({ url: '/tour-session/check-nearby?latitude='+lat+'&longitude='+lng+'&session_id='+sid, method: 'POST', timeout: 8000 }) },
+  checkNearby: function(lat, lng, sid, target) { return request({ url: '/tour-session/check-nearby?latitude='+lat+'&longitude='+lng+'&session_id='+sid+'&target_spot_id='+target, method: 'POST', timeout: 8000 }) },
 }
 
 export default {
-  components: {NocturneConfirm},
+  components: {NocturneConfirm,TourXingyun,
+    // #ifdef MP-WEIXIN
+    TourXfyun,
+    // #endif
+  },
   data: function() {
     return {
-      showEndConfirm: false,
+      showEndConfirm: false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
       motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
       guideName: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
-      speaking: false, loading: false, text: '', recording: false, voicePressing: false,
+      speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
       threeDSceneUrl:'',threeDAnimation:'idle',threeDProgress:0,threeDDuration:0,threeDError:false,
       avatarMode:'audio',avatarMessage:'语音导览',videoUrl:'',avatarCapability:null,guideId:0,
       lastMsgId: 'bottom', _voiceManager: null,
       quick: ['这里有什么历史故事？','最佳拍照点在哪里？','附近有哪些服务设施？','请介绍景点特色','下一站推荐去哪里？'],
       mediaExpanded: false,
       gpsTracking: false, mapExpanded: false, userLat: 0, userLng: 0,
+      distanceStatus: '正在获取当前位置…',
       nearestDistance: 0, nearestSpotName: '', nearestSpotIdx: -1, gpsTimer: null,
       knowCard: { visible: false, text: '', image: '' }, _knowTimer: null,
     }
   },
+  watch: {
+    spotIdx: function() { if(this.gpsTracking) { this.distanceStatus='正在更新目标景点距离…'; this.checkNearby() } },
+  },
   computed: {
+    guideDisplayName: function() { return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
     threeDModelUrl:function(){return assetUrl(this.avatarCapability&&this.avatarCapability.threeD&&this.avatarCapability.threeD.modelUrl||'')},
     cartoonPreviewUrl:function(){return assetUrl(this.avatarCapability && this.avatarCapability.cartoon.previewUrl || '')},
     spotName: function() {
@@ -267,9 +244,32 @@ export default {
     },
   },
   methods: {
+    connectXingyun:function(){
+      // #ifdef APP-PLUS
+      if(this.xingyunActive||!this.guideId||!this.sid)return
+      this.xingyunActive=true;this.xingyunFailed=false;this.avatarMessage=''
+      var self=this,version=this._xingyunVersion=(this._xingyunVersion||0)+1
+      request({url:'/xingyun/config/'+this.guideId}).then(function(res){
+        if(version!==self._xingyunVersion)return
+        if(!res.data.configured)throw new Error('所选星云数字人未启用或未绑定')
+        self._xingyunGateway=BASE_URL+'/xingyun/session/'+self.guideId+'?tour_id='+self.sid
+        self.xingyunPayload={id:Date.now(),command:'connect',text:self._xingyunPending||'',gateway:self._xingyunGateway,sdkUrl:res.data.sdkUrl,accessToken:uni.getStorageSync('xingyun-tour-'+self.sid),token:uni.getStorageSync('token')}
+      }).catch(function(error){if(version!==self._xingyunVersion)return;self.xingyunActive=false;self.xingyunFailed=true;self.avatarMessage=error.message||'星云连接失败，请重试'})
+      // #endif
+    },
+    onXingyunState:function(event){
+      if(event.gateway!==this._xingyunGateway)return
+      if(event.state==='connected'){this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage=''}
+      else if(event.state==='playing'){this.speaking=true;this.avatarMessage='星云数字人正在讲解'}
+      else if(event.state==='ended'){this.speaking=false;this.avatarMessage=''}
+      else if(event.state==='error'){this.speaking=false;this.xingyunConnected=false;this.xingyunActive=false;this.xingyunFailed=true;this.avatarMessage=event.message||'星云连接失败，请重试'}
+      else if(event.state!=='progress'&&event.message)this.avatarMessage=event.message
+    },
+    speakXingyun:function(text){if(!text)return;if(this.xingyunActive&&!this._xingyunGateway){this._xingyunPending=text;return}if(!this.xingyunActive){this.avatarMessage='数字人尚未连接，回答已显示；请重新连接';return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
+    closeXingyun:function(){this._xingyunVersion=(this._xingyunVersion||0)+1;this._xingyunGateway='';this.xingyunPayload={command:'close',id:Date.now()};this.xingyunActive=false;this.xingyunConnected=false},
     openXingyun: function() { uni.navigateTo({url:'/pages/xingyun/xingyun?sessionId='+this.sid}) },
     measureAvatar:function(){this.avatarPixelRatio=Math.min(uni.getSystemInfoSync().pixelRatio||1,3);var self=this;uni.createSelectorQuery().in(this).select('.guide-stage').boundingClientRect(function(rect){if(rect&&rect.width&&rect.height){self.avatarWidth=rect.width;self.avatarHeight=rect.height}}).exec()},
-    stopPlayback:function(){if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}if(this._threeDTimer){clearInterval(this._threeDTimer);this._threeDTimer=null}if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}this._pending3DAudio=null;this.threeDSceneUrl='';this.threeDAnimation='idle';this.threeDProgress=0;this.threeDDuration=0;this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
+    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}if(this._threeDTimer){clearInterval(this._threeDTimer);this._threeDTimer=null}if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}this._pending3DAudio=null;this.threeDSceneUrl='';this.threeDAnimation='idle';this.threeDProgress=0;this.threeDDuration=0;this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
     switchMode:function(mode){if(this.loading)return;this.stopPlayback();this.avatarMode=mode;this.updateAvatarMessage()},
     updateAvatarMessage:function(){if(this.avatarMode==='audio'){this.avatarMessage='语音导览';return}var capability=this.avatarCapability&&this.avatarCapability[this.avatarMode==='3d'?'threeD':this.avatarMode];this.avatarMessage=capability?capability.message:'正在查询数字人服务状态'},
     threeDReady:function(){if(!this.motionStartedAt)this.motionStartedAt=Date.now();if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}var p=this._pending3DAudio;if(p&&p.version===this._playbackVersion){this._pending3DAudio=null;this.playAudio(p.url);this.avatarMessage='3D导览'}},
@@ -311,17 +311,23 @@ export default {
         if (d && d.success) {
           // TTS自动播报
           if(playbackVersion===self._playbackVersion){
+            // #ifdef MP-WEIXIN
+            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){self.$refs.xfyun.speak(d.data&&d.data.message);self.refresh();return}
+            // #endif
+            // #ifdef APP-PLUS
+            if(self.guideProvider==='xingyun')self.speakXingyun(d.data&&d.data.message)
+            // #endif
             var job=d.data&&d.data.avatarJob
             var performance=d.data&&d.data.avatarPerformance
             if(performance&&performance.scene_url){self.prepare3D(performance,d.data.ttsAudioUrl,playbackVersion)}
             else if(job&&job.job_id){self.pollAvatar(job,playbackVersion)}
             else{if(job)self.avatarMessage=job.message;if(d.data&&d.data.ttsAudioUrl)self.playAudio(d.data.ttsAudioUrl)}
           }
-          self.showKnowCard()
+
           self.refresh()
         } else { uni.showToast({title:(d&&d.message)||'回复失败',icon:'none'}) }
       }).catch(function(e) {
-        uni.showToast({title:'网络超时，请重试',icon:'none'})
+        uni.showToast({title:e.message || (/timeout/i.test(e.errMsg||'')?'回答等待超时，请重试':'无法连接服务器，请检查网络'),icon:'none'})
       })
         .finally(function() { self.loading = false; self.lastMsgId = 'bottom' })
     },
@@ -340,7 +346,14 @@ export default {
             var gid=data.guide_info.guide_id
             self.guideAvatar=data.guide_info.avatar||data.guide_info.poster_image||''
             self.guideSourceVideo=assetUrl(data.guide_info.base_mp4_path||'')
-            if(self.guideProvider==='xingyun'){self.guideId=gid;self.avatarMode='audio';self.avatarMessage='星云未连接 · 可使用语音导览'}else if(gid&&gid!==self.guideId){self.guideId=gid;self._capabilityPromise=request({url:'/avatar/capabilities/'+gid}).then(function(r){self.avatarCapability=r.data.data;self.avatarMode=self.avatarCapability.preferredMode==='3d'&&self.avatarCapability.threeD&&self.avatarCapability.threeD.ready?'3d':self.avatarCapability.realistic.ready?'realistic':(self.avatarCapability.cartoon.ready?'cartoon':'audio');self.updateAvatarMessage();if(!self.guideAvatar&&self.avatarCapability.cartoon.previewUrl)self.guideAvatar=self.avatarCapability.cartoon.previewUrl}).catch(function(){self.avatarMessage='数字人服务状态查询失败'})}
+            if(self.guideProvider==='xingyun'){self.guideId=gid;self.avatarMode='audio';
+              // #ifdef APP-PLUS
+              self.avatarMode='xingyun';self.connectXingyun()
+              // #endif
+              // #ifndef APP-PLUS
+              self.avatarMessage='星云未连接 · 可使用语音导览'
+              // #endif
+            }else if(gid&&gid!==self.guideId){self.guideId=gid;self._capabilityPromise=request({url:'/avatar/capabilities/'+gid}).then(function(r){self.avatarCapability=r.data.data;self.avatarMode=self.avatarCapability.preferredMode==='3d'&&self.avatarCapability.threeD&&self.avatarCapability.threeD.ready?'3d':self.avatarCapability.realistic.ready?'realistic':(self.avatarCapability.cartoon.ready?'cartoon':'audio');self.updateAvatarMessage();if(!self.guideAvatar&&self.avatarCapability.cartoon.previewUrl)self.guideAvatar=self.avatarCapability.cartoon.previewUrl}).catch(function(){self.avatarMessage='数字人服务状态查询失败'})}
           }
           // 加载景点卡片
           var selectedIds=[];try{selectedIds=JSON.parse(data.visitor_preferences||'{}').spot_ids||[]}catch(e){}
@@ -378,19 +391,21 @@ export default {
     },
     startGps: function() {
       var self = this
+      this.stopGps()
       this.gpsTracking = true
+      this.distanceStatus = '正在获取当前位置…'
       uni.getLocation({
         type: 'gcj02', isHighAccuracy: true,
         success: function(res) { self.userLat = res.latitude; self.userLng = res.longitude; self.checkNearby() },
-        fail: function() { uni.showToast({ title: '定位失败，请检查权限', icon: 'none' }) }
+        fail: function() { self.distanceStatus='定位失败，请开启手机定位并允许位置权限'; uni.showToast({ title: '定位失败，请检查权限', icon: 'none' }) }
       })
       this.gpsTimer = setInterval(function() {
         uni.getLocation({
           type: 'gcj02',
           success: function(res) { self.userLat = res.latitude; self.userLng = res.longitude; self.checkNearby() },
-          fail: function() {}
+          fail: function() { self.distanceStatus='定位暂时失败，正在重试…' }
         })
-      }, 10000)
+      }, 5000)
     },
     stopGps: function() {
       this.gpsTracking = false
@@ -401,9 +416,12 @@ export default {
       if (!this.userLat || !this.userLng || !this.sid) return
       var self = this
       var gps = gcj02ToWgs84(this.userLat, this.userLng)
-      api.checkNearby(gps[0], gps[1], this.sid).then(function(res) {
+      var target = this.currentSpot.spot_id || 0
+      api.checkNearby(gps[0], gps[1], this.sid, target).then(function(res) {
+        if (!self.gpsTracking || target !== (self.currentSpot.spot_id || 0)) return
         var d = res.data && res.data.data
         if (!d) return
+        self.distanceStatus = d.target_spot ? '距'+d.target_spot.spot_name+'约 '+(d.target_spot.distance >= 1000 ? (d.target_spot.distance/1000).toFixed(2)+' 公里' : Math.round(d.target_spot.distance)+' 米')+'（直线距离）' : '当前景点暂无坐标，无法测距'
         if (d.closest_spot) {
           self.nearestSpotName = d.closest_spot.spot_name || ''
           self.nearestDistance = Math.round(d.closest_spot.distance || 0)
@@ -417,7 +435,7 @@ export default {
             self.send('请介绍「' + self.spotName + '」')
           }
         }
-      }).catch(function() {})
+      }).catch(function() { if(self.gpsTracking) self.distanceStatus='距离更新失败，请检查导览服务器连接' })
     },
     showKnowCard: function() {
       var s = this.currentSpot
@@ -442,35 +460,54 @@ export default {
       this.knowCard.visible = false
       if (this._knowTimer) { clearTimeout(this._knowTimer); this._knowTimer = null }
     },
-    startRecord: function() {
-      var self = this; self.recording = true; self.voicePressing = true
-      var rm = uni.getRecorderManager(); self._voiceManager = rm
-      rm.onStop(function(res) {
-        self.recording = false; self.voicePressing = false
-        if (res.tempFilePath && res.duration > 500) {
-          uni.uploadFile({
-            url: BASE_URL + '/asr/google', filePath: res.tempFilePath, name: 'file',
-            success: function(r) {
-              try { var d = JSON.parse(r.data); if (d&&d.success&&d.data) { self.text = d.data; self.send(d.data); return } }
-              catch(e) {}
-              uni.showToast({ title: '语音识别失败，请重试', icon: 'none' })
-            },
-            fail: function() { uni.showToast({ title: '语音识别失败，请重试', icon: 'none' }) }
-          })
-        } else {
-          uni.showToast({ title: '语音识别失败，请重试', icon: 'none' })
-        }
+    toggleVoiceMode:function(){if(this.recording||this.transcribing)return;this.voiceMode=!this.voiceMode;if(this.voiceMode)uni.hideKeyboard()},
+    initRecorder: function() {
+      if(this._voiceManager)return this._voiceManager
+      var self=this,rm=uni.getRecorderManager();self._voiceManager=rm
+      rm.onStart(function(){self._recordStartedAt=Date.now();if(!self.voicePressing)rm.stop()})
+      rm.onStop(function(res){
+        self.recording=false;self.voicePressing=false
+        if(self._recordCancelled)return
+        var duration=Number(res.duration)||(self._recordStartedAt?Date.now()-self._recordStartedAt:0)
+        if(!res.tempFilePath||duration<500){uni.showToast({title:'请按住说话至少半秒',icon:'none'});return}
+        self.transcribing=true
+        uni.uploadFile({url:BASE_URL+'/tour-session/asr-upload',filePath:res.tempFilePath,name:'file',timeout:120000,
+          header:{Authorization:'Bearer '+uni.getStorageSync('token')},
+          success:function(r){
+            try{var d=JSON.parse(r.data)
+              if(r.statusCode===200&&d.success&&d.data){self.text=d.data;self.send(d.data);return}
+              uni.showToast({title:typeof d.detail==='string'?d.detail:d.message||'语音识别服务返回错误',icon:'none',duration:4000})
+            }catch(e){uni.showToast({title:'语音识别返回格式异常',icon:'none'})}
+          },
+          fail:function(){uni.showToast({title:'语音上传失败，请检查网络连接',icon:'none'})},
+          complete:function(){self.transcribing=false}
+        })
       })
-      rm.onError(function() { self.recording = false; self.voicePressing = false; uni.showToast({ title: '语音识别失败，请重试', icon: 'none' }) })
-      rm.start({ duration: 60000, sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000, format: 'mp3' })
+      rm.onError(function(){self.recording=false;self.voicePressing=false;uni.showToast({title:'录音失败，请检查麦克风权限',icon:'none'})})
+      return rm
     },
-    stopRecord: function() { if (this._voiceManager) { this._voiceManager.stop() } else { this.recording = false; uni.showToast({ title: '语音识别失败，请重试', icon: 'none' }) } },
+    startRecord: function() {
+      if(this.recording||this.transcribing||this.loading)return
+      this._recordStartedAt=0;this._recordCancelled=false;this.voicePressing=true;this.recording=true
+      try{this.initRecorder().start({duration:60000,sampleRate:16000,numberOfChannels:1,format:'mp3'})}
+      catch(e){this.recording=false;this.voicePressing=false;uni.showToast({title:'无法启动录音，请检查麦克风权限',icon:'none'})}
+    },
+    stopRecord: function() {this.voicePressing=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
+    cancelRecord: function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
   },
   onReady:function(){this.measureAvatar()},
   onResize:function(){this.$nextTick(this.measureAvatar)},
-  onUnload:function(){this.stopPlayback();this.stopGps()},
-  onHide:function(){this.stopPlayback()},
+  onUnload:function(){this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
+  onHide:function(){this.cancelRecord();this.stopPlayback();this.closeXingyun();
+    // #ifdef MP-WEIXIN
+    if(this.$refs.xfyun)this.$refs.xfyun.close()
+    // #endif
+  },
+  onShow:function(){if(this.guideProvider==='xingyun')this.connectXingyun()},
   onLoad: function(opts) {
+    // #ifdef APP-PLUS
+    this.appXingyun=true
+    // #endif
     this.sid = Number(opts.sessionId || 0)
     if (!this.sid) { uni.showToast({title:'会话ID无效',icon:'none'}); return }
     var s = uni.getSystemInfoSync()
@@ -483,18 +520,26 @@ export default {
 <style scoped>
 .xingyun-open{margin:8rpx 24rpx;padding:8rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:14rpx;color:var(--ng-secondary);background:var(--ng-surface);font-size:26rpx;flex-shrink:0}
 .native-3d-stage{width:100%;height:100%;overflow:hidden;border-radius:24rpx;}
-.avatar-runtime-status{padding:12rpx 24rpx;color:var(--ng-secondary);font-size:22rpx;line-height:1.6;flex-shrink:0}
+.stage-footer{position:relative;z-index:1;display:flex;align-items:center;gap:12rpx;padding:10rpx 24rpx;flex-shrink:0}
+.stage-footer .avatar-runtime-status{flex:1;min-width:0;padding:0;color:var(--ng-secondary);font-size:22rpx;line-height:1.6}
+.stage-location{display:flex;align-items:center;justify-content:flex-end;gap:10rpx;max-width:70%;margin-left:auto}
 .selected-guide-image{position:absolute;top:0;left:0;width:100%;height:auto}.guide-stage{flex-shrink:0}
 .avatar-modes{display:flex;margin:18rpx 24rpx;gap:12rpx;flex-shrink:0}.avatar-mode{padding:14rpx 28rpx;border-radius:14rpx;background:var(--ng-surface);color:var(--ng-secondary);font-size:24rpx;border:1rpx solid var(--ng-border)}.avatar-mode.selected{background:var(--ng-surface);border-color:rgba(99,102,241,0.25);color:var(--ng-secondary)}.avatar-video{width:100%;height:100%}.avatar-notice{font-size:24rpx;line-height:1.7;color:var(--ng-secondary);padding:0 28rpx;text-align:center;max-width:560rpx}
 .page{height:100vh;display:flex;flex-direction:column;background-color:var(--ng-surface);position:relative;overflow:hidden}
-.ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}
-.ink-mt{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:55% 75% 0 0}
-.ink-mt-1{bottom:20%;height:220rpx;opacity:.04;transform:scaleX(1.3)}
-.ink-mt-2{bottom:25%;height:160rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
+.avatar-runtime-status,.xingyun-open,.tour-progress,.spot-media{position:relative;z-index:1}
+.nav-spacer{flex:1;min-width:0}
+.nav .nav-progress{flex:1;min-width:0;padding:4rpx 0}
+.nav-progress .tp-nodes{min-width:100%;justify-content:center}
+.nav-progress .tp-stats{justify-content:center;flex-wrap:wrap;gap:4rpx 12rpx}
+.nav-progress .tp-stat{font-size:18rpx}
+.nav-distance{max-width:56vw;font-size:20rpx;line-height:1.4;color:var(--ng-accent-text)}
+.stage-guide-name{position:absolute;left:20rpx;top:58rpx;z-index:4;padding:8rpx 18rpx;border-radius:14rpx;background:rgba(255,255,255,.82);color:var(--ng-text);font-size:28rpx;font-weight:600;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tour-gradient{position:absolute;inset:0;pointer-events:none;z-index:0;background:linear-gradient(135deg,#e5dcff 0%,#f0eaff 28%,#f8f9ff 52%,#dff4fb 76%,#e5dcff 100%);background-size:220% 220%;animation:tourGradientFlow 16s ease-in-out infinite alternate}
+@keyframes tourGradientFlow{from{background-position:0% 0%}to{background-position:100% 100%}}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 
 /* 导航 */
-.nav{position:relative;z-index:1;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx}
+.nav{position:relative;z-index:1;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx;align-items:flex-start}
 .nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-title{flex:1;font-size:36rpx;font-weight:600;color:var(--ng-text);letter-spacing:4rpx;font-family:var(--app-font-family);text-align:center}
 .nav-end{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:30rpx;color:var(--ng-secondary);flex-shrink:0}
@@ -536,10 +581,6 @@ export default {
 .guide-img-df{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16rpx}
 .guide-df-icon{font-size:120rpx}
 .guide-df-name{font-size:36rpx;font-weight:600;color:var(--ng-secondary);font-family:var(--app-font-family)}
-.speaking-wave{position:absolute;bottom:80rpx;left:50%;transform:translateX(-50%);display:flex;gap:8rpx;align-items:flex-end;height:60rpx;z-index:2}
-.sw-bar{width:6rpx;border-radius:3rpx;background:linear-gradient(180deg,rgba(99,102,241,0.18),var(--ng-surface));animation:swAnim .6s ease-in-out infinite}
-@keyframes swAnim{0%,100%{height:12rpx}50%{height:48rpx}}
-@keyframes swAnim{0%,100%{height:12rpx}50%{height:48rpx}}
 
 /* 景点切换卡片 */
 .spot-switch{position:relative;z-index:1;display:flex;align-items:center;gap:8rpx;padding:8rpx 16rpx}
@@ -580,6 +621,8 @@ export default {
 .voice-btn .iconfont{font-size:32rpx;color:var(--ng-secondary)}
 .voice-btn.rec{background:rgba(99,102,241,0.18)}
 .voice-btn.rec .iconfont{color:var(--ng-text)}
+.voice-hold-btn{flex:1;height:68rpx;display:flex;align-items:center;justify-content:center;border:1rpx solid var(--ng-border);border-radius:34rpx;background:var(--ng-surface);font-size:26rpx;color:var(--ng-secondary);font-weight:600;user-select:none}
+.voice-hold-btn.pressing{background:rgba(99,102,241,.18);color:var(--ng-text)}
 @keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0.15)}50%{box-shadow:0 0 0 12rpx rgba(99,102,241,0.15)}}
 .msg-input{flex:1;height:68rpx;padding:0 20rpx;border:1rpx solid var(--ng-border);border-radius:34rpx;background:var(--ng-surface);font-size:26rpx;color:var(--ng-text)}
 .send-btn{height:68rpx;padding:0 26rpx;line-height:68rpx;border-radius:34rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:26rpx;font-weight:700;flex-shrink:0}
@@ -601,6 +644,7 @@ export default {
 .tp-label{font-size:18rpx;color:var(--ng-secondary);margin-top:6rpx;max-width:100rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tp-node.active .tp-label{color:var(--ng-text);font-weight:600}
 .tp-node.done .tp-label{color:var(--ng-secondary)}
+.guide-stage .stage-progress{position:absolute;top:0;left:0;right:0;z-index:5;box-sizing:border-box;padding:8rpx 16rpx;background:rgba(255,255,255,.82);pointer-events:none;gap:12rpx}
 .tp-stats{display:flex;justify-content:space-between;align-items:center;padding:2rpx 4rpx 0}
 .tp-stat{font-size:20rpx;color:var(--ng-secondary)}
 .tp-stat.done{color:rgba(99,102,241,0.25)}
@@ -615,7 +659,7 @@ export default {
 .sm-bar-sub{font-size:20rpx;color:var(--ng-secondary);display:block;margin-top:2rpx}
 .sm-arrow{font-size:32rpx;color:var(--ng-secondary);flex-shrink:0;transition:transform .2s}
 .sm-arrow.open{transform:rotate(90deg)}
-.sm-body{padding:4rpx 14rpx 12rpx}
+.sm-body{padding:4rpx 14rpx 12rpx;max-height:22vh;overflow-y:auto}
 .sm-section{margin-top:8rpx}
 .sm-section-title{font-size:22rpx;font-weight:600;color:var(--ng-text);display:block;margin-bottom:4rpx}
 .sm-section-text{font-size:22rpx;color:var(--ng-secondary);line-height:1.6}

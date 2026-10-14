@@ -153,6 +153,17 @@ def config(guide_id: int):
                 "message": "星云应用已绑定，点击连接验证" if ready else "该导游未上架或未绑定星云应用"}
 
 
+@router.get('/chat-voice')
+def chat_voice(user_id: int = Depends(get_current_user_info)):
+    from ..models.xingyun import XingyunBootstrapState
+    with Session(DB_ENGINE) as db:
+        state = db.get(XingyunBootstrapState, 'default-guide-v1')
+        guide = db.get(DigitalGuideInfo, state.guide_id) if state else None
+        if not selectable(db, guide) or guide.render_mode != 'xingyun':
+            raise HTTPException(503, '默认星云数字人未启用，请管理员检查配置')
+        return {'guide_id': guide.guide_id, 'sdk_url': SDK_URL}
+
+
 def signed_headers(method, body, timestamp=None, app_id=None, app_secret=None):
     timestamp = int(time.time()) if timestamp is None else timestamp
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=True, separators=(",", ":")).replace(" ", "")
@@ -183,7 +194,7 @@ def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
 
 
 @router.api_route("/session/{guide_id}", methods=["POST", "DELETE"])
-async def session_proxy(guide_id: int, request: Request, tour_id: int = 0,
+async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False,
                         x_tour_access: str = Header(default=""), authorization: str = Header(default="")):
     raw = await request.body()
     if len(raw) > 65536:
@@ -220,16 +231,28 @@ async def session_proxy(guide_id: int, request: Request, tour_id: int = 0,
             guide = db.get(DigitalGuideInfo, guide_id)
             if not selectable(db, guide) or guide.render_mode != "xingyun":
                 raise HTTPException(409, "该数字导游未上架或尚未配置星云")
-            tour = authorize_tour(db, tour_id, guide_id, x_tour_access, authorization)
+            if chat_speech:
+                from ..models.xingyun import XingyunBootstrapState
+                scheme, _, token = authorization.partition(' ')
+                if scheme.lower() != 'bearer' or not token:
+                    raise HTTPException(401, '请先登录')
+                chat_user = get_current_user_info(token)
+                state = db.get(XingyunBootstrapState, 'default-guide-v1')
+                if tour_id or not state or state.guide_id != guide_id:
+                    raise HTTPException(403, 'AI小导游仅可使用默认数字人的声音')
+                owner_id = chat_user
+            else:
+                tour = authorize_tour(db, tour_id, guide_id, x_tour_access, authorization)
+                owner_id = tour.user_id or 0
             binding = db.get(XingyunGuideBinding, guide_id)
             app_id, encrypted = binding.app_id, binding.secret_encrypted
-            record = XingyunSession(user_id=tour.user_id or 0, guide_id=guide_id, tour_id=tour_id,
+            record = XingyunSession(user_id=owner_id, guide_id=guide_id, tour_id=tour_id,
                                      access_hash=access_hash, app_id=app_id, secret_encrypted=encrypted)
             db.add(record)
             db.commit()
         secret = decrypt_secret(encrypted)
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
                 response = await client.request(request.method, GATEWAY, json=body,
                                                 headers=signed_headers(request.method, body, app_id=app_id, app_secret=secret))
             payload = response.json()

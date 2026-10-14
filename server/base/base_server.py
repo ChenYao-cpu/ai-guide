@@ -40,7 +40,7 @@ from .database.init_db import create_db_and_tables
 from .routers import (
     digital_human, llm, products, streamer_info, streaming_room, users,
     scenic_spots, knowledge_base, tour_routes, tour_chat, feedback_analytics,
-    digital_guide, avatar, spot_favorites, xingyun, tts,
+    digital_guide, avatar, spot_favorites, xingyun, tts, xfyun,
 )
 from .server_info import SERVER_PLUGINS_INFO
 from .utils import ChatItem, ResultCode, gen_default_data, make_return_data, streamer_sales_process
@@ -81,6 +81,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("Step 2/3: 检查默认数据...")
     gen_default_data()
+    from .database.default_xingyun import initialize_default_xingyun
+    initialize_default_xingyun()
 
     logger.info("Step 3/3: 完成，准备就绪")
     if WEB_CONFIGS.ENABLE_RAG:
@@ -132,6 +134,7 @@ app.include_router(digital_guide.router)
 app.include_router(avatar.router)
 app.include_router(spot_favorites.router)
 app.include_router(xingyun.router)
+app.include_router(xfyun.router)
 
 
 # 挂载静态文件目录，以便访问上传的文件

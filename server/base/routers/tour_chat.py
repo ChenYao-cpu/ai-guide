@@ -7,6 +7,7 @@
 @Desc    :   导览会话核心接口 — 游客对话管道
 """
 
+import asyncio
 import json
 import os
 import re
@@ -379,7 +380,7 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
             "reasons": result["score_details"], "preferences": preferences,
         }, ensure_ascii=False)}]
         try:
-            response = await asyncio.wait_for(get_llm_res(prompt), timeout=12)
+            response = await asyncio.wait_for(get_llm_res(prompt, timeout=10, tour_mode=True), timeout=12)
             summary = verified_model_summary(result, json.loads(_extract_json_from_response(response)),
                                              [s.spot_name for s in spots])
             if summary:
@@ -707,6 +708,8 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     if turn.intents==['unknown'] and not evidence and not turn.faq:
         direct_answer=grounded_answer
     model_name = os.getenv("LLM_MODEL_NAME", "deepseek-flash")
+    if os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true':
+        model_name = os.getenv('VISION_MODEL', 'qwen3-vl-plus')
     if direct_answer:
         guide_response = direct_answer
         answer_mode = "database"
@@ -864,6 +867,35 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     }
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", response_data)
+
+
+@router.post("/recognize-spot", summary="拍照识景")
+async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), user_id: int = Depends(get_current_user_info)):
+    from sqlmodel import Session, select
+    from ..database.init_db import DB_ENGINE
+    from ..models.tour_models import ScenicSpotInfo
+    from ..models.user_model import ScenicRecognition
+    from ..modules.scenic_recognition import recognize_photo
+    try:
+        content = await file.read(8 * 1024 * 1024 + 1)
+        if not content or len(content) > 8 * 1024 * 1024:
+            raise HTTPException(400, '请选择不超过8MB的照片')
+        with Session(DB_ENGINE) as db:
+            spots = db.exec(select(ScenicSpotInfo).where(ScenicSpotInfo.delete == False)).all()
+            catalog = [{'spot_id':s.spot_id,'spot_name':s.spot_name,
+                        'city':s.city or '', 'description':(s.description or '')[:600]} for s in spots]
+        if not catalog:
+            raise HTTPException(503, '景点资料尚未配置，暂时无法识别')
+        result = await recognize_photo(content, catalog, question)
+        with Session(DB_ENGINE) as db:
+            record = ScenicRecognition(user_id=user_id, result_json=json.dumps(result, ensure_ascii=False))
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            result['recognition_id'] = record.recognition_id
+        return make_return_data(True, ResultCode.SUCCESS, '识别完成', result)
+    finally:
+        await file.close()
 
 
 @router.post("/asr-upload", summary="语音识别（直接上传文件）")
@@ -1301,6 +1333,7 @@ async def check_nearby_spot(
     latitude: float = 0,
     longitude: float = 0,
     session_id: int = 0,
+    target_spot_id: int = 0,
 ):
     """根据游客GPS坐标检测附近景点，支持自动触发讲解切换
 
@@ -1334,9 +1367,12 @@ async def check_nearby_spot(
 
     # 计算所有景点距离
     nearby_spots = []
+    target_spot = None
     for s in (spots or []):
         if s.latitude and s.longitude and s.latitude != 0:
             distance = haversine_distance(latitude, longitude, s.latitude, s.longitude)
+            if s.spot_id == target_spot_id:
+                target_spot = {"spot_id": s.spot_id, "spot_name": s.spot_name, "distance": round(distance, 1)}
             radius = s.trigger_radius or 50.0
             if distance <= radius:
                 nearby_spots.append({
@@ -1379,6 +1415,7 @@ async def check_nearby_spot(
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", {
         "visitor_position": {"latitude": latitude, "longitude": longitude},
+        "target_spot": target_spot,
         "nearby_spots": nearby_spots,
         "closest_spot": nearby_spots[0] if nearby_spots else None,
         "auto_switched": auto_switched,

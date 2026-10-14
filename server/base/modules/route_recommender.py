@@ -62,7 +62,13 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
         c=spot_city(spot)
         if c:groups.setdefault(c,[]).append(spot)
     selected_city=normalize_city(city)
-    if not selected_city and groups: selected_city=max(groups,key=lambda c:len(groups[c]))
+    if not selected_city and groups:
+        # Choose a feasible city from actual data instead of blindly using the
+        # largest group, which can have no matches or exceed the time budget.
+        plans=[await recommend_route(preferences,spot_list,budget,c,pace,start_area) for c in sorted(groups)]
+        return max(plans,key=lambda p:(bool(p['spot_ids']),
+            len({pref for detail in p['score_details'] for pref in detail['matched_preferences']}),
+            sum(detail['score'] for detail in p['score_details']),p['spot_count']))
     spots=groups.get(selected_city,[])
     all_profiles=bool(spots) and all(get_spot_profile(s) for s in spots)
     start_name={'east':'仁寿殿','north':'苏州街','south':'铜牛'}.get(start_area)
