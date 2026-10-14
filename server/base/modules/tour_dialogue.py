@@ -62,7 +62,8 @@ def resolve_turn(question: str, spot: dict | None, memory: dict | None = None):
     active_id=(spot or {}).get("spot_id")
     mem=dict(memory or {})
     if mem.get("spot_id") != active_id: mem={"spot_id":active_id,"needs":mem.get("needs",[])}
-    text=question.strip()
+    from .conversation_focus import normalize_question, FOLLOW
+    text=normalize_question(question.strip())
     if re.fullmatch(r"(?:你好|您好|嗨|谢谢|谢谢你|好的|明白了)[！!。\s]*",text):
         return Turn(text,text,["greeting"],memory=mem)
     detailed=bool(re.search(r"详细|展开|深入|具体讲|多讲|再讲一点|继续讲",text))
@@ -76,7 +77,7 @@ def resolve_turn(question: str, spot: dict | None, memory: dict | None = None):
     practical={"facilities","next","opening","boat","photography","duration","location"}
     if item and set(intents)&practical and item["topic"] not in intents:
         item=None
-    follow=not reference_spot_names(text) and bool(re.search(r"^(?:那|它|这个|那里|这里的|刚才|为什么|还有呢|还有别|继续|再讲|再详细|详细|说简单|简单点|短一点|太长|一句话)",text))
+    follow=not reference_spot_names(text) and bool(FOLLOW.search(text) or re.search(r'^(?:那里|这里的|说简单|短一点|太长)',text))
     last=mem.get("last_intent")
     if last and follow and intents==["overview"]:
         intents=[last]
@@ -88,8 +89,12 @@ def resolve_turn(question: str, spot: dict | None, memory: dict | None = None):
     resolved=text
     if follow and last and (not intents or len(text)<16 or detailed or brief):
         resolved=f"关于{(spot or {}).get('spot_name','当前景点')}的{TOPIC_LABELS.get(last,last)}，上一个问题是：{mem.get('last_question','')}。追问：{text}"
-    if not item and follow and last:
+    new_detail = bool(re.search(r'谁画|谁写|作者|画师|工匠姓名|原话|一共.*(?:幅|张)|who (?:painted|wrote)|painter',text,re.I))
+    if not item and follow and last and not new_detail:
         item=match_faq(dossier_for(spot),mem.get("last_question",""))
+    if new_detail and (not item or not re.search(r'谁画|谁写|作者|画师|工匠姓名|原话|一共.*(?:幅|张)',item['question'])):
+        item=None
+        intents=['unknown']
     if item and not (len(intents)>1 and re.search(r"和|以及|另外|还想|还有",text)):
         # The verified specific FAQ resolves questions like '金光穿洞是专门设计吗'.
         intents=[item["topic"]]
@@ -146,7 +151,7 @@ def local_answer(turn: Turn, spot: dict | None, next_spot=None):
     if not turn.detailed:
         # Multi-intent replies preserve one direct answer for every detected topic.
         answer="\n".join(clean_sentences(s,1 if turn.brief else 2,220) for s in sections)
-        if turn.follow_up and turn.memory.get("last_answer") and not turn.brief and d:
+        if turn.follow_up and turn.memory.get("last_answer") and not turn.brief and d and not turn.faq:
             topic=turn.intents[0]
             text=_topic_text(topic,spot,d,next_spot)
             candidates=[s.strip() for s in re.findall(r"[^。！？\n]+[。！？]?",text) if s.strip()]
@@ -206,18 +211,24 @@ def spoken_answer(answer: str, language="zh"):
 def scoped_history(history, spot_name):
     """Walk backwards through completed pairs until the previous POI boundary."""
     selected=[]
-    for item in reversed(history):
-        if item["role"]=="guide" and (item.get("aiMeta") or {}).get("spotContext") != spot_name:
-            break
-        selected.append(item)
-        if len(selected)>=8: break
+    awaiting_user=False
+    for index in range(len(history)-1,-1,-1):
+        item=history[index]
+        if item['role']=='guide':
+            if (item.get('aiMeta') or {}).get('spotContext') != spot_name: break
+            selected.append(item);awaiting_user=True
+        elif item['role']=='user' and (awaiting_user or index==len(history)-1):
+            selected.append(item);awaiting_user=False
+        # A user turn without a completed answer may have been interrupted.
+        # Keep it in the visible audit history, but not in the next LLM prompt.
+        if len(selected)>=9: break
     return list(reversed(selected))
 
 
 def updated_memory(turn: Turn, spot, answer, message_id=None):
     mem=dict(turn.memory)
     mem.update(spot_id=(spot or {}).get("spot_id"),last_intent=turn.intents[0],
-               last_question=turn.question if not turn.follow_up else mem.get("last_question",turn.question),
+               last_question=turn.question if not turn.follow_up or turn.faq else mem.get("last_question",turn.question),
                last_answer=answer[:1600], last_message_id=message_id)
     needs=list(mem.get("needs",[]))
     for pattern,label in [(r"带.*孩子|带.*小朋友","带孩子"),(r"带.*老人|带.*父母","有老人同行"),

@@ -336,10 +336,12 @@ async def next_spot_in_session(session_id: int) -> bool:
     try:
         with Session(DB_ENGINE) as session:
             tour_session = session.exec(
-                select(TourSessionInfo).where(TourSessionInfo.session_id == session_id)
+                select(TourSessionInfo).where(TourSessionInfo.session_id == session_id).with_for_update()
             ).one()
 
             if tour_session and tour_session.status:
+                if tour_session.status.live_status == 2: return False
+                session.exec(select(TourSessionStatus).where(TourSessionStatus.status_id == tour_session.status_id).with_for_update()).one()
                 route_info = session.get(TourRoute, tour_session.route_id) if tour_session.route_id else None
                 spots, route_error = _session_route_spots(session, tour_session, route_info)
                 index = tour_session.status.current_spot_index

@@ -28,6 +28,7 @@ import type { DigitalGuide } from '@/api/digitalHuman'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
 import QrFloating from '@/components/QrFloating.vue'
 import ScenicVisitContext from '@/components/ScenicVisitContext.vue'
+import VisitorAtmosphere from '@/components/VisitorAtmosphere.vue'
 
 const router = useRouter()
 const mapDiv = ref<HTMLDivElement | null>(null)
@@ -203,6 +204,12 @@ const selectedSpotIds = computed({ get: () => activeDraft.value.spotIds, set: va
 const loading = ref(false)
 const starting = ref(false)
 const guideList = ref<DigitalGuide[]>([])
+const guideChoicePoster = computed(() => {
+  const guide = selectedGuide.value || guideList.value[0]
+  return guide?.poster_image || guide?.avatar || ''
+})
+const guideChoicePosterFailed = ref(false)
+watch(guideChoicePoster, () => { guideChoicePosterFailed.value = false })
 const routeList = ref<any[]>([])
 const selectedRouteId = computed({ get: () => activeDraft.value.routeId, set: value => { activeDraft.value.routeId = value } })
 const spotList = ref<any[]>([])
@@ -476,6 +483,7 @@ const startTour = async () => {
     route_id: String(selectedRouteId.value || 0),
     visitor_preferences: activeMenuTab.value === 'personal' ? selectedPreferences.value.join(',') : '',
     spot_ids: JSON.stringify([...selectedSpotIds.value]),
+    ...(activeMenuTab.value === 'personal' ? {planning: JSON.stringify(planningOptions.value)} : {}),
   })
 
   try {
@@ -521,6 +529,7 @@ watch(activeMenuTab, (tab) => {
 
 <template>
   <main class="visitor-home">
+    <VisitorAtmosphere />
     <div class="visitor-topbar-shell">
       <header class="visitor-topbar">
         <div class="visitor-brand">
@@ -535,6 +544,15 @@ watch(activeMenuTab, (tab) => {
     </div>
 
     <div class="visitor-intro">
+      <svg class="planner-landscape" viewBox="0 0 500 140" fill="none" aria-hidden="true">
+        <path d="M0 121Q58 90 92 106L163 40Q173 30 184 42L237 95L286 60Q297 51 307 64L354 112Q425 88 500 119V140H0Z" fill="#d4cdeb" opacity=".5" />
+        <path d="M64 140L162 83Q172 77 182 84L252 131L316 99Q330 91 342 104L392 140Z" fill="#bfd8dc" opacity=".48" />
+        <g stroke="#959ac5" stroke-width="1.3" stroke-linecap="round" opacity=".65">
+          <path d="M296 119Q365 66 434 119M296 126Q365 77 434 126M312 110V120M336 96V106M365 91V101M394 96V106M418 110V120" />
+          <path class="planner-ripple" d="M24 127Q86 119 153 130T292 130M341 135H454" />
+          <path d="M64 37H114M79 28Q99 19 122 28T163 28" opacity=".55" />
+        </g>
+      </svg>
       <div>
         <h2>{{ $t("规划行程") }}</h2>
       </div>
@@ -575,7 +593,7 @@ watch(activeMenuTab, (tab) => {
           </div>
 
           <!-- 推荐路线 -->
-          <div class="content-card" v-if="routeList.length > 0">
+          <div class="content-card recommended-routes" v-if="routeList.length > 0">
             <div class="card-title">{{ $t("推荐路线") }}</div>
             <div class="routes-grid">
               <div v-for="route in routeList" :key="route.route_id" class="route-card" :class="{ selected: selectedRouteId === route.route_id }" @click="selectRoute(route)">
@@ -722,12 +740,21 @@ watch(activeMenuTab, (tab) => {
           <div class="start-summary"><span>{{ $t(spotCount) }} {{ $t("个景点") }}</span><span v-if="spotCount">{{ $t("约") }} {{ $t(selectedDuration) }} {{ $t("分钟") }}</span></div>
           <p v-if="!spotCount" class="start-hint">{{ $t(activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程') }}</p>
           </div>
-          <section class="start-guide-choice" :aria-label='$t("当前数字人")'>
-            <div v-if="selectedGuide" class="chosen-guide">
-              <img v-if="selectedGuide.poster_image || selectedGuide.avatar" :src="selectedGuide.poster_image || selectedGuide.avatar" :alt="$t(selectedGuide.name)" />
-              <strong>{{ $t(selectedGuide.name) }}</strong>
+          <section class="start-guide-choice" :class="{ 'has-guide': selectedGuide }" :aria-label='$t("当前数字人")'>
+            <div class="guide-choice-portrait" aria-hidden="true">
+              <span class="guide-choice-aura"></span>
+              <img v-if="guideChoicePoster && !guideChoicePosterFailed" :src="guideChoicePoster" alt="" @error="guideChoicePosterFailed = true" />
+              <el-icon v-else><User /></el-icon>
             </div>
-            <el-button plain @click="openGuidePicker">{{ $t(selectedGuide ? '更换数字人' : '选择数字人') }}</el-button>
+            <div class="guide-choice-main">
+              <div class="guide-choice-heading">
+                <span class="guide-choice-label">{{ $t("数字人导游") }}</span>
+                <span class="guide-choice-state"><el-icon v-if="selectedGuide" aria-hidden="true"><Check /></el-icon>{{ $t(selectedGuide ? '已选择' : '待选择') }}</span>
+              </div>
+              <div v-if="selectedGuide" class="chosen-guide"><strong>{{ $t(selectedGuide.name) }}</strong></div>
+              <p v-else class="guide-choice-caption">{{ $t("形象与声音") }}</p>
+              <el-button plain class="guide-select-button" @click="openGuidePicker">{{ $t(selectedGuide ? '更换数字人' : '选择数字人') }}<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button>
+            </div>
           </section>
           <el-input v-model="visitorName" :placeholder='$t("输入昵称（选填）")' :aria-label='$t("导览昵称")' maxlength="12" />
           <el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">{{ $t("开始导览") }}</el-button>
@@ -1921,5 +1948,227 @@ watch(activeMenuTab, (tab) => {
   .route-card { min-width: 0; }
   .route-spots span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   .pref-name { white-space: normal; }
+}
+
+/* Quiet scenic identity: colour lives in the canvas and a few supporting surfaces. */
+.visitor-home {
+  position: relative;
+  isolation: isolate;
+}
+.visitor-home > .visitor-topbar-shell,
+.visitor-intro,
+.visitor-main {
+  position: relative;
+}
+.visitor-home .visitor-intro {
+  overflow: hidden;
+  min-height: 106px;
+  background-color: #f3f1fb !important;
+  background-image: linear-gradient(110deg, #f2eefb, #f4f5fb 53%, #edf5f4) !important;
+  box-shadow: 0 8px 30px -16px rgba(73, 69, 112, .2) !important;
+}
+.visitor-intro > div,
+.visitor-intro .visitor-menu {
+  position: relative;
+  z-index: 1;
+}
+.planner-landscape {
+  position: absolute;
+  right: 22%;
+  bottom: -1px;
+  width: 420px;
+  height: 118px;
+  pointer-events: none;
+}
+.planner-ripple {
+  animation: planner-ripple-drift 9s ease-in-out infinite alternate;
+}
+.visitor-home .visitor-intro .visitor-menu {
+  background-color: rgba(255, 255, 255, .74) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 18px -10px rgba(84, 74, 137, .18) !important;
+}
+.visitor-main { min-height: 0; justify-content: flex-start; }
+.tab-content { gap: 18px; }
+.map-overview { margin-bottom: 0; }
+.visitor-home .content-card {
+  box-shadow: 0 8px 26px -14px rgba(53, 66, 98, .19) !important;
+}
+.visitor-home .map-overview :deep(.visit-context) {
+  background-color: #edf4f5 !important;
+  background-image: linear-gradient(145deg, #f1f2fb, #edf6f3) !important;
+}
+.map-overview :deep(.weather-symbol) {
+  background: rgba(255, 255, 255, .78);
+  color: #7088ad;
+  box-shadow: 0 5px 18px -10px rgba(88, 119, 130, .25);
+}
+.map-overview :deep(.context-tip) { background: rgba(255, 255, 255, .7); }
+.map-overview :deep(.context-overview),
+.map-overview :deep(.weather-details) { border-color: rgba(94, 123, 142, .12); }
+.visitor-home .recommended-routes { padding: 22px 24px 24px; }
+.routes-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.visitor-home .route-card {
+  --route-tint: #f1eef9;
+  --route-ink: #67558e;
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  overflow: hidden;
+  background-color: var(--route-tint) !important;
+  background-image: linear-gradient(145deg, rgba(255,255,255,.5), transparent 80%) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(129, 130, 170, .08) !important;
+  border-radius: 18px !important;
+  transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.visitor-home .route-card:nth-child(3n + 2) { --route-tint: #edf3fa; --route-ink: #4c6f94; }
+.visitor-home .route-card:nth-child(3n) { --route-tint: #edf5f0; --route-ink: #466e5e; }
+.visitor-home .route-card:hover {
+  transform: translateY(-3px);
+  background-color: var(--route-tint) !important;
+  border-color: rgba(117, 108, 178, .2) !important;
+  box-shadow: 0 10px 24px -16px rgba(64, 77, 116, .35) !important;
+}
+.visitor-home .route-card.selected {
+  background-color: var(--route-tint) !important;
+  border-color: #9b91d6 !important;
+  box-shadow: inset 0 0 0 1px #9b91d6 !important;
+}
+.route-theme-tag { color: var(--route-ink); background: rgba(255,255,255,.72); font-size: 13px; padding: 4px 10px; }
+.route-time { font-size: 13px; }
+.route-name { margin-top: 14px; font-size: 18px; line-height: 1.5; }
+.route-desc, .route-spots { font-size: 14px; line-height: 1.7; }
+.route-spots span { white-space: normal; }
+.route-card-bottom { margin-top: 16px; border-color: rgba(102, 123, 142, .12); }
+.visitor-home .spot-card-section {
+  background-image: linear-gradient(180deg, #f8f8fd 0, #fff 155px) !important;
+}
+.spot-options-grid { column-gap: 24px; }
+.spot-option { border-bottom-color: rgba(123, 139, 161, .1); }
+.spot-choice-title em { color: #778397; }
+.visitor-home .start-panel {
+  background: linear-gradient(110deg, #f1effa, #f0f6f5);
+  border: 1px solid rgba(123, 136, 161, .08);
+  box-shadow: 0 8px 26px -14px rgba(53, 66, 98, .19);
+}
+@keyframes planner-ripple-drift {
+  from { transform: translateX(-8px); }
+  to { transform: translateX(8px); }
+}
+@media (max-width: 1100px) {
+  .planner-landscape { right: 25%; width: 300px; opacity: .7; }
+  .routes-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .planner-landscape { right: 2%; width: 245px; opacity: .5; }
+  .visitor-home .visitor-intro { min-height: 100px; }
+  .visitor-home .recommended-routes { padding: 20px; }
+  .routes-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .visitor-home .route-card { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner-ripple { animation: none; }
+  .visitor-home .route-card { transition: none; }
+  .visitor-home .route-card:hover { transform: none; }
+}
+
+/* The guide choice is the focal action in the otherwise quiet launch bar. */
+.visitor-home .start-panel {
+  grid-template-columns: minmax(150px, .8fr) minmax(280px, 1.35fr) minmax(160px, 1fr) 180px;
+}
+.visitor-home .start-guide-choice {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cfc6ee;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #eee9fa, #f7f6fc);
+  box-shadow: 0 6px 20px -12px rgba(95, 76, 156, .32);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+.visitor-home .start-guide-choice:hover,
+.visitor-home .start-guide-choice:focus-within {
+  border-color: #a898db;
+  box-shadow: 0 7px 24px -12px rgba(95, 76, 156, .4);
+}
+.guide-choice-portrait {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  flex: 0 0 70px;
+  place-items: center;
+  height: 90px;
+  border: 1px solid rgba(155, 137, 207, .16);
+  border-radius: 16px;
+  background: #faf9fe;
+}
+.guide-choice-portrait img {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.guide-choice-portrait > .el-icon { color: #8a79b5; font-size: 30px; }
+.guide-choice-aura {
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border: 1px solid #b5a2dc;
+  border-radius: 21px;
+  opacity: .3;
+  animation: guide-choice-breathe 4.5s ease-in-out infinite;
+}
+.guide-choice-main { flex: 1; min-width: 0; }
+.guide-choice-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
+.guide-choice-label { color: #5b4c82; font-size: 14px; line-height: 1.5; }
+.guide-choice-state { display: inline-flex; align-items: center; gap: 3px; color: #726588; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.has-guide .guide-choice-state { color: #3d7761; }
+.guide-choice-caption { margin: 7px 0 10px; color: #6d6185; font-size: 14px; line-height: 1.5; }
+.start-guide-choice .chosen-guide { margin: 7px 0 10px; min-height: 21px; color: #3e325d; }
+.start-guide-choice .chosen-guide strong { font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
+.visitor-home .start-guide-choice .guide-select-button.el-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 38px;
+  height: auto;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #6652bd !important;
+  color: #fff !important;
+  box-shadow: 0 5px 14px -7px rgba(83, 63, 156, .5) !important;
+  font-size: 15px;
+  font-weight: 400;
+  white-space: normal;
+  line-height: 1.35;
+}
+.guide-select-button :deep(> span) { min-width: 0; max-width: 100%; white-space: normal; line-height: 1.35; }
+.visitor-home .start-guide-choice .guide-select-button.el-button:hover { background: #5843ad !important; }
+.guide-select-button .el-icon { margin-left: 8px; transition: transform .25s ease; }
+.guide-select-button:hover .el-icon { transform: translateX(3px); }
+.has-guide .guide-choice-aura { animation: none; opacity: .18; }
+@keyframes guide-choice-breathe {
+  0%, 100% { opacity: .18; transform: scale(.98); }
+  50% { opacity: .52; transform: scale(1.04); }
+}
+@media (max-width: 1100px) {
+  .visitor-home .start-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .visitor-home .start-panel { grid-template-columns: minmax(0, 1fr); }
+  .visitor-home .start-guide-choice { gap: 14px; padding: 14px; }
+  .guide-select-button .el-icon { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-choice-aura { animation: none; }
+  .visitor-home .start-guide-choice, .guide-select-button .el-icon { transition: none; }
 }
 </style>

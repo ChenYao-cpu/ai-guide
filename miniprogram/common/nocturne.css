@@ -2,7 +2,7 @@
 page .auth-page .ambient-field > view,
 page .page .aurora-background > view {opacity:0;animation:none}
 page {
-  --app-font-family:"SimSun", "宋体", "Songti SC", "STSong", serif;
+  --app-font-family:Arial, "SimSun", "宋体", "Songti SC", "STSong", serif;
   --ng-night:#0B1322;
   --ng-surface:rgba(255,255,255,.08);
   --ng-raised:rgba(255,255,255,.12);

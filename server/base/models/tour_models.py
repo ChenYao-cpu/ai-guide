@@ -350,6 +350,8 @@ class TourChatItem(BaseModel):
     explanation_mode: Literal['standard', 'child', 'deep'] = 'standard'
     speech_rate: Literal[0.8, 1.0] = 1.0
     text_only: bool = False
+    persona: Literal['modern', 'qianlong'] = 'modern'
+    defer_speech: bool = False
 
 
 class PreferenceItem(BaseModel):

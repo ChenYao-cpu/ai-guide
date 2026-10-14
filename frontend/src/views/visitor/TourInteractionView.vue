@@ -36,6 +36,7 @@
         </nav>
       </div>
       <div class="banner-right">
+        <el-button plain :disabled="sessionLoading || !!sessionError || switchingSpot" @click="openRepair('')">{{ $t('调整行程') }}</el-button>
         <LanguageSwitch :disabled="disableInput || isRecording || recognizing" />
         <el-tooltip
           :content="$t(gpsEnabled ? '定位已开启，接近景点时自动播报' : '开启定位，接近景点时自动播报')"
@@ -66,7 +67,7 @@
       <section class="tour-left" :aria-label='$t("数字人导游")'>
         <div class="guide-stage">
           <div class="stage-heading">
-            <h2>{{ $t(guideInfo?.name || '数字导游') }}</h2>
+            <div><h2>{{ $t(guideInfo?.name || '数字导游') }}</h2><span v-if="persona === 'qianlong'" class="era-stage-label">{{ $t('演绎乾隆时期') }} · 1736–1795</span></div>
             <span class="speaking-state" :class="{ speaking: isSpeaking }" role="status"
               ><i></i>{{ $t(playbackStatus) }}</span
             >
@@ -103,10 +104,12 @@
           <header class="chat-heading">
             <h2>{{ $t(tourLanguage === 'en' ? 'Scenic Q&A' : '景区问答') }}</h2>
             <div class="chat-heading-actions">
+              <select v-model="persona" class="persona-select" :aria-label="$t('对话角色')" :disabled="disableInput" @change="stopPlayback()"><option value="modern">{{ $t('现代导游') }}</option><option value="qianlong">{{ $t('乾隆时期·史料对话') }}</option></select>
               <span v-if="viewingSpot"><el-icon><Location /></el-icon>{{ $t(viewingSpot.spot_name) }}</span>
 
             </div>
           </header>
+          <p v-if="persona === 'qianlong'" class="era-notice">{{ $t('依据史料演绎；后世问题交由现代导游回答。') }}</p>
           <div class="reading-tools" role="group" :aria-label='$t("讲解与阅读辅助")'>
             <label>{{ $t("讲解方式") }}<select v-model="explanationMode" :aria-label='$t("讲解方式")' :disabled="disableInput"><option value="standard">{{ $t("简明讲解") }}</option><option value="child">{{ $t("儿童讲解") }}</option><option value="deep">{{ $t("深入讲解") }}</option></select></label>
             <button type="button" :aria-pressed="largeReading" @click="largeReading = !largeReading">{{ $t("大字阅读") }}</button>
@@ -146,8 +149,9 @@
             >
               <div class="msg-content">
                 <div v-if="msg.role === 'guide'" class="msg-name">
-                  {{ $t(guideInfo?.name || '数字导游') }}
+                  {{ $t(messageSpeaker(msg)) }}
                 </div>
+                <span v-if="msg.aiMeta?.persona" class="era-message-tag">{{ $t(msg.aiMeta.persona.mode === 'modern_handoff' ? '已交由现代导游' : msg.aiMeta.persona.mode === 'insufficient' ? '史料不足，未作推测' : '乾隆时期 · 史料演绎') }}</span>
                 <div class="msg-text" v-html="formatMessage(msg.message, msg.role)"></div>
                 <div v-if="msg.role === 'guide' && msg.aiMeta?.serviceActions?.length" class="service-actions">
                   <template v-for="action in msg.aiMeta.serviceActions" :key="action.url"><a v-if="isKnowledgeSourceUrl(action.url) || action.url === 'tel:01062860608'" :href="action.url" :target="action.url.startsWith('https:') ? '_blank' : undefined" rel="noopener noreferrer">{{ $t(action.label) }}</a></template>
@@ -155,13 +159,14 @@
                 <details
                   v-if="
                     msg.role === 'guide' &&
-                    (msg.aiMeta?.spotContext ||
+                    (msg.aiMeta?.sources?.length || msg.aiMeta?.persona || msg.aiMeta?.spotContext ||
                       msg.aiMeta?.references?.length ||
                       msg.message?.includes('以上内容来自景区知识档案'))
                   "
                   class="msg-sources"
                 >
                   <summary>{{ $t("参考资料") }}</summary>
+                  <div v-if="msg.aiMeta?.persona?.timeline?.length" class="era-timeline"><p v-for="point in msg.aiMeta.persona.timeline" :key="point.year + point.text"><strong>{{ point.year }}</strong><span>{{ point.text }}</span></p><p>{{ $t('事实摘要依据官方资料整理，不是历史人物原话。') }}</p></div>
                   <p v-if="msg.aiMeta?.spotContext">{{ $t(msg.aiMeta.spotContext) }} {{ $t("景点资料") }}</p>
                   <p v-if="msg.aiMeta?.claimReview?.status === 'model_checked'">{{ $t("回答经过模型辅助核对，引用原文可展开查看；不代表人工逐句认证。") }}</p>
                   <details v-if="msg.aiMeta?.claimReview?.checks?.length"><summary>{{ $t("回答对应原文") }}</summary><div v-for="check in msg.aiMeta.claimReview.checks" :key="check.segment"><strong>{{ $t("第") }} {{ $t(check.segment) }} {{ $t("段依据") }}</strong><blockquote v-for="quote in check.quotes" :key="quote.evidence_id + quote.quote">{{ quote.quote }}</blockquote></div></details>
@@ -178,7 +183,7 @@
                     </li>
                   </ul>
                   <details v-if="msg.aiMeta?.evidence?.length" class="evidence-excerpts">
-                    <summary>{{ $t("查看检索原文") }}</summary>
+                    <summary>{{ $t(msg.aiMeta?.persona ? '查看史料摘要' : '查看检索原文') }}</summary>
                     <article v-for="piece in msg.aiMeta.evidence" :key="piece.id"><strong>{{ $t(piece.spot) }} · {{ $t(piece.document) }}</strong><p>{{ piece.excerpt }}</p><span>{{ $t("版本") }} {{ piece.version }} {{ $t("· 片段") }} {{ piece.id }}</span></article>
                     <p>{{ $t(msg.aiMeta.evidenceNote) }}</p>
                   </details>
@@ -202,6 +207,7 @@
                 resize="none"
               />
               <div class="composer-actions">
+                <el-button v-if="loadingResponse || loadingSpeech || isSpeaking" class="interrupt-button" @click="interruptAnswer">{{ $t(loadingResponse ? '停止回答' : '打断讲解') }}</el-button>
                 <el-button
                   :type="isRecording ? 'danger' : 'default'"
                   :icon="Microphone"
@@ -251,6 +257,7 @@
         ><el-button type="primary" @click="showWelcomeDialog = false">{{ $t("开始导览") }}</el-button></template
       >
     </el-dialog>
+    <TourRouteRepair v-if="repairOpen" :session-id="Number(props.sessionId)" :current-name="currentSpot?.spot_name || ''" :remaining-spots="routeSpots.slice(activeSpotIndex + 1)" :prompt="repairPrompt" :initial-minutes="remainingBudget" :initial-pace="savedPlan.pace" :initial-exit="savedPlan.end_area" @close="repairOpen = false" @applied="repairApplied" />
     <PwaInstallPrompt />
   </main>
 </template>
@@ -272,7 +279,9 @@ import {
 } from '@element-plus/icons-vue'
 import DigitalAvatarPlayer from '@/components/DigitalAvatarPlayer.vue'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
-import { getTourLiveInfo, sendTourChatMessage, endTourSession } from '@/api/visitor'
+import { receiveAvatarToken } from '@/api/xingyunTour'
+import TourRouteRepair from '@/components/TourRouteRepair.vue'
+import { getTourLiveInfo, sendTourChatMessage, endTourSession, getReplyMedia } from '@/api/visitor'
 import { useRecordedSpeech } from '@/composables/useRecordedSpeech'
 import { useGeolocation } from '@/composables/useGeolocation'
 import { formatTourMessage, isKnowledgeSourceUrl } from '@/utils/tourPresentation'
@@ -314,6 +323,22 @@ watch(
 
 const conversations = ref<any[]>([])
 const inputValue = ref('')
+const persona = ref<'modern'|'qianlong'>('modern')
+const repairOpen=ref(false), repairPrompt=ref(''), remainingBudget=ref<number|undefined>()
+const savedPlan=ref<{pace?:'standard'|'relaxed';end_area?:'auto'|'east'|'north'|'south'}>({})
+const loadingSpeech=ref(false)
+let speechController:AbortController|undefined
+let turnVersion=0
+function messageSpeaker(msg:any) {
+  return msg.aiMeta?.persona?.mode === 'historical' ? '乾隆时期讲解' : msg.aiMeta?.persona ? '现代导游' : guideInfo.value?.name || '数字导游'
+}
+function isRouteChange(message:string) {
+  return !/不(?:需要|用|要)调整|不用改|不累|not tired|do not replan/i.test(message) && /只剩|还剩|剩下|提前离园|早点离园|回出口|调整路线|改.*路线|少走|走不动|累了|跳过|不去|不想去|不想爬|避开|minutes? left|hours? left|tired|skip|replan|leave early|less walking|avoid stairs/i.test(message)
+}
+function openRepair(message:string){interruptAnswer();repairPrompt.value=message;repairOpen.value=true}
+async function repairApplied(){repairOpen.value=false;stopPlayback();await refreshSessionInfo();ElMessage.success(t('路线已更新'))}
+function interruptAnswer(){turnVersion++;chatController?.abort();chatController=undefined;stopPlayback();stopGenerationStages();disableInput.value=false;loadingResponse.value=false}
+
 const explanationMode = ref<'standard' | 'child' | 'deep'>('standard')
 const largeReading = ref(localStorage.getItem('tour-large-reading') === 'true')
 const textOnly = ref(localStorage.getItem('tour-text-only') === 'true')
@@ -379,6 +404,7 @@ const upcomingStops = computed(() => {
 })
 const playbackStatus = computed(() => {
   if (loadingResponse.value) return generationStage.value
+  if (loadingSpeech.value) return t('文字已就绪，正在准备语音')
   if (isSpeaking.value) return t("正在讲解")
   if (playbackError.value) return t("语音未播放，可查看文字")
   return avatarConnected.value ? t("数字人已就绪") : t("可文字或语音问答")
@@ -391,7 +417,15 @@ const SENTIMENT_TO_EMOTION: Record<string, string> = {
   neutral: 'neutral'
 }
 
-const quickQuestions = computed(() => tourLanguage.value === 'en' ? [
+const quickQuestions = computed(() => persona.value === 'qianlong' ? (tourLanguage.value === 'en' ? [
+  {label:'Garden origins',message:'Why was Qingyi Yuan built?'},
+  {label:'A later era',message:'What happened in 1860?'},
+  {label:'Private thoughts',message:'What were your private thoughts?'}
+] : [
+  {label:'建园故事',message:'清漪园为什么修建？'},
+  {label:'后世变迁',message:'1860年这里发生了什么？'},
+  {label:'史料边界',message:'你建园时心里怎么想的？'}
+]) : tourLanguage.value === 'en' ? [
   { label: 'History', message: 'What is the history of this place?' },
   { label: 'Photo spots', message: 'Where can I take good photos here?' },
   { label: 'Facilities', message: 'What facilities are nearby?' },
@@ -425,6 +459,11 @@ async function refreshSessionInfo() {
       try {
         const prefs = JSON.parse(data.visitor_preferences || '{}')
         visitorPrefs.value = prefs.preferences || prefs.prefs || []
+        const plan = prefs.last_replan || prefs.planning || {}
+        savedPlan.value = {pace:plan.pace,end_area:plan.end_area}
+        const started = prefs.last_replan?.applied_at ? prefs.last_replan.applied_at * 1000 : Date.parse(data.start_time || '')
+        const initial = prefs.last_replan?.remaining_minutes ?? plan.time_budget_minutes
+        remainingBudget.value = initial ? Math.max(1, Math.floor(initial - (Number.isFinite(started) ? (Date.now()-started)/60000 : 0))) : undefined
         if (!routeSpots.value.length && prefs.spot_ids?.length > 0) {
           const { getVisitorSpotList } = await import('@/api/visitor')
           const spotResponse = await getVisitorSpotList().catch(() => null)
@@ -468,6 +507,8 @@ async function refreshSessionInfo() {
 // 问答回复照常播放，页面不再提供独立的景点讲解或播放控制。
 function stopPlayback() {
   playbackVersion++
+  speechController?.abort()
+  loadingSpeech.value=false
   live2dRef.value?.stop()
   ttsAudio.value?.pause()
   isSpeaking.value = false
@@ -530,6 +571,9 @@ async function handleSend() {
 }
 async function sendMessage(message: string) {
   if (disableInput.value || disposed || sessionError.value || sessionLoading.value || !currentSpot.value) return false
+  if (isRouteChange(message)) {openRepair(message);return true}
+  const ownTurn = ++turnVersion
+  const sentAt = performance.now()
   const nextViewingSpot = nextTourSpot.value || upcomingStops.value[0]
   conversations.value.push({
     role: 'user',
@@ -547,16 +591,17 @@ async function sendMessage(message: string) {
     stopPlayback()
     playbackError.value = false
     chatController = new AbortController()
+    const signal = chatController.signal
     const response = await sendTourChatMessage(
       Number(props.sessionId),
       message,
       currentSpot.value?.spot_id,
       nextViewingSpot?.spot_id || 0,
       (await live2dRef.value?.getMode()) || 'audio',
-      { signal: chatController.signal, timeout: 90000, language: tourLanguage.value,
-        explanation_mode: explanationMode.value, speech_rate: slowSpeech.value ? 0.8 : 1.0, text_only: textOnly.value }
+      { signal, timeout: 90000, language: tourLanguage.value,
+        explanation_mode: explanationMode.value, speech_rate: slowSpeech.value ? 0.8 : 1.0, text_only: textOnly.value, persona: persona.value, defer_speech: true }
     )
-    if (disposed) return false
+    if (disposed || ownTurn !== turnVersion) return true
     const body = response.data
     if (body && body.success) {
       conversations.value.push({
@@ -565,7 +610,18 @@ async function sendMessage(message: string) {
         aiMeta: body.data?.aiMeta,
         send_time: new Date().toISOString()
       })
-      await playReply(body.data)
+      if (body.data?.aiMeta) body.data.aiMeta.clientTextReadyMs = Math.round(performance.now()-sentAt)
+      if(body.data?.speechPending && body.data?.messageId && !textOnly.value) {
+        const mediaVersion=playbackVersion
+        speechController=new AbortController();loadingSpeech.value=true
+        void getReplyMedia(Number(props.sessionId),body.data.messageId,speechController.signal).then(async media=>{
+          if(disposed || mediaVersion!==playbackVersion || ownTurn!==turnVersion || textOnly.value)return
+          loadingSpeech.value=false
+          await playReply({...body.data,...media.data.data})
+        }).catch((e:any)=>{
+          if(!disposed && mediaVersion===playbackVersion && e.code!=='ERR_CANCELED')onAudioError()
+        }).finally(()=>{if(mediaVersion===playbackVersion)loadingSpeech.value=false})
+      } else await playReply(body.data)
 
       // ── 情感分析 → 数字人表情 ──
       const sentimentLabel = body.data?.sentiment?.label
@@ -588,13 +644,16 @@ async function sendMessage(message: string) {
       ElMessage.error(body?.message || t("回复失败"))
     }
   } catch (e: any) {
+    if (ownTurn !== turnVersion || e.code === 'ERR_CANCELED') return true
     console.error('Send error:', e.message, e)
     if (!disposed)
       ElMessage.error(e.code === 'ECONNABORTED' ? t("讲解准备超时，请重试") : t("发送失败，请重试"))
   } finally {
+    if (ownTurn === turnVersion) {
     stopGenerationStages()
     disableInput.value = false
     loadingResponse.value = false
+    }
     if (!disposed) {
       await nextTick()
       const chat = document.querySelector('.chat-area')
@@ -656,6 +715,7 @@ async function handleEndTour() {
   }
 }
 function handleRecord() {
+  if (!isRecording.value) stopPlayback()
   isRecording.value ? stopRecognition() : startRecognition()
 }
 function formatMessage(message: string, role = '') {
@@ -689,6 +749,7 @@ function themeLabel(key: string): string {
   return map[key] || key
 }
 onMounted(() => {
+  receiveAvatarToken(Number(props.sessionId))
   refreshSessionInfo()
 })
 onUnmounted(() => {
@@ -702,6 +763,9 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.persona-select{font:inherit;font-size:14px;color:#59459b;background:#f3effc;border:1px solid #e6dcf7;border-radius:12px;padding:8px 10px;max-width:210px}
+.era-stage-label{display:block;color:#89764b;font-size:14px;margin-top:5px}.era-notice{margin:0;padding:0 22px 10px;font-size:13px;color:#85754d;line-height:1.5}.era-message-tag{display:inline-block;padding:4px 8px;border-radius:7px;color:#866a36;background:#fbf4e6;font-size:12px;margin-bottom:8px}.era-timeline p{display:flex;gap:12px;font-size:14px;line-height:1.65}.era-timeline strong{color:#806ab1;flex-shrink:0}.interrupt-button{color:#7b5273!important;background:#f7eef4!important}.composer-actions{flex-wrap:wrap}.persona-select:focus-visible{outline:2px solid #7460c5;outline-offset:3px}
+
 .chat-heading-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
 .chat-heading-actions > span{display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:16px}
 .tour-language{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--glass)}
@@ -1416,6 +1480,37 @@ onUnmounted(() => {
     padding-bottom: 8px;
   }
 }
+@media (max-width: 767px) {
+  .tour-interaction-container{padding:6px;height:100dvh}
+  .tour-banner{display:grid;grid-template-columns:1fr;padding:8px 10px;gap:7px;margin-bottom:7px;border-radius:18px}
+  .banner-left{display:flex;flex-wrap:nowrap;gap:8px;width:100%;min-width:0}
+  .banner-title :deep(.brand-logo-wordmark),.banner-title :deep(.brand-logo-english){display:none}
+  .banner-route-flow{flex:1;border:0;padding:0;gap:5px}
+  .flow-node{padding:3px 7px;gap:2px}.flow-node strong{font-size:14px}.flow-label{font-size:12px}
+  .banner-right{position:static;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin:0}
+  .banner-right :deep(.el-button){height:28px;padding:0 8px;margin:0;font-size:13px}
+  .banner-right :deep(.language-switch button){font-size:12px;padding:4px 8px}
+  .tour-main{grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(170px,28dvh,280px) minmax(0,1fr);gap:7px}
+  .tour-left,.tour-side{min-height:0}.guide-stage{height:100%}
+  .stage-heading{top:10px;left:12px;right:12px;flex-wrap:nowrap;align-items:flex-start}
+  .stage-heading h2{font-size:16px}.era-stage-label,.speaking-state{font-size:12px}
+  .chat-heading{padding:9px 12px 5px;gap:8px}.chat-heading h2{font-size:16px}
+  .chat-heading-actions{gap:6px;flex-wrap:nowrap}.chat-heading-actions>span{display:none}
+  .persona-select{font-size:13px;max-width:210px;padding:5px 8px}
+  .reading-tools{padding:3px 10px;flex-wrap:nowrap;overflow-x:auto;flex-shrink:0;gap:6px;white-space:nowrap}
+  .reading-tools label,.reading-tools select,.reading-tools button{font-size:12px}
+  .quick-questions{padding:6px 10px;flex-wrap:nowrap;overflow-x:auto;max-height:none;flex-shrink:0}
+  .quick-questions button{white-space:nowrap;font-size:13px;padding:5px 8px}
+  .era-notice{font-size:12px;padding:0 12px 4px}
+  .chat-area{padding:6px 10px;min-height:40px}
+  .chat-welcome{min-height:0;padding:10px}.chat-welcome h3{margin:5px 0;font-size:15px}.chat-welcome p{font-size:13px;margin:0}.chat-welcome-icon{display:none}
+  .msg-text{font-size:14px;line-height:1.65}.msg-content{padding:9px 10px}
+  .chat-input-area{padding:7px 10px}.input-row{flex-wrap:nowrap;align-items:flex-end;gap:6px}
+  .input-row :deep(.el-textarea){flex:1;min-width:0}.input-row :deep(.el-textarea__inner){font-size:14px;padding:8px;min-height:44px!important}
+  .composer-actions{gap:5px;margin:0;flex-wrap:wrap;max-width:128px}
+  .composer-actions :deep(.el-button){height:32px;padding:0 7px;margin:0;font-size:13px}
+}
+@media (max-width:767px) and (max-height:650px){.tour-main{grid-template-rows:145px minmax(0,1fr)}.reading-tools{max-height:28px}.chat-welcome p{display:none}}
 @media (prefers-reduced-motion: reduce) {
   *,
   :deep(*) {

@@ -3,13 +3,15 @@ import { defineComponent, h, ref } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import TourInteractionView from '../TourInteractionView.vue'
 
-const api = vi.hoisted(() => ({ live: vi.fn(), spots: vi.fn(), chat: vi.fn(), end: vi.fn(), push: vi.fn() }))
+const api = vi.hoisted(() => ({ live: vi.fn(), spots: vi.fn(), chat: vi.fn(), end: vi.fn(), push: vi.fn(), media: vi.fn() }))
 const avatarSpeak = vi.hoisted(() => vi.fn(() => false))
-vi.mock('@/api/visitor', () => ({ getTourLiveInfo: api.live, getVisitorSpotList: api.spots, sendTourChatMessage: api.chat, endTourSession: api.end }))
+vi.mock('@/api/visitor', () => ({ getTourLiveInfo: api.live, getVisitorSpotList: api.spots, sendTourChatMessage: api.chat, endTourSession: api.end, getReplyMedia: api.media }))
+vi.mock('@/api/xingyunTour',()=>({receiveAvatarToken:vi.fn()}))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: api.push }) }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), info: vi.fn() }, ElMessageBox: { confirm: vi.fn() } }))
 vi.mock('@/composables/useGeolocation', () => ({ useGeolocation: () => ({ closestSpot: ref(null), autoSwitchEnabled: ref(false), isSupported: () => false, stopTracking: vi.fn() }) }))
 vi.mock('@/composables/useRecordedSpeech', () => ({ useRecordedSpeech: () => ({ recording: ref(false), recognizing: ref(false), start: vi.fn(), stop: vi.fn() }) }))
+vi.mock('@/components/TourRouteRepair.vue', () => ({ default: defineComponent({ props:['prompt'], setup: props => () => h('div', {class:'test-repair'}, props.prompt) }) }))
 vi.mock('@/components/PwaInstallPrompt.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/DigitalAvatarPlayer.vue', () => ({ default: defineComponent({
   setup(_, { expose }) {
@@ -241,5 +243,48 @@ describe('网页导览顶部路线流程', () => {
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(wrapper.find('.next-stop').attributes('disabled')).toBeUndefined()
+  })
+})
+
+
+describe('会话、语音与调整行程', () => {
+  it('先显示文字，打断后忽略迟到的语音', async () => {
+    let finish!: (value:any)=>void
+    api.media.mockReturnValue(new Promise(resolve=>{finish=resolve}))
+    api.chat.mockResolvedValue(ok({message:'先到达的文字',messageId:301,speechPending:true,spokenText:'口语文字'}))
+    await button('历史故事').trigger('click'); await flushPromises()
+    expect(wrapper.find('.guide-msg').text()).toContain('先到达的文字')
+    expect(api.media).toHaveBeenCalledTimes(1)
+    expect(play).not.toHaveBeenCalled()
+    await button('打断讲解').trigger('click')
+    expect(api.media.mock.calls[0][2].aborted).toBe(true)
+    finish(ok({ttsAudioUrl:'/late.wav'}));await flushPromises()
+    expect(play).not.toHaveBeenCalled();expect(avatarSpeak).not.toHaveBeenCalled()
+    expect(wrapper.find('textarea').attributes('disabled')).toBeUndefined()
+  })
+  it('停止生成后可以继续问，旧回复不覆盖新回复', async () => {
+    let finish!: (value:any)=>void
+    api.chat.mockReturnValueOnce(new Promise(resolve=>{finish=resolve}))
+    await button('历史故事').trigger('click');await flushPromises()
+    await button('停止回答').trigger('click')
+    expect(api.chat.mock.calls[0][5].signal.aborted).toBe(true)
+    api.chat.mockResolvedValueOnce(ok({message:'新的回答'}))
+    await button('拍照位置').trigger('click');await flushPromises()
+    finish(ok({message:'过期回答',ttsAudioUrl:'/stale.wav'}));await flushPromises()
+    expect(wrapper.text()).toContain('新的回答');expect(wrapper.text()).not.toContain('过期回答')
+  })
+  it('语句中的路线调整先打开预览，不直接发送知识问答', async () => {
+    await wrapper.find('textarea').setValue('累了，只剩40分钟，从东门离园')
+    await button('发送').trigger('click');await flushPromises()
+    expect(wrapper.find('.test-repair').text()).toContain('40分钟')
+    expect(api.chat).not.toHaveBeenCalled()
+  })
+  it('历史角色传递给接口，来源和时代边界可见', async () => {
+    await wrapper.find('[aria-label="对话角色"]').setValue('qianlong')
+    api.chat.mockResolvedValue(ok({message:'1750年开始建园',aiMeta:{persona:{mode:'historical',timeline:[{year:1750,text:'开始建园'}]},sources:[{title:'官方记录',url:'https://www.summerpalace.net.cn/'}]}}))
+    await wrapper.find('textarea').setValue('清漪园为什么修建？');await button('发送').trigger('click');await flushPromises()
+    expect(api.chat.mock.calls[0][5].persona).toBe('qianlong')
+    expect(wrapper.find('.era-notice').text()).toContain('依据史料')
+    expect(wrapper.find('.era-timeline').text()).toContain('1750')
   })
 })

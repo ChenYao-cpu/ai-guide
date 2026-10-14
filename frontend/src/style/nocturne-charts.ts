@@ -3,7 +3,7 @@ import * as echarts from 'echarts'
 // Canvas-rendered charts cannot inherit CSS tokens. Mirror the shared palette.
 const foreground = 'rgba(255,255,255,.60)'
 const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--app-font-family').trim()
-  || '"SimSun", "宋体", "Songti SC", "STSong", serif'
+  || 'Arial, "SimSun", "宋体", "Songti SC", "STSong", serif'
 const axis = {
   axisLine: { lineStyle: { color: 'rgba(255,255,255,.15)' } },
   axisTick: { lineStyle: { color: 'rgba(255,255,255,.15)' } },

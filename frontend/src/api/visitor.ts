@@ -3,6 +3,7 @@
  * 用于景区导览游客交互页面
  */
 import { request_handler as request } from './base'
+import { avatarHeaders } from './xingyunTour'
 
 // ============================================================
 //                       类型定义
@@ -157,10 +158,11 @@ export function getTourLiveInfo(sessionId: number) {
 }
 
 /** 发送聊天消息 */
-export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number; language?: 'zh' | 'en'; explanation_mode?: 'standard' | 'child' | 'deep'; speech_rate?: 0.8 | 1.0; text_only?: boolean }) {
-  const { language = 'zh', explanation_mode = 'standard', speech_rate = 1.0, text_only = false, ...requestOptions } = options || {}
+export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number; language?: 'zh' | 'en'; explanation_mode?: 'standard' | 'child' | 'deep'; speech_rate?: 0.8 | 1.0; text_only?: boolean; persona?: 'modern' | 'qianlong'; defer_speech?: boolean }) {
+  const { language = 'zh', explanation_mode = 'standard', speech_rate = 1.0, text_only = false, persona = 'modern', defer_speech = false, ...requestOptions } = options || {}
   return request({
     url: '/tour-session/chat',
+    headers: avatarHeaders(sessionId),
     method: 'put',
     ...requestOptions,
     data: {
@@ -173,6 +175,8 @@ export function sendTourChatMessage(sessionId: number, message: string, currentS
       explanation_mode,
       speech_rate,
       text_only,
+      persona,
+      defer_speech,
     },
   })
 }
@@ -343,4 +347,35 @@ export function checkNearbySpot(latitude: number, longitude: number, sessionId: 
     method: 'POST',
     params: { latitude, longitude, session_id: sessionId },
   })
+}
+
+export interface RouteRepairOptions {
+  message?: string
+  remaining_minutes?: number
+  pace: 'standard' | 'relaxed'
+  end_area: 'auto' | 'east' | 'north' | 'south'
+  excluded_spot_ids: number[]
+  reserve_minutes: number
+}
+export interface RouteRepair {
+  proposal_token: string
+  feasible: boolean
+  exit_only: boolean
+  remaining_minutes: number
+  current_spot: string
+  next_spots: Array<{spot_id:number;spot_name:string}>
+  removed: Array<{spot_id:number;spot_name:string;reason:string}>
+  totals: {visit_minutes:number;walk_minutes:number;rest_minutes:number;exit_minutes:number;reserve_minutes:number;total_minutes:number;walking_meters:number}
+  original_totals: {total_minutes:number;walking_meters:number}
+  end_anchor: string
+  options: RouteRepairOptions
+}
+export function previewTourRepair(sid:number, options:RouteRepairOptions, signal?:AbortSignal) {
+  return request<{success:boolean;data:RouteRepair}>({url:`/tour-session/${sid}/replan/preview`,method:'post',data:options,headers:avatarHeaders(sid),signal,timeout:20000})
+}
+export function applyTourRepair(sid:number, token:string) {
+  return request({url:`/tour-session/${sid}/replan/apply`,method:'post',data:{proposal_token:token},headers:avatarHeaders(sid),timeout:15000})
+}
+export function getReplyMedia(sid:number, messageId:number, signal?:AbortSignal) {
+  return request({url:`/tour-session/${sid}/reply/${messageId}/media`,method:'post',headers:avatarHeaders(sid),signal,timeout:45000})
 }

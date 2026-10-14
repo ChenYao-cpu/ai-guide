@@ -96,6 +96,11 @@ class LightweightTourRetriever:
         return tokens
 
     def search_evidence(self, question, spot_name='', topics=None, limit=5):
+        from ..conversation_focus import expand_retrieval_query
+        # Scope is an eligibility filter, not evidence that a fragment answers
+        # a question. Remove the injected scenic-name prefix from scoring.
+        question=re.sub(r'^景点：.*?。游客问题：', '', question)
+        question=expand_retrieval_query(question)
         scores=(self.matrix @ self.vectorizer.transform([question]).T).toarray().ravel()
         eligible=[i for i,meta in enumerate(self.metadata) if meta['topic']!='sources'
                   and (not spot_name or meta['spot']==spot_name) and (not topics or meta['topic'] in topics)]
