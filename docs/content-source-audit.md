@@ -51,7 +51,7 @@
 
 ## 提交准备
 
-resources/summer-palace 包含可追踪的公开数据及图片，新环境用 scripts/import_resource_pack.py 导入。
+原 resources/summer-palace 的多城市资料包已于 2026-10-15 归档，原文件保留在提交 d4f23ac 的 Git 历史中。当前交付使用 resources/local-resources.zip（本机 16 景点快照），导入方法见 docs/resource-pack.md；下述审计结论针对原资料包。
 名称包含“次庄雅”的两条现有数字人记录已统一为用户提供的封面。
 本次仅整理文件，没有 commit 或 push。
 

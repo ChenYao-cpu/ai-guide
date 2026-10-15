@@ -17,6 +17,7 @@ project.private.config.json
 *.pem
 *.key
 *.zip
+!/resources/local-resources.zip
 *.7z
 *.tgz
 /work_dirs/

@@ -75,12 +75,15 @@ npm run dev
 
 ## 六、导入景点数据
 
-后端正运行的情况下，另开终端：
+当前本机数据包是 `resources/local-resources.zip`，包含 16 个颐和园景点、3 条路线、2 个数字人展示配置和 21 份知识文档。后端已初始化数据库和管理员后，在项目根目录另开终端：
 
 ```powershell
 conda activate tourist
-python scripts/import_scenic_spots.py
+Expand-Archive -LiteralPath resources/local-resources.zip -DestinationPath resources
+python scripts/import_resource_pack.py resources/local-resources
 ```
+
+数字人应用绑定、素材校验及已有数据的处理规则见 [资源包说明](docs/resource-pack.md)。资源包不含平台密钥；向已有数据库导入不会删除旧内容。
 
 ## 常见问题
 
