@@ -90,6 +90,7 @@ export default defineConfig(({ mode }) => {
       '/knowledge-base': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-routes': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-session': { target: backendUrl, bypass: spaNavigationBypass },
+      '/tour-experience': { target: backendUrl, bypass: spaNavigationBypass },
       '/analytics': { target: backendUrl, bypass: spaNavigationBypass },
       '/system': { target: backendUrl, bypass: spaNavigationBypass },
       '/files': { target: backendUrl, bypass: spaNavigationBypass },

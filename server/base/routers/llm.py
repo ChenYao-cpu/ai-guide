@@ -90,7 +90,7 @@ async def gen_guide_base_prompt(
         "你的回答应该准确有据，采用短句和具体观察引导；不得用自己的印象补充未核实的历史细节。"
         "★ 严禁出现【XX】格式的占位符，每个描述都要写具体。关键事实和数据须基于资料，"
         "未在资料中出现的雕刻纹样、典故和设施位置不要编造。"
-        "先直接回答游客的问题，通常用2至4句、80至150字口语讲解；游客要求详细时再展开。"
+        "先直接回答游客的问题；介绍、历史和建筑适当分段展开，具体长度遵循本轮讲解策略。"
         "缺少某项资料时说明具体缺少什么，并提供资料中可确认的相关信息，不要笼统拒绝所有问题。"
     )
 
@@ -249,7 +249,7 @@ async def get_agent_res(prompt, departure_place, delivery_company):
     return agent_response
 
 
-async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
+async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45, *, tour_mode: bool = False):
     """获取 LLM 推理返回
 
     Args:
@@ -287,13 +287,17 @@ async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
         if json_mode:
             request_kwargs["response_format"] = {"type": "json_object"}
         try:
-            return LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0).chat.completions.create(**request_kwargs)
-        except Exception:
-            if not json_mode:
-                raise
-            logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
-            request_kwargs.pop("response_format", None)
-            return LLM_MODEL_HANDLER.with_options(timeout=timeout, max_retries=0).chat.completions.create(**request_kwargs)
+            try:
+                return client.chat.completions.create(**request_kwargs)
+            except Exception:
+                if not json_mode:
+                    raise
+                logger.warning("当前模型不支持 JSON response_format，回退到提示词约束")
+                request_kwargs.pop("response_format", None)
+                return client.chat.completions.create(**request_kwargs)
+        finally:
+            if owned_client is not None:
+                owned_client.close()
 
     # OpenAI SDK 是同步客户端，放入工作线程避免阻塞 FastAPI 事件循环。
     response = await asyncio.to_thread(_request)
@@ -311,6 +315,16 @@ async def get_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
     #     res_data = item["choices"][0]["message"]["content"]
     #
     # return res_data
+
+
+async def get_tour_llm_res(prompt, json_mode: bool = False, timeout: float = 45):
+    """Keep tour generation, query translation and evidence review on the same provider."""
+    import asyncio
+    # Bound the entire request, including SDK retries and worker scheduling.
+    return await asyncio.wait_for(
+        get_llm_res(prompt, json_mode=json_mode, timeout=timeout, tour_mode=True),
+        timeout=timeout + 1,
+    )
 
 
 @router.get("/gen_sales_doc", summary="生成主播文案接口")

@@ -13,6 +13,13 @@ interface SpotListParams {
 // ---- 数据实体 ----
 
 interface ScenicSpotItem {
+  city?:string
+  latitude?:number
+  longitude?:number
+  visit_duration?:number
+  photo_tips?:string
+  service_facilities?:string
+  tour_tips?:string
   spot_id: number
   spot_name: string
   category: string

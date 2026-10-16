@@ -70,7 +70,7 @@ def main():
             ('What is special about the Long Corridor?',{'language':'en'}),
             ('附近的卫生间在哪？',{}),
             ('长廊里外星文明的暗号是什么？',{}),
-            ('长廊有多长？',{'speech_rate':0.8}),
+            ('长廊有多长？',{}),
             ('下一站去哪儿？',{'text_only':True}),
         ]:
             reply=call('PUT','/tour-session/chat',json={
@@ -83,7 +83,6 @@ def main():
                 assert not re.search(r'[\u4e00-\u9fff]',reply['message'])
             if '外星' in question:assert meta['answerMode']=='database' and not meta['evidence']
             if '卫生间' in question:assert meta['serviceActions'] and '核实' in reply['message']
-            if options.get('speech_rate')==0.8:assert meta['speechRate']==0.8 and reply['ttsAudioUrl']
             if options.get('text_only'):assert meta['textOnly'] and not reply['ttsAudioUrl']
             if meta['answerMode'].startswith('llm_'):assert meta['claimReview']['status']=='model_checked' and meta['claimReview']['checks']
             if meta['ragApplied']:assert meta['evidence'] and all(e['version'] for e in meta['evidence'])
@@ -93,7 +92,7 @@ def main():
                 'evidence_count':len(meta['evidence']),'audio_available':bool(reply['ttsAudioUrl'])})
         live=call('GET',f'/tour-session/live-info/{sid}')
         guide_messages=[message for message in live['conversation'] if message['role']=='guide']
-        assert guide_messages[-2]['aiMeta']['speechRate']==0.8
+        assert 'speechRate' not in guide_messages[-2]['aiMeta']
         assert guide_messages[-1]['aiMeta']['textOnly']
         result['persisted_metadata']=True
     finally:

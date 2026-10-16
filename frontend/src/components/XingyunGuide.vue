@@ -20,12 +20,17 @@ const loading = ref(false)
 const ready = ref(false)
 const message = ref('数字人正在加载中')
 const querying = ref(true)
+const retryCount=ref(0),retryPending=ref(false),configRevision=ref(0)
+let retryTimer:ReturnType<typeof setTimeout>|undefined
+let cancelReady:(()=>void)|undefined
+let wanted=true
 const statusText = computed(() => message.value.startsWith('数字人服务异常') ? t("暂时无法连接，请重试") : message.value.replace(/SDK/g, '数字人资源').replace(/^Error:\s*/, ''))
 let avatar: Avatar | undefined
 let active = true
 let generation = 0
 let configPromise: Promise<void> = Promise.resolve()
-watch(() => [props.guideId, props.tourId], () => {
+watch(() => [props.guideId, props.tourId,configRevision.value], () => {
+  wanted=true;retryCount.value=0
   release(); configured.value = false; provider.value = ''
   querying.value = true
   message.value = '数字人正在加载中'
@@ -33,7 +38,7 @@ watch(() => [props.guideId, props.tourId], () => {
   configPromise = (async () => {
     if (!props.guideId) return
     try {
-      const { data } = await request_handler.get('/xingyun/config/' + props.guideId)
+      const { data } = await request_handler.get('/xingyun/config/' + props.guideId,{timeout:12000})
       if (!active || current !== generation) return
       configured.value = data.configured
       provider.value = data.provider
@@ -64,15 +69,27 @@ async function loadSdk() {
 }
 function release() {
   generation++
+  if(retryTimer)clearTimeout(retryTimer)
+  retryTimer=undefined;retryPending.value=false
+  cancelReady?.();cancelReady=undefined
+  loading.value=false
   ready.value = false
   emit('connected', false)
   emit('playing', false)
   try { avatar?.destroy() } catch { /* 已断开的实例 */ }
   avatar = undefined
 }
+function scheduleRetry(){
+ if(!active||!wanted||retryCount.value>=2||navigator.onLine===false)return
+ const current=generation;retryPending.value=true;retryCount.value++
+ retryTimer=setTimeout(()=>{retryTimer=undefined;retryPending.value=false;if(active&&wanted&&current===generation)void connect()},retryCount.value===1?2000:6000)
+}
+function retry(){wanted=true;retryCount.value=0;if(!configured.value){configRevision.value++;return}void connect()}
+function online(){if(wanted&&!ready.value&&!loading.value)retry()}
+window.addEventListener('online',online)
 async function connect() {
   await configPromise
-  if (!configured.value || loading.value) return
+  if (!active || !wanted || !configured.value || loading.value) return
   release()
   const current = generation
   loading.value = true
@@ -84,6 +101,12 @@ async function connect() {
     let resolveReady!: () => void
     let rejectReady!: (error: Error) => void
     const rendered = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject })
+    cancelReady=()=>rejectReady(new Error('Connection cancelled'))
+    const failed=(text:string)=>{
+      if(current!==generation)return
+      rejectReady(new Error(text))
+      release();message.value=text;scheduleRetry()
+    }
     // SDK 的本地签名会被代理忽略；真实应用凭据保留在后端。
     const instance = new SDK({
       containerId: '#' + containerId,
@@ -97,11 +120,7 @@ async function connect() {
       onInitEvent: (code: number) => { if (current === generation && code === 4000) { ready.value = true; emit('connected', true); message.value = '数字人已连接'; resolveReady() } },
       onMessage: (error: { code?: number; message?: string }) => {
         if (current === generation && error.code && error.code !== 4000) {
-          message.value = t("数字人服务异常：") + (error.message || String(error.code))
-          ready.value = false
-          emit('connected', false)
-          emit('playing', false)
-          rejectReady(new Error(t("数字人服务异常，请重试")))
+          failed(t("数字人服务异常，请重试"))
         }
       },
       onVoiceStateChange: (status: string) => {
@@ -127,16 +146,13 @@ async function connect() {
       },
       onClose: () => {
         if (current !== generation) return
-        ready.value = false
-        emit('connected', false); emit('playing', false)
-        message.value = '数字人连接已关闭，可重新连接'
-        rejectReady(new Error(t("数字人连接已关闭，可重新连接")))
+        failed(t("数字人连接已关闭，可重新连接"))
       },
     })]), new Promise<never>((_, reject) => { initTimer = setTimeout(() => reject(new Error(t("数字人初始化超时，请重新连接"))), 90000) })])
     } finally { if (initTimer) clearTimeout(initTimer) }
   } catch (error) {
-    if (current === generation) { release(); message.value = error instanceof Error ? error.message : t("数字人连接失败") }
-  } finally { if (active) loading.value = false }
+    if (current === generation) { release(); message.value = error instanceof Error ? error.message : t("数字人连接失败");scheduleRetry() }
+  } finally { if (active && current===generation) {loading.value = false;cancelReady=undefined} }
 }
 function stop() {
   try { if (ready.value) avatar?.interactiveidle() } catch { release(); message.value = '数字人连接异常，请重新连接' }
@@ -150,7 +166,7 @@ function speak(text?: string): boolean {
     return true
   } catch { release(); message.value = '数字人播报失败，本轮使用原导览语音'; return false }
 }
-onBeforeUnmount(() => { active = false; release() })
+onBeforeUnmount(() => { active = false;wanted=false;window.removeEventListener('online',online);release() })
 defineExpose({ speak, stop, isReady: () => ready.value })
 </script>
 <template>
@@ -160,8 +176,9 @@ defineExpose({ speak, stop, isReady: () => ready.value })
       <p v-if="!ready" class="xingyun-loading" role="status">{{ $t(querying || loading ? '数字人正在加载中' : statusText) }}</p>
     </div>
     <div class="xingyun-controls">
-      <button v-if="configured && !ready && !loading && !querying" @click="connect">{{ $t("连接数字人") }}</button>
-      <button v-if="ready" @click="release(); message='数字人连接已关闭'">{{ $t("断开连接") }}</button>
+      <span v-if="retryPending" role="status">{{ $t('正在准备自动重连') }} {{ retryCount }} / 2 · </span>
+      <button v-if="!ready && !loading && !querying && provider==='xingyun'" @click="retry">{{ $t("连接数字人") }}</button>
+      <button v-if="ready" @click="wanted=false; release(); message='数字人连接已关闭'">{{ $t("断开连接") }}</button>
     </div>
   </section>
 </template>

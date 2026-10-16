@@ -1,7 +1,8 @@
 <script setup lang="ts">import { t, locale } from '@/i18n'
 
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as echarts from 'echarts'
+import { useResizeObserver } from '@vueuse/core'
 
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
@@ -47,15 +48,15 @@ function initChart() {
       },
     },
     grid: {
-      left: 60, right: 30, top: props.title ? 50 : 20, bottom: 60,
+      left: 64, right: 18, top: props.title ? 58 : 18, bottom: 82,
     },
     xAxis: {
       type: 'category',
       data: hours,
       splitArea: { show: true },
       axisLabel: {
-        fontSize: 10,
-        rotate: 45,
+        fontSize: 14,
+        rotate: 0,
         interval: 3, // 每3小时显示一个标签
       },
     },
@@ -63,7 +64,7 @@ function initChart() {
       type: 'category',
       data: days,
       splitArea: { show: true },
-      axisLabel: { fontSize: 12 },
+      axisLabel: { fontSize: 14 },
     },
     visualMap: {
       min: 0,
@@ -71,11 +72,11 @@ function initChart() {
       calculable: true,
       orient: 'horizontal',
       left: 'center',
-      bottom: 0,
+      bottom: 8,
       inRange: {
         color: ['#eef2ff', '#e0e7ff', '#c7d2fe', '#a5b4fc', '#818cf8', '#6366f1', '#4338ca'],
       },
-      textStyle: { fontSize: 11 },
+      textStyle: { fontSize: 14 },
     },
     series: [{
       type: 'heatmap',
@@ -107,6 +108,8 @@ watch(() => props.data, () => {
   if (chartInstance) { chartInstance.dispose(); initChart() }
 }, { deep: true })
 
+useResizeObserver(chartRef, () => chartInstance?.resize())
+onBeforeUnmount(() => chartInstance?.dispose())
 onMounted(() => { initChart() })
 watch(locale, () => initChart())
 </script>

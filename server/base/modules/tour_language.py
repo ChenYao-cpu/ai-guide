@@ -1,5 +1,6 @@
 """Language policy for the web guide; retrieval stays grounded in Chinese dossiers."""
 import re
+from loguru import logger
 
 ENGLISH_SPOT_NAMES = {
     "仁寿殿": "Hall of Benevolence and Longevity", "长廊": "Long Corridor",
@@ -21,8 +22,10 @@ ENGLISH_PLACE_NAMES = {
 
 ENGLISH_POLICY = (
     "Answer entirely in natural spoken English, even when the question and evidence are in Chinese. "
-    "Use only the supplied facts; do not add facts during translation. Default to 2-3 short sentences, "
-    "about 45-90 words; expand only when asked. Preserve all dates, numbers, uncertainty and legend labels. "
+    "Use only the supplied facts; do not add facts during translation. For broad introductions, history and architecture, "
+    "use 2-3 natural paragraphs and about 100-180 words; deep mode may use 180-300 words when evidence supports it. "
+    "Specific dates, dimensions and service questions should stay direct. Respect explicit requests for brevity. "
+    "Preserve all dates, numbers, uncertainty and legend labels. "
     "Use the supplied English place names; romanize any other Chinese proper names using Latin letters. "
     "Never keep Chinese characters inside English names or words. Do not print URLs or reference labels. "
     "This output language overrides the Chinese wording examples in earlier instructions."
@@ -60,10 +63,11 @@ def query_aliases(text: str) -> str:
 def english_spoken_text(text: str) -> str:
     # Keep sentence boundaries and complete words instead of Chinese punctuation.
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    words = " ".join(sentences[:6]).split()
-    if len(words) <= 140:
-        return " ".join(words)
-    short = " ".join(words[:140])
+    words = " ".join(sentences[:10]).split()
+    if len(words) <= 240:
+        result = " ".join(words)
+        return result + '.' if result and result[-1] not in '.!?' else result
+    short = " ".join(words[:240])
     boundary = max(short.rfind('. '), short.rfind('! '), short.rfind('? '))
     return short[:boundary + 1] if boundary > len(short) // 2 else short.rstrip('.,;:!?') + '.'
 
@@ -82,8 +86,8 @@ async def retrieval_question(text, generate=None):
             ], timeout=10)).strip()
             if len(translated) <= 2000 and re.search(r"[\u4e00-\u9fff]", translated):
                 return translated
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning('Tour retrieval translation failed: {}', type(exc).__name__)
     return query_aliases(text)
 
 
@@ -103,6 +107,6 @@ async def translate_answer(text, generate=None):
             ], timeout=15)).strip()
             if english_answer(translated):
                 return translated
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning('Tour answer translation failed: {}', type(exc).__name__)
     return ENGLISH_UNAVAILABLE

@@ -43,15 +43,19 @@ let play: MockInstance<[], Promise<void>>
 let fetchMock: ReturnType<typeof vi.fn>
 const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text)!
 const mountTour = async () => {
-  wrapper = mount(TourInteractionView, { props: { sessionId: '90' }, global: { stubs: { ElButton: Button, ElInput: Input, ElDialog: Dialog, ElIcon: true, ElTooltip: true } } })
+  wrapper = mount(TourInteractionView, { props: { sessionId: '90' }, global: { stubs: { ElButton: Button, ElInput: Input, ElDialog: Dialog, ElIcon: true, ElTooltip: true, ElImage:true } } })
   await flushPromises()
 }
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  avatarSpeak.mockReturnValue(false)
   sessionStorage.removeItem('tour-language-90')
   localStorage.removeItem('tour-large-reading')
   localStorage.removeItem('tour-text-only')
+  localStorage.removeItem('tour-explanation-mode')
+  sessionStorage.removeItem('tour-draft-90')
+  sessionStorage.removeItem('tour-welcome-90')
   api.live.mockResolvedValue(session())
   api.spots.mockResolvedValue(ok({ spot_list: spots }))
   api.chat.mockResolvedValue(ok({ message: '这里是景点介绍。', ttsAudioUrl: '/api/v1/files/voice.wav', aiMeta: { spotContext: '仁寿殿', references: ['景区档案'] } }))
@@ -76,7 +80,9 @@ describe('网页导览顶部路线流程', () => {
     expect(localStorage.getItem('tour-large-reading')).toBe('true')
   })
 
-  it('仅文字不启动语音，慢速明确走合成音频而非星云默认语速', async () => {
+  it('移除慢速入口，退出仅文字后恢复数字人正常语音', async () => {
+    expect(button('慢速语音')).toBeUndefined()
+    avatarSpeak.mockReturnValue(true)
     await button('仅文字').trigger('click')
     await button('历史故事').trigger('click')
     await flushPromises()
@@ -84,12 +90,11 @@ describe('网页导览顶部路线流程', () => {
     expect(play).not.toHaveBeenCalled()
     expect(api.chat.mock.calls[0][5].text_only).toBe(true)
     await button('仅文字').trigger('click')
-    await button('慢速语音').trigger('click')
     await button('历史故事').trigger('click')
     await flushPromises()
-    expect(api.chat.mock.calls[1][5].speech_rate).toBe(0.8)
-    expect(avatarSpeak).not.toHaveBeenCalled()
-    expect(play).toHaveBeenCalledTimes(1)
+    expect(api.chat.mock.calls[1][5]).not.toHaveProperty('speech_rate')
+    expect(avatarSpeak).toHaveBeenCalledTimes(1)
+    expect(play).not.toHaveBeenCalled()
   })
 
   it('来源原文以文本显示，保留片段版本而不执行其中HTML', async () => {
@@ -186,12 +191,11 @@ describe('网页导览顶部路线流程', () => {
     expect(api.chat).toHaveBeenCalledTimes(1)
   })
 
-  it('慢速音频不可用时保留答复并提示，不回退到星云默认音色', async () => {
+  it('正常语音不可用时保留答复并提示', async () => {
     api.chat.mockResolvedValue(ok({ message: '这里是景点介绍。', ttsAudioUrl: '' }))
-    await button('慢速语音').trigger('click')
     await button('历史故事').trigger('click')
     await flushPromises()
-    expect(avatarSpeak).not.toHaveBeenCalled()
+    expect(avatarSpeak).toHaveBeenCalledTimes(1)
     expect(play).not.toHaveBeenCalled()
     expect(wrapper.find('.guide-msg').text()).toContain('景点介绍')
     expect(wrapper.text()).toContain('语音未播放，可查看文字')
@@ -248,6 +252,24 @@ describe('网页导览顶部路线流程', () => {
 
 
 describe('会话、语音与调整行程', () => {
+  it('切换会话时旧的加载结果不能覆盖新会话',async()=>{
+    let old!:(value:any)=>void
+    api.live.mockReturnValueOnce(new Promise(resolve=>old=resolve))
+    await wrapper.setProps({sessionId:'91'})
+    api.live.mockResolvedValueOnce(session(1))
+    await wrapper.setProps({sessionId:'92'});await flushPromises()
+    old(session(0));await flushPromises()
+    expect(wrapper.find('.current-stop strong').text()).toBe('长廊')
+    expect(wrapper.find('.next-stop strong').text()).toBe('昆明湖')
+  })
+  it('刷新保留未发送的问题和讲解方式',async()=>{
+    await wrapper.find('textarea').setValue('请讲讲廊道的建筑结构')
+    await wrapper.find('[aria-label="讲解方式"]').setValue('deep')
+    wrapper.unmount();await mountTour()
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('请讲讲廊道的建筑结构')
+    expect((wrapper.find('[aria-label="讲解方式"]').element as HTMLSelectElement).value).toBe('deep')
+    expect(button('开始导览')).toBeUndefined()
+  })
   it('先显示文字，打断后忽略迟到的语音', async () => {
     let finish!: (value:any)=>void
     api.media.mockReturnValue(new Promise(resolve=>{finish=resolve}))

@@ -61,12 +61,9 @@ def _route_spot_data(spot):
     from ...web_configs import API_CONFIG
     fields = ("spot_id", "spot_name", "category", "description", "history_detail",
               "location", "best_season", "visit_duration", "photo_tips",
-              "service_facilities", "tour_tips")
-    result = {key: getattr(spot, key) for key in fields}
-    result["image_path"] = (
-        API_CONFIG.REQUEST_FILES_URL.rstrip("/") + "/" + spot.image_path.lstrip("/")
-        if spot.image_path else ""
-    )
+              "service_facilities", "tour_tips", "latitude", "longitude", "city")
+    result = {key: getattr(spot, key, None) for key in fields}
+    result["image_path"] = _asset_url(spot.image_path)
     return result
 
 
@@ -284,6 +281,13 @@ async def get_session_live_info(session_id: int):
             guide_info.render_mode if guide_info else "",
         )
 
+        from ..modules.route_presentation import route_overview
+        preferences = _answer_metadata(tour_session.visitor_preferences)
+        plan = preferences.get('last_replan') or preferences.get('planning') or {}
+        if not isinstance(plan,dict): plan={}
+        overview = route_overview([s.model_dump() for s in spots], plan.get('pace', 'standard'),
+            end_area=plan.get('end_area', 'auto'), avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'))
+
         result = {
             "session_id": tour_session.session_id,
             "name": tour_session.name,
@@ -305,7 +309,7 @@ async def get_session_live_info(session_id: int):
                 "route_id": route_info.route_id if route_info else 0,
                 "name": route_info.name if route_info else "",
                 "theme": route_info.theme if route_info else "",
-                "estimated_time": route_info.estimated_time_minutes if route_info else 0,
+                "estimated_time": overview['total_minutes'],
             } if route_info else None,
             "current_spot_index": current_spot_index,
             "current_streamer_video": API_CONFIG.REQUEST_FILES_URL + tour_session.status.streaming_video_path if tour_session.status and tour_session.status.streaming_video_path else "",
@@ -318,6 +322,10 @@ async def get_session_live_info(session_id: int):
         result["current_spot_info"] = _route_spot_data(current_spot)
         result["next_spot_info"] = _route_spot_data(next_spot)
         result["route_spots"] = [_route_spot_data(spot) for spot in spots]
+        result["route_overview"] = overview
+        result["remaining_route_overview"] = route_overview([s.model_dump() for s in spots[current_spot_index:]],
+            plan.get('pace', 'standard'), include_first_visit=False, end_area=plan.get('end_area', 'auto'),
+            avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'), reserve=plan.get('reserve_minutes', plan.get('queue_reserve_minutes', 0)))
         result["route_error"] = route_error
         result["final_spot"] = bool(spots) and current_spot_index >= len(spots) - 1
 

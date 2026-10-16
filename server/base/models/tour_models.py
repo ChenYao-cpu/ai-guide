@@ -348,7 +348,6 @@ class TourChatItem(BaseModel):
     avatarMode: str = "audio"  # audio / realistic，未就绪时返回真实原因
     language: Literal['zh', 'en'] = 'zh'
     explanation_mode: Literal['standard', 'child', 'deep'] = 'standard'
-    speech_rate: Literal[0.8, 1.0] = 1.0
     text_only: bool = False
     persona: Literal['modern', 'qianlong'] = 'modern'
     defer_speech: bool = False

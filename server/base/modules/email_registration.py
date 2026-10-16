@@ -33,18 +33,18 @@ def send_registration_code(email: str, code: str):
     if not username or not password:
         raise HTTPException(503, "验证码邮件服务未配置，请联系管理员")
     message = EmailMessage()
-    message['From'] = formataddr(('智游灵境', username))
+    message['From'] = formataddr(('智游知境', username))
     message['To'] = email
-    message['Subject'] = '【智游灵境】验证邮箱，开启你的旅程'
+    message['Subject'] = '【智游知境】验证邮箱，开启你的旅程'
     message.set_content(
-        '智游灵境 · AI 数字人景区导览\n\n'
-        '你好，欢迎来到智游灵境！\n'
-        '你正在注册智游灵境账号，请在注册页面输入以下验证码，完成邮箱验证。\n\n'
+        '智游知境 · AI 数字人景区导览\n\n'
+        '你好，欢迎来到智游知境！\n'
+        '你正在注册智游知境账号，请在注册页面输入以下验证码，完成邮箱验证。\n\n'
         f'注册验证码：{code}\n\n'
         '验证码将在发送后 10 分钟失效，仅用于本次注册。\n'
         '请勿将验证码转发或告知他人。\n'
         '如果这不是你的操作，请忽略此邮件，无需回复。\n\n'
-        '山水之间，智游相伴。\n智游灵境\n此邮件由系统自动发送，请勿直接回复。'
+        '山水之间，智游相伴。\n智游知境\n此邮件由系统自动发送，请勿直接回复。'
     )
     safe_code = escape(code)
     message.add_alternative(f'''<!doctype html>
@@ -54,13 +54,13 @@ def send_registration_code(email: str, code: str):
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f3ff;"><tr><td align="center" style="padding:32px 16px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #e8e2f5;border-radius:20px;">
 <tr><td style="padding:32px 28px 24px;border-bottom:1px solid #eeeaf6;">
-<div style="font-size:24px;font-weight:bold;color:#6d48c8;">智游灵境</div>
+<div style="font-size:24px;font-weight:bold;color:#6d48c8;">智游知境</div>
 <div style="margin-top:8px;font-size:13px;line-height:1.6;color:#817994;">AI 数字人景区导览 · 山水之间，智游相伴</div>
 </td></tr>
 <tr><td style="padding:28px;">
 <h1 style="margin:0 0 16px;font-size:22px;line-height:1.5;color:#30285e;">验证邮箱，开启你的旅程</h1>
-<p style="margin:0 0 12px;font-size:15px;line-height:1.8;color:#625a75;">你好，欢迎来到智游灵境！</p>
-<p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#625a75;">你正在注册智游灵境账号。请在注册页面输入下方验证码，完成邮箱验证。</p>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.8;color:#625a75;">你好，欢迎来到智游知境！</p>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#625a75;">你正在注册智游知境账号。请在注册页面输入下方验证码，完成邮箱验证。</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f0ff;border:1px solid #e5dcfa;border-radius:14px;"><tr><td align="center" style="padding:22px 12px;">
 <div style="font-size:13px;color:#74668d;">注册验证码</div>
 <div style="margin:12px 0;font-family:Consolas,monospace;font-size:36px;line-height:1.4;letter-spacing:6px;font-weight:bold;color:#6840c2;">{safe_code}</div>
@@ -68,7 +68,7 @@ def send_registration_code(email: str, code: str):
 </td></tr></table>
 <p style="margin:24px 0 0;font-size:13px;line-height:1.9;color:#817994;">请勿将验证码转发或告知他人。<br>如果这不是你的操作，请忽略此邮件，无需回复。</p>
 </td></tr>
-<tr><td style="padding:20px 28px;border-top:1px solid #eeeaf6;font-size:12px;line-height:1.8;color:#938aA5;">智游灵境<br>此邮件由系统自动发送，请勿直接回复。</td></tr>
+<tr><td style="padding:20px 28px;border-top:1px solid #eeeaf6;font-size:12px;line-height:1.8;color:#938aA5;">智游知境<br>此邮件由系统自动发送，请勿直接回复。</td></tr>
 </table></td></tr></table></body></html>''', subtype='html')
     try:
         with smtplib.SMTP_SSL(os.getenv('SMTP_HOST', 'smtp.qq.com'),

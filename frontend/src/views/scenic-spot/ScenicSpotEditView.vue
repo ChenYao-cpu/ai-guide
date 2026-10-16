@@ -7,6 +7,8 @@ import type { InputInstance } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
 import FileUpload from '@/components/FileUpload.vue'
+import VisitorContentPreview from '@/components/VisitorContentPreview.vue'
+const previewVisible=ref(false)
 
 import {
   type ScenicSpotItem,
@@ -164,12 +166,14 @@ onMounted(async () => {
       </template>
       <template #extra>
         <div class="flex items-center">
+          <el-button @click="previewVisible=true">{{ $t('游客效果预览') }}</el-button>
           <el-button type="primary" class="ml-2" @click="onSubmit" :loading="saveLoading"
             >{{ $t("保存") }}</el-button
           >
         </div>
       </template>
     </el-page-header>
+    <VisitorContentPreview v-if="previewVisible" :spot-id="Number(props.spotId)||0" :draft="spotInfo as unknown as Record<string,unknown>" @close="previewVisible=false" />
     <el-card>
       <template #header>
         <!-- 步骤条 -->
@@ -277,6 +281,13 @@ onMounted(async () => {
             />
           </el-form-item>
 
+          <el-form-item :label="$t('拍照建议')"><el-input v-model="spotInfo.photo_tips" type="textarea" :rows="3" maxlength="5000" /></el-form-item>
+          <el-form-item :label="$t('游览提醒')"><el-input v-model="spotInfo.tour_tips" type="textarea" :rows="3" maxlength="5000" /></el-form-item>
+          <el-form-item :label="$t('周边服务设施')"><el-input v-model="spotInfo.service_facilities" type="textarea" :rows="3" maxlength="5000" /></el-form-item>
+          <el-form-item :label="$t('建议停留分钟')"><el-input-number v-model="spotInfo.visit_duration" :min="1" :max="480" /></el-form-item>
+          <el-form-item :label="$t('所属城市')"><el-input v-model="spotInfo.city" maxlength="50" /></el-form-item>
+          <el-form-item :label="$t('WGS84 纬度')"><el-input-number v-model="spotInfo.latitude" :min="-90" :max="90" :precision="7" /></el-form-item>
+          <el-form-item :label="$t('WGS84 经度')"><el-input-number v-model="spotInfo.longitude" :min="-180" :max="180" :precision="7" /></el-form-item>
           <div class="bottom-gen-btn">
             <el-button type="success" :loading="aiGenerating" @click="handleAiGenerate">{{ $t("AI 生成") }}</el-button>
             <span class="gen-hint">{{ $t("根据\"游览说明\"文件夹中的 .md 文档自动填充景点描述和历史详情") }}</span>
@@ -337,7 +348,7 @@ onMounted(async () => {
   gap: 6px;
 
   .gen-hint {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text-muted);
   }
 }

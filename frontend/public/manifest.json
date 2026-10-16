@@ -1,6 +1,6 @@
 {
-  "name": "智游灵境",
-  "short_name": "智游灵境",
+  "name": "智游知境",
+  "short_name": "智游知境",
   "description": "基于AI数字人技术的智能景区导览系统，支持语音问答、GPS位置感知、个性化路线推荐",
   "start_url": "/visitor/home",
   "display": "standalone",
@@ -10,7 +10,7 @@
   "lang": "zh-CN",
   "icons": [
     {
-      "src": "/brand/brand-icon.svg",
+      "src": "/brand/zhiyou-zhijing-icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
