@@ -57,7 +57,7 @@ onMounted(refresh)
         <el-form-item label="App Secret" :required="!form.secret_configured"><el-input v-model="form.app_secret" type="password" show-password autocomplete="new-password" maxlength="500" :placeholder="$t(form.secret_configured ? '已保存，留空沿用；修改 App ID 时需重新填写' : '输入该应用的密钥')" /></el-form-item>
         <el-form-item :label='$t("音色名称")'><el-input v-model="form.voice_label" maxlength="80" :placeholder='$t("填写应用中选定的音色名称，供游客识别")' /></el-form-item>
         <el-form-item :label='$t("备用音色")' required><el-select v-model="form.voice_style"><el-option :label='$t("温厚男声")' value="male_wenhou" /><el-option :label='$t("洪亮男声")' value="male_hongliang" /><el-option :label='$t("温柔女声")' value="female_wenrou" /><el-option :label='$t("活泼女声")' value="female_huopo" /></el-select></el-form-item>
-        <p>{{ $t("备用音色用于慢速语音和英文合成，请与当前人物匹配；星云原声仍由平台应用设置。") }}</p>
+        <p>{{ $t("备用音色用于本地语音合成，请与当前人物匹配；星云原声仍由平台应用设置。") }}</p>
         <el-form-item :label='$t("启用实时数字人")'><el-switch v-model="form.use_xingyun" /></el-form-item>
       </el-form>
       <p>{{ $t("人物、背景、音色在数字人平台配置；此处只绑定应用。密钥由后端加密保存，不回显。") }}</p>

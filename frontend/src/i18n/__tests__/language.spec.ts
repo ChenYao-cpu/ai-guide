@@ -3,8 +3,23 @@ import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import { t, locale, formatDate, formatTableCell, setLocale } from '@/i18n'
+import scenicDetails from './fixtures/scenic-details.json'
 
 describe('application language', () => {
+  it('translates full public attraction details and restores the exact Chinese source', () => {
+    for (const spot of Object.values(scenicDetails)) {
+      setLocale('en')
+      for (const value of Object.values(spot)) {
+        if (value.includes(';')) continue // Tags are individually rendered by the page.
+        expect(t(value)).not.toMatch(/[\u3400-\u9fff]/)
+      }
+      const history = t(spot.history_detail)
+      expect(history.length).toBeGreaterThan(spot.history_detail.length)
+      setLocale('zh')
+      expect(t(spot.history_detail)).toBe(spot.history_detail)
+      expect(t(spot.photo_tips)).toBe(spot.photo_tips)
+    }
+  })
   it('updates labels without remounting a form or changing entered content', async () => {
     const Page=defineComponent({components:{LanguageSwitch},data:()=>({input:'原始输入'}),template:`<section><LanguageSwitch/><h1>{{ $t("后台登录") }}</h1><input v-model="input" :placeholder="$t('请输入账号')"/><span>{{ $t("仁寿殿") }}</span></section>`})
     const wrapper=mount(Page)

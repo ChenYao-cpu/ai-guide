@@ -17,7 +17,7 @@ RULES = [
     ("next", r"下一站|下一个景点|接下来.*(?:去|走)|然后去哪|之后去哪"),
     ("opening", r"门票|票价|买票|联票|开放|闭园|开门|关门|营业|演出|开演|排期"),
     ("boat", r"游船|乘船|坐船|码头|航线|船票"),
-    ("photography", r"拍照|摄影|机位|取景|出片|倒影|金光穿洞"),
+    ("photography", r"拍照|拍摄|摄影|机位|取景|出片|打卡|照相|倒影|金光穿洞"),
     ("accessibility", r"轮椅|推车|台阶|累了|走不动|爬不动|无障碍|爬山|老人|休息|体力"),
     ("family", r"孩子|小朋友|亲子|儿童"),
     ("season", r"季节|花期|赏花|冬天|春天|夏天|秋天|几月"),
@@ -74,6 +74,8 @@ def resolve_turn(question: str, spot: dict | None, memory: dict | None = None):
     if len(intents)>1:
         intents=[i for i in intents if i not in ("location","overview") or bool(re.search(r"另外.*(?:景点位置|景点在哪|介绍景点)",text))]
     item=match_faq(dossier_for(spot),text)
+    if re.search(r'(?:介绍|讲讲|了解|什么|哪些).*(?:历史|建筑|特色|看点)|有什么历史故事',text) and not re.search(r'哪年|何时|谁|多长|几层|多高|多少|名字|名称',text):
+        item=None
     practical={"facilities","next","opening","boat","photography","duration","location"}
     if item and set(intents)&practical and item["topic"] not in intents:
         item=None
@@ -114,7 +116,15 @@ def _topic_text(topic, spot, dossier, next_spot):
     if topic=="duration": return f"建议在{name}停留约{spot.get('visit_duration',20)}分钟，这是策展估算，不含排队。拍照或休息多时可适当延长。"
     if dossier:
         if topic=="highlights": return " ".join(dossier["highlights"])
-        return dossier.get(topic,"")
+        field={'overview':'description','history':'history_detail','photography':'photo_tips','accessibility':'tour_tips'}.get(topic)
+        content=spot.get(field,'') if field else ''
+        content=content or dossier.get(topic,'')
+        if topic=='history':
+            from .tour_visuals import visual_catalog
+            timeline=visual_catalog().get(name,{}).get('timeline',[])
+            chronology=''.join(str(point['year'])+'年，'+point['zh'] for point in timeline)
+            if chronology:content=chronology+content
+        return content
     field={"overview":"description","history":"history_detail","architecture":"history_detail", "photography":"photo_tips", "facilities":"service_facilities","season":"best_season","accessibility":"tour_tips"}.get(topic)
     return spot.get(field,"") if field else ""
 
@@ -137,12 +147,30 @@ def local_answer(turn: Turn, spot: dict | None, next_spot=None):
                                (r"吃饭|餐饮","附近餐饮点"),(r"寄存","寄存点")] if re.search(pattern,turn.question)),"附近服务设施")
                 text=f"{requested}的准确位置和当日开放情况还没有核实。请先看园内导览牌或询问工作人员，不能用历史商铺名称判断今天的服务。"
             sections.append(text or f"{TOPIC_LABELS.get(topic,'这项信息')}尚未核实，请以现场说明为准。")
+    narrative = bool(set(turn.intents) & {'overview', 'history', 'architecture', 'highlights'})
+    # Specific FAQ answers (length, date, names) stay concise. Broad narration
+    # gets enough reviewed material to explain what to look at and why it matters.
+    if d and narrative and not turn.brief and not turn.faq:
+        extras = []
+        if 'overview' in turn.intents:
+            extras.extend([d['history'], d['architecture']])
+        elif 'history' in turn.intents:
+            extras.extend([d['misconceptions'],d['architecture']])
+        elif 'highlights' in turn.intents:
+            extras.append(d['architecture'])
+        elif 'architecture' in turn.intents:
+            extras.append(' '.join(d['highlights']))
+        for extra in extras:
+            if extra and extra not in sections:
+                sections.append(extra)
     if turn.detailed and d:
         for topic in turn.intents:
             if topic in ("overview","history","architecture","highlights"):
                 extras=[d[topic] if topic!="highlights" else " ".join(d[topic])]
                 if topic=="overview": extras.extend([d["history"],d["architecture"]])
                 if topic=="history": extras.append(d["misconceptions"])
+                if topic=="highlights": extras.extend([d['architecture'],d['overview'],d['photography']])
+                if topic=="architecture": extras.extend([d['history'],d['misconceptions']])
                 for extra in extras:
                     if extra not in sections: sections.append(extra)
             elif topic in d and isinstance(d[topic],str) and d[topic] not in sections:
@@ -150,7 +178,15 @@ def local_answer(turn: Turn, spot: dict | None, next_spot=None):
     answer="\n\n".join(sections)
     if not turn.detailed:
         # Multi-intent replies preserve one direct answer for every detected topic.
-        answer="\n".join(clean_sentences(s,1 if turn.brief else 2,220) for s in sections)
+        count, limit = (1, 160) if turn.brief else (4, 340) if narrative and not turn.faq else (2, 220)
+        answer="\n\n".join(clean_sentences(s,count,limit) for s in sections)
+        if narrative and not turn.faq and not turn.brief:
+            kept=[];remaining=520
+            for section in sections:
+                if remaining<60:break
+                piece=clean_sentences(section,4,min(340,remaining))
+                kept.append(piece);remaining-=len(piece)
+            answer='\n\n'.join(kept)
         if turn.follow_up and turn.memory.get("last_answer") and not turn.brief and d and not turn.faq:
             topic=turn.intents[0]
             text=_topic_text(topic,spot,d,next_spot)
@@ -166,7 +202,18 @@ def local_answer(turn: Turn, spot: dict | None, next_spot=None):
             if remaining: fresh.append("".join(remaining))
         if fresh: answer="\n\n".join(fresh)
     if turn.brief: answer=clean_sentences(answer,1,160)
+    if turn.detailed and len(answer)>900:
+        kept=[];remaining=880
+        for section in answer.split('\n\n'):
+            if remaining<60:break
+            piece=clean_sentences(section,6,min(320,remaining));kept.append(piece);remaining-=len(piece)
+        answer='\n\n'.join(kept)
     refs=sources_for(d,turn.faq["source_ids"] or None) if turn.faq else sources_for(d)
+    if d and 'history' in turn.intents:
+        from .tour_visuals import visual_catalog
+        for point in visual_catalog().get(spot['spot_name'],{}).get('timeline',[]):
+            if str(point['year']) in answer and not any(r['url']==point['source'] for r in refs):
+                refs.append(dict(id='visual-chronology',title='颐和园官方景点资料',url=point['source']))
     if any(i in turn.intents for i in ("opening","boat")):
         refs=[dict(id="official",title="颐和园官网·动态导览与公告",url="https://www.summerpalace.net.cn/")]
     return answer, refs
@@ -186,7 +233,8 @@ def generation_policy(turn: Turn, spot, next_spot=None):
 
 REPLY_POLICY = (
     "你在与游客交谈，不是朗读百科。第一句话回答本轮问题的核心，再补一项有用依据或可执行建议。"
-    "普通回答2至3句，约70至180字；明确要求详细才分段展开到300至700字；要求一句话就只说一句。"
+    "介绍、历史、建筑和看点问题，默认分2至3个自然短段、约220至420字：先答核心，再解释有依据的背景、细节和现场观察方法。"
+    "长度、年代、位置等具体问题直接回答，不为了凑字数展开无关历史。深入讲解在资料充足时约450至800字；要求一句话就只说一句。"
     "追问延续已消歧话题，优先补尚未讲过的内容；不要重复开场、导游姓名、游客昵称、整个景点简介。"
     "用短句、自然停顿和具体的观察引导，不堆形容词，不装熟，不用‘以上内容来自’等播报尾句。"
     "给孩子讲时解释概念，不能为生动虚构人物对话。传说必须明确说是传说，策展建议不能称为历史事实。"
@@ -205,7 +253,7 @@ def spoken_answer(answer: str, language="zh"):
     if language == "en":
         from .tour_language import english_spoken_text
         return english_spoken_text(text)
-    return clean_sentences(text,6,460)
+    return clean_sentences(text,10,800)
 
 
 def scoped_history(history, spot_name):

@@ -4,6 +4,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import VisitorHomeView from '../VisitorHomeView.vue'
 import { wgs84ToGcj02 } from '../../../../../shared/coordinates.js'
 import locations from '../../../../../data/summer_palace_locations.json'
+import scenicDetails from '@/i18n/__tests__/fixtures/scenic-details.json'
 
 const api = vi.hoisted(() => ({
   spots: vi.fn(), guides: vi.fn(), routes: vi.fn(), recommend: vi.fn(), ai: vi.fn(), push: vi.fn(),
@@ -124,7 +125,7 @@ beforeEach(async () => {
     disconnect() {}
   })
   api.spots.mockResolvedValue(response({ spot_list: [
-    { ...locations.spots['仁寿殿'], spot_id: 1, spot_name: '仁寿殿', category: 'historical', visit_duration: 20 },
+    { ...locations.spots['仁寿殿'], ...scenicDetails['仁寿殿'], spot_id: 1, spot_name: '仁寿殿', category: 'historical', visit_duration: 20 },
     { ...locations.spots['昆明湖'], spot_id: 2, spot_name: '昆明湖', category: 'natural', visit_duration: 30 },
   ] }))
   api.guides.mockResolvedValue(response({ guide_list: [
@@ -146,6 +147,67 @@ beforeEach(async () => {
 afterEach(() => { wrapper.unmount(); vi.unstubAllGlobals() })
 
 describe('independent visitor planning flows', () => {
+  it('keeps Start tour busy until navigation completes and ignores repeated clicks', async () => {
+    let finishNavigation!: () => void
+    api.push.mockImplementationOnce(() => new Promise<void>(resolve => { finishNavigation = resolve }))
+    await wrapper.find('.route-card').trigger('click')
+    await chooseGuide('小颐')
+    await button('开始导览').trigger('click')
+    await flushPromises()
+    expect(button('开始导览').attributes('disabled')).toBeDefined()
+    await button('开始导览').trigger('click')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(api.push).toHaveBeenCalledTimes(1)
+    finishNavigation()
+    await flushPromises()
+    expect(button('开始导览').attributes('disabled')).toBeUndefined()
+  })
+
+  it('shows failed navigation and retries the same session without creating a duplicate', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    api.push.mockRejectedValueOnce(new Error('Failed to fetch dynamically imported module'))
+    await wrapper.find('.route-card').trigger('click')
+    await chooseGuide('小颐')
+    await button('开始导览').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.start-error').text()).toContain('导览页面打开失败')
+    expect(button('开始导览').attributes('disabled')).toBeUndefined()
+    await button('开始导览').trigger('click')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(api.push).toHaveBeenCalledTimes(2)
+    expect(api.push).toHaveBeenLastCalledWith({ path: '/visitor/90' })
+    expect(wrapper.find('.start-error').exists()).toBe(false)
+    log.mockRestore()
+  })
+
+  it('shows session creation errors and does not navigate to an invalid tour', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ success: false, message: '请选择数字人形象' }) })
+    await wrapper.find('.route-card').trigger('click')
+    await chooseGuide('小颐')
+    await button('开始导览').trigger('click')
+    await flushPromises()
+    expect(api.push).not.toHaveBeenCalled()
+    expect(wrapper.find('.start-error').text()).toContain('请选择数字人形象')
+  })
+  it('switches every open attraction detail section without refetching or changing selection', async () => {
+    await wrapper.find('.route-card').trigger('click')
+    await button('详情').trigger('click')
+    const source = scenicDetails['仁寿殿']
+    expect(wrapper.find('.spot-story-card p').text()).toBe(source.history_detail)
+    await button('English').trigger('click')
+    const paragraphs = wrapper.findAll('.spot-story-card p, .spot-guide-grid article p')
+    expect(paragraphs).toHaveLength(5)
+    for (const paragraph of paragraphs) {
+      expect(paragraph.text()).not.toMatch(/[\u3400-\u9fff]/)
+      expect(paragraph.text().length).toBeGreaterThan(80)
+    }
+    expect(wrapper.find('button[aria-label="Deselect stop: Hall of Benevolence and Longevity"]').attributes('aria-pressed')).toBe('true')
+    await button('中文').trigger('click')
+    expect(wrapper.find('.spot-story-card p').text()).toBe(source.history_detail)
+    expect(wrapper.findAll('.spot-guide-grid article').find(article => article.find('.spot-section-title').text() === '推荐取景')!.find('p').text()).toBe(source.photo_tips)
+    expect(api.spots).toHaveBeenCalledTimes(1)
+  })
   it('switches the entire planner while preserving selected stop IDs and nickname', async () => {
     await wrapper.find('.route-card').trigger('click')
     await wrapper.find('input[aria-label="导览昵称"]').setValue('原始昵称')
@@ -186,7 +248,7 @@ describe('independent visitor planning flows', () => {
     await chooseGuide('小颐')
     expect(button('开始导览').attributes('disabled')).toBeUndefined()
     await wrapper.find('select[aria-label="可用时长"]').setValue('120')
-    expect(wrapper.find('[role="status"]').text()).toContain('重新生成')
+    expect(wrapper.find('.plan-refresh[role="status"]').text()).toContain('重新生成')
     expect(button('开始导览').attributes('disabled')).toBeDefined()
   })
 

@@ -30,7 +30,7 @@
   },
   "compileType": "miniprogram",
   "miniprogramRoot": "unpackage/dist/dev/mp-weixin/",
-  "projectname": "智游灵境-当前工作区",
+  "projectname": "智游知境-当前工作区",
   "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [],

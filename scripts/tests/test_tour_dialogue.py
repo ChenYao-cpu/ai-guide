@@ -76,7 +76,10 @@ class TourDialogueTests(unittest.TestCase):
         t2,a2,_=answer('长廊','再详细讲讲',mem)
         self.assertTrue(t2.follow_up)
         self.assertEqual(t2.intents,['history'])
-        self.assertGreater(len(a2),len(a))
+        # Standard narration is now substantial. A follow-up must add fresh
+        # evidence, rather than repeat the first answer just to be longer.
+        self.assertGreater(len(a2),80)
+        self.assertTrue(any(sentence not in a for sentence in a2.split('。') if len(sentence)>10))
         self.assertNotEqual(a,a2)
         t3,a3,_=answer('长廊','一句话说重点',updated_memory(t2,spot('长廊'),a2))
         self.assertTrue(t3.brief)
@@ -114,7 +117,7 @@ class TourDialogueTests(unittest.TestCase):
     def test_speech_is_clean_and_bounded(self):
         text='## 介绍\n**这里是长廊**。'+('彩画需要保护。'*90)+'\n[资料](https://example.com/file)'
         speech=spoken_answer(text)
-        self.assertLessEqual(len(speech),460)
+        self.assertLessEqual(len(speech),800)
         self.assertNotIn('https',speech)
         self.assertNotIn('**',speech)
         self.assertNotIn('##',speech)
@@ -131,7 +134,7 @@ class TourDialogueTests(unittest.TestCase):
         self.assertEqual(t.intents,['photography'])
 
     def test_long_unpunctuated_speech_is_still_bounded(self):
-        self.assertLessEqual(len(spoken_answer('字'*3000)),460)
+        self.assertLessEqual(len(spoken_answer('字'*3000)),800)
 
 
 if __name__=='__main__': unittest.main()

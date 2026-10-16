@@ -31,11 +31,13 @@
               <span class="flow-label">{{ $t("下下一站") }}</span><strong>{{ $t(spot.spot_name) }}</strong>
             </div>
           </template>
-          <span v-if="currentSpot && finalSpot" class="flow-end">{{ $t("最后一站") }}</span>
+          <button v-if="currentSpot && finalSpot && plannedExit" class="flow-node next-stop" type="button" @click="routeMapOpen=true"><span class="flow-label">{{ $t('前往出口') }}</span><strong>{{ $t(plannedExit) }}</strong></button>
+          <span v-else-if="currentSpot && finalSpot" class="flow-end">{{ $t("最后一站") }}</span>
           <span v-if="!currentSpot && sessionLoading && !sessionError" class="flow-loading">{{ $t("正在加载路线…") }}</span>
         </nav>
       </div>
       <div class="banner-right">
+        <el-button plain :disabled="sessionLoading || !!sessionError" @click="routeMapOpen=true">{{ $t('查看路线') }}</el-button>
         <el-button plain :disabled="sessionLoading || !!sessionError || switchingSpot" @click="openRepair('')">{{ $t('调整行程') }}</el-button>
         <LanguageSwitch :disabled="disableInput || isRecording || recognizing" />
         <el-tooltip
@@ -61,11 +63,12 @@
 
     <div v-if="sessionError" class="tour-alert" role="alert">
       <span>{{ $t(sessionError) }}</span
-      ><el-button :loading="sessionLoading" @click="refreshSessionInfo">{{ $t("重新加载") }}</el-button>
+      ><el-button :loading="sessionLoading" @click="refreshSessionInfo">{{ $t("重新加载") }}</el-button><el-button @click="router.push('/visitor/home')">{{ $t('返回规划') }}</el-button>
     </div>
     <div class="tour-main">
       <section class="tour-left" :aria-label='$t("数字人导游")'>
         <div class="guide-stage">
+          <GuideScenicBackdrop :spot-name="currentSpot?.spot_name" />
           <div class="stage-heading">
             <div><h2>{{ $t(guideInfo?.name || '数字导游') }}</h2><span v-if="persona === 'qianlong'" class="era-stage-label">{{ $t('演绎乾隆时期') }} · 1736–1795</span></div>
             <span class="speaking-state" :class="{ speaking: isSpeaking }" role="status"
@@ -111,10 +114,9 @@
           </header>
           <p v-if="persona === 'qianlong'" class="era-notice">{{ $t('依据史料演绎；后世问题交由现代导游回答。') }}</p>
           <div class="reading-tools" role="group" :aria-label='$t("讲解与阅读辅助")'>
-            <label>{{ $t("讲解方式") }}<select v-model="explanationMode" :aria-label='$t("讲解方式")' :disabled="disableInput"><option value="standard">{{ $t("简明讲解") }}</option><option value="child">{{ $t("儿童讲解") }}</option><option value="deep">{{ $t("深入讲解") }}</option></select></label>
+            <label>{{ $t("讲解方式") }}<select v-model="explanationMode" :aria-label='$t("讲解方式")' :disabled="disableInput"><option value="standard">{{ $t("标准讲解") }}</option><option value="child">{{ $t("儿童讲解") }}</option><option value="deep">{{ $t("深入讲解") }}</option></select></label>
             <button type="button" :aria-pressed="largeReading" @click="largeReading = !largeReading">{{ $t("大字阅读") }}</button>
             <button type="button" :aria-pressed="textOnly" @click="textOnly = !textOnly; stopPlayback()">{{ $t("仅文字") }}</button>
-            <button type="button" :aria-pressed="slowSpeech" :title='$t("使用慢速合成语音；星云数字人在此模式下不驱动口型")' :disabled="disableInput" @click="slowSpeech = !slowSpeech; stopPlayback()">{{ $t("慢速语音") }}</button>
           </div>
           <div class="quick-questions" :aria-label='$t("快捷提问")'>
             <button
@@ -153,6 +155,7 @@
                 </div>
                 <span v-if="msg.aiMeta?.persona" class="era-message-tag">{{ $t(msg.aiMeta.persona.mode === 'modern_handoff' ? '已交由现代导游' : msg.aiMeta.persona.mode === 'insufficient' ? '史料不足，未作推测' : '乾隆时期 · 史料演绎') }}</span>
                 <div class="msg-text" v-html="formatMessage(msg.message, msg.role)"></div>
+                <TourVisualContext v-if="msg.role==='guide'" :context="msg.aiMeta?.visuals" :expanded="idx===conversations.length-1" />
                 <div v-if="msg.role === 'guide' && msg.aiMeta?.serviceActions?.length" class="service-actions">
                   <template v-for="action in msg.aiMeta.serviceActions" :key="action.url"><a v-if="isKnowledgeSourceUrl(action.url) || action.url === 'tel:01062860608'" :href="action.url" :target="action.url.startsWith('https:') ? '_blank' : undefined" rel="noopener noreferrer">{{ $t(action.label) }}</a></template>
                 </div>
@@ -195,6 +198,7 @@
             </div>
           </div>
           <div class="chat-input-area">
+            <p v-if="chatError" class="chat-request-error" role="alert">{{ chatError }}</p>
             <div class="input-row">
               <el-input
                 v-model="inputValue"
@@ -257,7 +261,8 @@
         ><el-button type="primary" @click="showWelcomeDialog = false">{{ $t("开始导览") }}</el-button></template
       >
     </el-dialog>
-    <TourRouteRepair v-if="repairOpen" :session-id="Number(props.sessionId)" :current-name="currentSpot?.spot_name || ''" :remaining-spots="routeSpots.slice(activeSpotIndex + 1)" :prompt="repairPrompt" :initial-minutes="remainingBudget" :initial-pace="savedPlan.pace" :initial-exit="savedPlan.end_area" @close="repairOpen = false" @applied="repairApplied" />
+    <TourRouteRepair v-if="repairOpen" :session-id="Number(props.sessionId)" :current-name="currentSpot?.spot_name || ''" :remaining-spots="routeSpots.slice(activeSpotIndex + 1)" :prompt="repairPrompt" :initial-minutes="remainingBudget" :initial-pace="savedPlan.pace" :initial-exit="savedPlan.end_area" :initial-avoid-steps="savedPlan.avoid_steps" :initial-required="savedPlan.required_spot_ids" @close="repairOpen = false" @applied="repairApplied" />
+    <el-dialog v-model="routeMapOpen" :title="$t('剩余游览路线')" width="min(760px,94vw)" class="tour-route-map-dialog" destroy-on-close><RouteOverview v-if="routeMapOpen" :overview="currentRouteOverview" :spot-ids="routeSpots.slice(activeSpotIndex).map(s=>s.spot_id)" :current-id="currentSpot?.spot_id" :pace="savedPlan.pace" /></el-dialog>
     <PwaInstallPrompt />
   </main>
 </template>
@@ -278,9 +283,13 @@ import {
   Promotion
 } from '@element-plus/icons-vue'
 import DigitalAvatarPlayer from '@/components/DigitalAvatarPlayer.vue'
+import GuideScenicBackdrop from '@/components/GuideScenicBackdrop.vue'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
 import { receiveAvatarToken } from '@/api/xingyunTour'
 import TourRouteRepair from '@/components/TourRouteRepair.vue'
+import TourVisualContext from '@/components/TourVisualContext.vue'
+import RouteOverview from '@/components/RouteOverview.vue'
+import type { RouteOverviewData } from '@/api/tourExperience'
 import { getTourLiveInfo, sendTourChatMessage, endTourSession, getReplyMedia } from '@/api/visitor'
 import { useRecordedSpeech } from '@/composables/useRecordedSpeech'
 import { useGeolocation } from '@/composables/useGeolocation'
@@ -322,10 +331,14 @@ watch(
 )
 
 const conversations = ref<any[]>([])
-const inputValue = ref('')
+const inputValue = ref(sessionStorage.getItem('tour-draft-'+props.sessionId)||'')
+watch(inputValue,value=>{try{sessionStorage.setItem('tour-draft-'+props.sessionId,value)}catch{/* Optional draft storage. */}})
+const chatError=ref(''),routeMapOpen=ref(false)
 const persona = ref<'modern'|'qianlong'>('modern')
 const repairOpen=ref(false), repairPrompt=ref(''), remainingBudget=ref<number|undefined>()
-const savedPlan=ref<{pace?:'standard'|'relaxed';end_area?:'auto'|'east'|'north'|'south'}>({})
+const savedPlan=ref<{pace?:'standard'|'relaxed';end_area?:'auto'|'east'|'north'|'south';avoid_steps?:boolean;required_spot_ids?:number[]}>({})
+const currentRouteOverview=ref<RouteOverviewData|null>(null)
+const plannedExit=computed(()=>(({east:'东宫门',north:'北宫门',south:'新建宫门'} as Record<string,string>)[savedPlan.value.end_area||'auto']||''))
 const loadingSpeech=ref(false)
 let speechController:AbortController|undefined
 let turnVersion=0
@@ -339,10 +352,10 @@ function openRepair(message:string){interruptAnswer();repairPrompt.value=message
 async function repairApplied(){repairOpen.value=false;stopPlayback();await refreshSessionInfo();ElMessage.success(t('路线已更新'))}
 function interruptAnswer(){turnVersion++;chatController?.abort();chatController=undefined;stopPlayback();stopGenerationStages();disableInput.value=false;loadingResponse.value=false}
 
-const explanationMode = ref<'standard' | 'child' | 'deep'>('standard')
+const explanationMode = ref<'standard' | 'child' | 'deep'>(['standard','child','deep'].includes(localStorage.getItem('tour-explanation-mode')||'') ? localStorage.getItem('tour-explanation-mode') as 'standard'|'child'|'deep' : 'standard')
+watch(explanationMode,value=>{try{localStorage.setItem('tour-explanation-mode',value)}catch{/* Optional preference storage. */}})
 const largeReading = ref(localStorage.getItem('tour-large-reading') === 'true')
 const textOnly = ref(localStorage.getItem('tour-text-only') === 'true')
-const slowSpeech = ref(false)
 watch(largeReading,value => localStorage.setItem('tour-large-reading',String(value)))
 watch(textOnly,value => localStorage.setItem('tour-text-only',String(value)))
 const tourLanguage = locale
@@ -365,6 +378,7 @@ const playbackError = ref(false)
 let playbackVersion = 0
 let disposed = false
 let chatController: AbortController | undefined
+let sessionController:AbortController|undefined,sessionVersion=0
 const currentEmotion = ref('neutral')
 const live2dRef = ref<InstanceType<typeof DigitalAvatarPlayer> | null>(null)
 const {
@@ -387,7 +401,7 @@ const visitorPrefs = ref<string[]>([])
 // 路线全部景点（含图片/描述等完整信息）
 const routeSpots = ref<any[]>([])
 // 路线窗口只弹一次
-const welcomeShown = ref(false)
+const welcomeShown = ref(sessionStorage.getItem('tour-welcome-'+props.sessionId)==='true')
 const viewingSpot = computed(() => currentSpot.value)
 const activeSpotIndex = computed(() =>
   routeSpots.value.findIndex((spot) => spot.spot_id === currentSpot.value?.spot_id)
@@ -442,11 +456,14 @@ const quickQuestions = computed(() => persona.value === 'qianlong' ? (tourLangua
 async function refreshSessionInfo() {
   if (sessionLoading.value) return false
   sessionLoading.value = true
+  const own=++sessionVersion,sid=props.sessionId
+  sessionController?.abort();sessionController=new AbortController()
   try {
-    const response = await getTourLiveInfo(Number(props.sessionId))
-    if (disposed) return false
+    const response = await getTourLiveInfo(Number(sid),sessionController.signal)
+    if (disposed || own!==sessionVersion || sid!==props.sessionId) return false
     if (response?.data?.success) {
       const data = response.data.data
+      if(data.live_status===2){sessionStorage.removeItem('zhiyou-active-tour');sessionError.value=t('本次导览已结束，请返回重新规划');return false}
       sessionError.value = ''
       conversations.value = data.conversation || []
       currentSpot.value = data.current_spot_info
@@ -456,11 +473,12 @@ async function refreshSessionInfo() {
       routeInfo.value = data.route_info
       finalSpot.value = data.final_spot
       routeSpots.value = data.route_spots || []
+      currentRouteOverview.value = data.remaining_route_overview || data.route_overview || null
       try {
         const prefs = JSON.parse(data.visitor_preferences || '{}')
         visitorPrefs.value = prefs.preferences || prefs.prefs || []
         const plan = prefs.last_replan || prefs.planning || {}
-        savedPlan.value = {pace:plan.pace,end_area:plan.end_area}
+        savedPlan.value = {pace:plan.pace,end_area:plan.end_area,avoid_steps:plan.avoid_steps??plan.pace==='relaxed',required_spot_ids:plan.required_spot_ids}
         const started = prefs.last_replan?.applied_at ? prefs.last_replan.applied_at * 1000 : Date.parse(data.start_time || '')
         const initial = prefs.last_replan?.remaining_minutes ?? plan.time_budget_minutes
         remainingBudget.value = initial ? Math.max(1, Math.floor(initial - (Number.isFinite(started) ? (Date.now()-started)/60000 : 0))) : undefined
@@ -484,6 +502,7 @@ async function refreshSessionInfo() {
         /* ignore preference parsing failure */
       }
       visitorSpots.value = routeSpots.value.map((spot) => spot.spot_name)
+      try{sessionStorage.setItem('zhiyou-active-tour',JSON.stringify({id:Number(sid),spot:currentSpot.value?.spot_name||'',at:Date.now()}))}catch{/* Optional recovery shortcut. */}
       if (!currentSpot.value) {
         sessionError.value = data.route_error || t("路线景点未能加载，请重新加载或重新规划行程")
         return false
@@ -492,14 +511,15 @@ async function refreshSessionInfo() {
       if (data.route_info?.name && !welcomeShown.value) {
         showWelcomeDialog.value = true
         welcomeShown.value = true
+        sessionStorage.setItem('tour-welcome-'+props.sessionId,'true')
       }
       return true
     }
     sessionError.value = response?.data?.message || t("导览信息不可用，请重新加载")
   } catch {
-    if (!disposed) sessionError.value = '暂时无法连接导览服务，请重新加载'
+    if (!disposed && own===sessionVersion) sessionError.value = '暂时无法连接导览服务，请重新加载'
   } finally {
-    sessionLoading.value = false
+    if(own===sessionVersion)sessionLoading.value = false
   }
   return false
 }
@@ -531,7 +551,7 @@ async function playReply(data: any) {
   if (textOnly.value) return
   const version = playbackVersion
   try {
-    if (!slowSpeech.value && live2dRef.value?.speak(data.spokenText || data.message)) return
+    if (live2dRef.value?.speak(data.spokenText || data.message)) return
     await live2dRef.value?.acceptPerformance(data.avatarPerformance)
     if (disposed || version !== playbackVersion) return
     if (live2dRef.value?.acceptJob(data.avatarJob)) return
@@ -573,6 +593,7 @@ async function sendMessage(message: string) {
   if (disableInput.value || disposed || sessionError.value || sessionLoading.value || !currentSpot.value) return false
   if (isRouteChange(message)) {openRepair(message);return true}
   const ownTurn = ++turnVersion
+  chatError.value=''
   const sentAt = performance.now()
   const nextViewingSpot = nextTourSpot.value || upcomingStops.value[0]
   conversations.value.push({
@@ -598,8 +619,8 @@ async function sendMessage(message: string) {
       currentSpot.value?.spot_id,
       nextViewingSpot?.spot_id || 0,
       (await live2dRef.value?.getMode()) || 'audio',
-      { signal, timeout: 90000, language: tourLanguage.value,
-        explanation_mode: explanationMode.value, speech_rate: slowSpeech.value ? 0.8 : 1.0, text_only: textOnly.value, persona: persona.value, defer_speech: true }
+      { signal, timeout: 75000, language: tourLanguage.value,
+        explanation_mode: explanationMode.value, text_only: textOnly.value, persona: persona.value, defer_speech: true }
     )
     if (disposed || ownTurn !== turnVersion) return true
     const body = response.data
@@ -642,12 +663,15 @@ async function sendMessage(message: string) {
     } else {
       console.error('Chat API fail:', body?.message, body)
       ElMessage.error(body?.message || t("回复失败"))
+      chatError.value=body?.message||t('回复失败，请重试')
     }
   } catch (e: any) {
     if (ownTurn !== turnVersion || e.code === 'ERR_CANCELED') return true
     console.error('Send error:', e.message, e)
     if (!disposed)
       ElMessage.error(e.code === 'ECONNABORTED' ? t("讲解准备超时，请重试") : t("发送失败，请重试"))
+    if(!disposed)chatError.value=t(e.code==='ECONNABORTED'?'讲解准备超时，请重试':'发送失败，请重试')
+    if(!inputValue.value)inputValue.value=message
   } finally {
     if (ownTurn === turnVersion) {
     stopGenerationStages()
@@ -679,12 +703,18 @@ async function handleNextSpot() {
   try {
     const sid = Number(props.sessionId)
     stopPlayback()
+    const timeoutController=new AbortController()
+    const deadline=setTimeout(()=>timeoutController.abort(),15000)
+    let data:any
+    try {
     const res = await fetch(`/tour-session/next-spot/${sid}`, {
       method: 'POST',
+      signal:timeoutController.signal,
       headers: { 'Content-Type': 'application/json' },
       body: '{}'
     })
-    const data = await res.json()
+    data = await res.json()
+    } finally {clearTimeout(deadline)}
     if (disposed) return
     if (data.success) {
       playbackError.value = false
@@ -708,6 +738,8 @@ async function handleEndTour() {
       cancelButtonText: t("取消")
     })
     await endTourSession(Number(props.sessionId))
+    sessionStorage.removeItem('zhiyou-active-tour')
+    sessionStorage.removeItem('tour-draft-'+props.sessionId)
     ElMessage.success(t("导览已结束"))
     router.push('/visitor/home')
   } catch {
@@ -748,12 +780,21 @@ function themeLabel(key: string): string {
   }
   return map[key] || key
 }
+function recoverOnline(){if(sessionError.value&&!sessionLoading.value&&!disposed)void refreshSessionInfo()}
+watch(()=>props.sessionId,()=>{
+  interruptAnswer();sessionVersion++;sessionController?.abort();sessionLoading.value=false
+  conversations.value=[];currentSpot.value=null;routeSpots.value=[];guideInfo.value=null;sessionError.value='';chatError.value='';welcomeShown.value=sessionStorage.getItem('tour-welcome-'+props.sessionId)==='true'
+  receiveAvatarToken(Number(props.sessionId));inputValue.value=sessionStorage.getItem('tour-draft-'+props.sessionId)||''
+  void refreshSessionInfo()
+})
 onMounted(() => {
+  window.addEventListener('online',recoverOnline)
   receiveAvatarToken(Number(props.sessionId))
   refreshSessionInfo()
 })
 onUnmounted(() => {
   disposed = true
+  sessionVersion++;sessionController?.abort();window.removeEventListener('online',recoverOnline)
   chatController?.abort()
   stopPlayback()
   if (gpsEnabled.value) gps.stopTracking()
@@ -763,6 +804,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+:global(.tour-route-map-dialog.el-dialog){margin:3dvh auto!important;max-height:94dvh;display:flex;flex-direction:column}
+:global(.tour-route-map-dialog .el-dialog__header){flex-shrink:0}
+:global(.tour-route-map-dialog .el-dialog__body){min-height:0;overflow:auto}
+.chat-request-error{margin:0 0 8px;color:#b42342;font-size:14px;line-height:1.5}
+@media (min-width:769px) and (max-width:1366px){.banner-route-flow .later-stop,.banner-route-flow:has(.later-stop)>.flow-arrow:last-of-type{display:none}.tour-banner .banner-route-flow{scrollbar-width:none}.tour-banner .banner-route-flow::-webkit-scrollbar{display:none}}
 .persona-select{font:inherit;font-size:14px;color:#59459b;background:#f3effc;border:1px solid #e6dcf7;border-radius:12px;padding:8px 10px;max-width:210px}
 .era-stage-label{display:block;color:#89764b;font-size:14px;margin-top:5px}.era-notice{margin:0;padding:0 22px 10px;font-size:13px;color:#85754d;line-height:1.5}.era-message-tag{display:inline-block;padding:4px 8px;border-radius:7px;color:#866a36;background:#fbf4e6;font-size:12px;margin-bottom:8px}.era-timeline p{display:flex;gap:12px;font-size:14px;line-height:1.65}.era-timeline strong{color:#806ab1;flex-shrink:0}.interrupt-button{color:#7b5273!important;background:#f7eef4!important}.composer-actions{flex-wrap:wrap}.persona-select:focus-visible{outline:2px solid #7460c5;outline-offset:3px}
 
@@ -1018,6 +1064,8 @@ onUnmounted(() => {
   box-shadow: 0 0 0 4px #eef2ff;
 }
 .avatar-space {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1038,6 +1086,11 @@ onUnmounted(() => {
 }
 .avatar-space :deep(.xingyun-frame) {
   min-height: 0;
+}
+.avatar-space :deep(.xingyun-guide:not(.half) .xingyun-canvas) {
+  inset: 28px 10px 42px !important;
+  width: calc(100% - 20px) !important;
+  height: calc(100% - 70px) !important;
 }
 .avatar-space :deep(.xingyun-controls) {
   position: absolute;

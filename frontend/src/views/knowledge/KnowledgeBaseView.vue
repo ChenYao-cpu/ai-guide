@@ -17,6 +17,8 @@ import {
   type AccuracyTestResult,
 } from '@/api/knowledgeBase'
 import { AxiosError } from 'axios'
+import VisitorContentPreview from '@/components/VisitorContentPreview.vue'
+const visitorPreviewVisible=ref(false)
 import type { UploadRequestOptions } from 'element-plus'
 
 // 加载框
@@ -286,6 +288,7 @@ const handleAccuracyTest = async () => {
             </el-upload>
           </div>
           <div class="header-right">
+            <el-button @click="visitorPreviewVisible=true">{{ $t('游客效果预览') }}</el-button>
             <!-- 全部重建索引 -->
             <el-button
               type="warning"
@@ -357,6 +360,7 @@ const handleAccuracyTest = async () => {
       </template>
     </el-card>
 
+    <VisitorContentPreview v-if="visitorPreviewVisible" @close="visitorPreviewVisible=false" />
     <el-dialog v-model="reviewVisible" class="review-dialog" :title='$t("知识内容审核")' width="min(900px, 92vw)" top="5vh">
       <div v-loading="reviewLoading" class="knowledge-review">
         <template v-if="preview">
@@ -447,7 +451,7 @@ const handleAccuracyTest = async () => {
             <el-table-column :label='$t("覆盖")' width="95" align="center">
               <template #default="scope">
                 {{ $t(scope.row.matched_count) }}/{{ $t(scope.row.required_count) }}
-                <div style="font-size: 11px; color: var(--text-muted)">{{ $t(scope.row.keyword_coverage) }}%</div>
+                <div style="font-size: 14px; color: var(--text-muted)">{{ $t(scope.row.keyword_coverage) }}%</div>
               </template>
             </el-table-column>
             <el-table-column prop="is_correct" :label='$t("结果")' width="80" align="center">

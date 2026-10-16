@@ -29,11 +29,13 @@ async function acceptPerformance(data?:Performance|null){
 const mode = ref('audio')
 const state = ref<Capability | null>(null)
 const capabilityLoading = ref(true)
+const capabilityRevision=ref(0)
 const message = ref('语音导览 · 提问后播放本轮讲解')
 const videoUrl = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
 let version = 0
 let capabilityReady: Promise<void> = Promise.resolve()
+let capabilityVersion=0
 function stop() { xingyunRef.value?.stop(); version++; if(timer)clearTimeout(timer);timer=undefined;videoUrl.value='';readyResolve?.(false);readyResolve=undefined;sceneUrl.value=''; props.audioElement?.pause();emit('playing',false) }
 function updateMessage() { message.value = mode.value==='3d' ? state.value?.threeD?.message||t("正在准备3D模型") : mode.value === 'audio' ? t("语音导览 · 提问后播放本轮讲解") : state.value?.[mode.value as 'realistic'|'cartoon']?.message || t("正在查询数字人状态") }
 function choose(value: string) { stop();mode.value=value;updateMessage() }
@@ -50,18 +52,19 @@ async function poll(job: AvatarJob, current: number) {
   }catch{if(current===version)message.value='获取视频状态失败，请重新提问'}
 }
 function acceptJob(job?: AvatarJob | null) { if(job?.job_id){poll(job,version);return true} if(job?.message)message.value=job.message;return false }
-watch(()=>props.guideId,(id)=>{
+watch(()=>[props.guideId,capabilityRevision.value],([id])=>{
+  const own=++capabilityVersion
   stop();state.value=null;capabilityLoading.value=true
-  capabilityReady=(async()=>{if(!id)return;try{const response=await request_handler.get('/avatar/capabilities/'+id);if(props.guideId===id){state.value=response.data.data;mode.value=state.value?.preferredMode==='xingyun'?'audio':state.value?.preferredMode==='3d'&&state.value.threeD?.ready?'3d':state.value?.realistic.ready?'realistic':'audio';updateMessage()}}catch{if(props.guideId===id)message.value='数字人状态查询失败，请刷新重试'}finally{if(props.guideId===id)capabilityLoading.value=false}})()
+  capabilityReady=(async()=>{if(!id){capabilityLoading.value=false;return}try{const response=await request_handler.get('/avatar/capabilities/'+id,{timeout:12000});if(own===capabilityVersion){state.value=response.data.data;mode.value=state.value?.preferredMode==='xingyun'?'audio':state.value?.preferredMode==='3d'&&state.value.threeD?.ready?'3d':state.value?.realistic.ready?'realistic':'audio';updateMessage()}}catch{if(own===capabilityVersion)message.value='数字人状态查询失败，请刷新重试'}finally{if(own===capabilityVersion)capabilityLoading.value=false}})()
 },{immediate:true})
-onBeforeUnmount(stop)
+onBeforeUnmount(()=>{capabilityVersion++;stop()})
 watch(()=>props.speaking,value=>{if(!value&&props.audioElement?.ended&&mode.value==='3d'){sceneUrl.value='';updateMessage()}})
 defineExpose({getMode:async()=>{await capabilityReady;return xingyunRef.value?.isReady() ? 'xingyun' : mode.value},speak:(text?:string)=>xingyunRef.value?.speak(text)||false,acceptJob,acceptPerformance,stop})
 </script>
 <template>
   <div class="digital-avatar" :style="{maxWidth:(width||360)+'px'}">
     <div class="viewport" :style="{minHeight:0+'px'}">
-      <div v-if="!state" class="avatar-loading" role="status">{{ $t(capabilityLoading ? '数字人正在加载中' : message) }}</div>
+      <div v-if="!state" class="avatar-loading" role="status">{{ $t(capabilityLoading ? '数字人正在加载中' : message) }}<button v-if="!capabilityLoading" type="button" @click="capabilityRevision++">{{ $t('重试') }}</button></div>
       <XingyunGuide v-show="state?.preferredMode === 'xingyun'" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
       <TourAvatar3D v-show="!xingyunConnected" :natural-standing="true" v-if="mode==='3d'&&state?.threeD?.modelUrl" :model-url="sceneUrl||state.threeD.modelUrl" :audio-element="audioElement" :width="Math.max(200,(width||360)-30)" :height="height||440" @ready="sceneReady" @error="sceneError" />
       <video v-show="!xingyunConnected" v-else-if="videoUrl" :key="'speech-'+videoUrl" :muted="false" :loop="false" playsinline :src="videoUrl" controls autoplay @play="emit('playing',true)" @pause="emit('playing',false)" @ended="emit('playing',false)" @error="message='视频播放失败，请检查网络';emit('playing',false)" />

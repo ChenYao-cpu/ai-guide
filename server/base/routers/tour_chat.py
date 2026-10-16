@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException, Request
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -34,6 +34,7 @@ from ..database.tour_session_db import (
     get_dialogue_context,
     save_dialogue_context,
 )
+from ..database.digital_guide_db import _asset_url
 from ..models.tour_models import TourChatItem
 from ..modules.rag import rag_worker
 from ..modules.json_utils import extract_json_object
@@ -45,7 +46,7 @@ from ..modules.sentiment_analyzer import analyze_sentiment
 from ..modules.text_utils import strip_repeated_name_prefixes
 from ..modules.tour_dialogue import (resolve_turn, local_answer, generation_policy, REPLY_POLICY,
                                     spoken_answer, updated_memory, reference_spot_names, scoped_history)
-from ..routers.llm import combine_history, gen_guide_base_prompt, get_llm_res
+from ..routers.llm import combine_history, gen_guide_base_prompt, get_tour_llm_res as get_llm_res
 from ..server_info import SERVER_PLUGINS_INFO
 from ..utils import ResultCode, make_return_data
 from .users import get_current_user_info
@@ -59,7 +60,8 @@ router = APIRouter(
 
 def _llm_is_configured() -> bool:
     """真实模型密钥存在时才调用远程模型，避免演示环境长时间超时。"""
-    api_key = os.getenv("LLM_API_KEY", "").strip()
+    key_name = 'VISION_API_KEY' if os.getenv('TOUR_LLM_USE_VISION_PROVIDER', '').lower() == 'true' else 'LLM_API_KEY'
+    api_key = os.getenv(key_name, "").strip()
     return bool(api_key) and api_key.isascii() and not any(c.isspace() for c in api_key) and api_key not in {
         "local-demo-disabled", "replace-with-your-provider-key"}
 
@@ -293,7 +295,7 @@ async def get_visitor_spots():
             "tags": s.tags,
             "location": s.location,
             "description": s.description,
-            "image_path": API_CONFIG.REQUEST_FILES_URL + "/" + s.image_path.lstrip("/") if s.image_path else "",
+            "image_path": _asset_url(s.image_path),
             "latitude": s.latitude or 0.0,
             "longitude": s.longitude or 0.0,
             "trigger_radius": s.trigger_radius or 50.0,
@@ -380,7 +382,7 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
             "reasons": result["score_details"], "preferences": preferences,
         }, ensure_ascii=False)}]
         try:
-            response = await asyncio.wait_for(get_llm_res(prompt, timeout=10, tour_mode=True), timeout=12)
+            response = await asyncio.wait_for(get_llm_res(prompt, timeout=10), timeout=12)
             summary = verified_model_summary(result, json.loads(_extract_json_from_response(response)),
                                              [s.spot_name for s in spots])
             if summary:
@@ -430,6 +432,9 @@ async def get_visitor_routes():
                 logger.warning(f'Route {r.route_id} has unconfigured or mixed cities; excluded from visitor routes')
                 continue
 
+            from ..modules.route_presentation import route_overview
+            overview=route_overview([s.model_dump() for s in route_members])
+
             route_list.append({
                 "route_id": r.route_id,
                 "city": city,
@@ -437,7 +442,10 @@ async def get_visitor_routes():
                 "cover_generated": r.cover_generated,
                 "name": r.name,
                 "theme": r.theme,
-                "estimated_time_minutes": r.estimated_time_minutes,
+                "estimated_time_minutes": overview['total_minutes'],
+                "walking_time_minutes": overview['walking_minutes'],
+                "walking_distance_meters": overview['walking_meters'],
+                "visit_time_minutes": overview['visit_minutes'],
                 "description": r.description,
                 "spot_ids": spot_ids,
                 "spot_names": spot_names,
@@ -532,6 +540,8 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     live_info = await get_session_live_info(session_id)
     if not live_info:
         return make_return_data(False, ResultCode.FAIL, "会话不存在", "")
+    if live_info.get('live_status') == 2:
+        return make_return_data(False, ResultCode.FAIL, '本次导览已结束，请返回重新规划', '')
     if live_info.get("route_error"):
         return make_return_data(False, ResultCode.FAIL, live_info["route_error"], "")
 
@@ -579,7 +589,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     guide_character = guide_info_data.get("character", "博学、亲切、热情") if guide_info_data else "博学、亲切、热情"
     spot_name = spot_info_data.get("spot_name", "") if spot_info_data else ""
     turn = resolve_turn(retrieval_message, spot_info_data, dialogue_memory)
-    from ..modules.tour_support import AUDIENCE_POLICY, child_fallback, unsupported_numbers
+    from ..modules.tour_support import AUDIENCE_POLICY, child_fallback, unsupported_numbers, scenic_fact_evidence
     if chat_item.explanation_mode == 'deep': turn.detailed=True
     grounded_answer, knowledge_sources = local_answer(turn, spot_info_data, next_spot_info_data)
     if chat_item.explanation_mode == 'child':
@@ -698,6 +708,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         except Exception as e:
             logger.warning(f"Tour RAG failed: {e}")
 
+    evidence.extend(scenic_fact_evidence(spot_info_data,turn.intents))
     # 6. LLM 生成回复；远程服务不可用时回退到本地景区知识档案。
     answer_mode = "local_knowledge"
     fallback_reason = ""
@@ -802,12 +813,12 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         pass
 
     from ..modules.reply_media import prepare_reply_media
-    native_voice = chat_item.avatarMode == 'xingyun' and chat_item.speech_rate == 1.0
+    native_voice = chat_item.avatarMode == 'xingyun'
     speech_pending = chat_item.defer_speech and not chat_item.text_only and not native_voice
     media = dict(ttsAudioUrl='', avatarJob=None, avatarPerformance=None)
     if not chat_item.text_only and not speech_pending:
         media = await prepare_reply_media(guide_info_data, session_id, interaction.message_id, speech_text,
-            chat_item.avatarMode, chat_item.language, chat_item.speech_rate, background_tasks)
+            chat_item.avatarMode, chat_item.language, background_tasks)
 
     # 10. Persist context and provenance separately from visitor route preferences.
     unique_sources = {item["url"]:item for item in knowledge_sources}
@@ -818,7 +829,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         "spotContext":spot_name, "intents":turn.intents, "followUp":turn.follow_up,
         "fallbackReason":fallback_reason, "verifiedOn":"2026-10-11" if knowledge_sources else "",
         "language": chat_item.language,
-        "explanationMode":chat_item.explanation_mode,"speechRate":chat_item.speech_rate,
+        "explanationMode":chat_item.explanation_mode,
         "textOnly":chat_item.text_only,
         "voiceStyle":guide_info_data.get("voice_style", "female_wenrou"),
         "numericGuard":numeric_guard,
@@ -837,6 +848,9 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         ai_metadata['references'] = [s['title'] for s in historical_meta['sources']]
         ai_metadata['referenceCount'] = len(historical_meta['sources'])
         ai_metadata['claimReview'] = {'status':'curated_era_facts','checks':[]}
+    from ..modules.tour_visuals import build_visual_context
+    ai_metadata['visuals'] = build_visual_context(spot_info_data, turn.intents, guide_response,
+        chat_item.language, historical_meta)
     next_memory = updated_memory(turn,spot_info_data,guide_response,interaction.message_id)
     next_memory = remember_subjects(next_memory, dialogue_memory, spot_name, chat_item.persona)
     if chat_item.persona == 'qianlong':

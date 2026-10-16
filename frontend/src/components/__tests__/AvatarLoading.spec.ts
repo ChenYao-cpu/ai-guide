@@ -25,9 +25,35 @@ beforeEach(() => {
     speak() {}
   })
 })
-afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals() })
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals();vi.useRealTimers() })
 
 describe('数字人加载呈现', () => {
+  it('断线后有限重连，旧实例迟到的就绪事件无效',async()=>{
+    vi.useFakeTimers({toFake:['setTimeout','clearTimeout']})
+    wrapper=mount(XingyunGuide,{props:{guideId:37,tourId:90}});await flushPromises()
+    const old=callbacks
+    callbacks.onInitEvent(4000);await flushPromises()
+    download.onClose();await flushPromises()
+    expect(wrapper.text()).toContain('自动重连')
+    old.onInitEvent(4000);await nextTick()
+    expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('hidden')
+    await vi.advanceTimersByTimeAsync(2000);await flushPromises()
+    callbacks.onMessage({code:5000,message:'offline'});await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000);await flushPromises()
+    callbacks.onMessage({code:5000,message:'offline'});await flushPromises()
+    expect(wrapper.text()).not.toContain('自动重连')
+    expect(wrapper.find('button').text()).toBe('连接数字人')
+  })
+  it('主动断开后不自动重新连接',async()=>{
+    vi.useFakeTimers({toFake:['setTimeout','clearTimeout']})
+    wrapper=mount(XingyunGuide,{props:{guideId:37,tourId:90}});await flushPromises()
+    callbacks.onInitEvent(4000);await flushPromises()
+    await wrapper.find('button').trigger('click')
+    window.dispatchEvent(new Event('online'))
+    await vi.advanceTimersByTimeAsync(10000);await flushPromises()
+    expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('hidden')
+    expect(wrapper.text()).not.toContain('自动重连')
+  })
   it('下载时只显示文字，隐藏头像和画布，准备好后展示画布', async () => {
     wrapper = mount(XingyunGuide, { props: { guideId: 37, tourId: 90, posterImage: '/head.png' } })
     await flushPromises()

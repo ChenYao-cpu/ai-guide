@@ -286,12 +286,12 @@ onMounted(() => {
 .stat-row { margin-bottom: 20px; }
 .stat-card { border-radius: 12px; padding: 20px 24px; transition: transform .2s; &:hover { transform: translateY(-2px); } }
 .stat-card-header { margin-bottom: 10px; }
-.stat-card-title { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+.stat-card-title { font-size: 16px; color: var(--text-secondary); font-weight: 500; }
 .stat-card-body { display: flex; align-items: baseline; gap: 4px; }
 .stat-card-value { font-size: 32px; font-weight: 700; line-height: 1.2; }
 .stat-card-text { font-size: 22px; }
-.stat-card-unit { font-size: 14px; color: var(--text-muted); }
-.stat-card-sub { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.stat-card-unit { font-size: 16px; color: var(--text-muted); }
+.stat-card-sub { margin-top: 4px; font-size: 15px; color: var(--text-muted); }
 
 .charts-row { margin-bottom: 20px; }
 .bottom-row { margin-bottom: 20px; }
@@ -300,18 +300,18 @@ onMounted(() => {
 // 柱状图
 .bar-chart { display: flex; flex-direction: column; gap: 18px; }
 .bar-item { display: flex; align-items: center; gap: 10px; }
-.bar-label { width: 70px; font-size: 13px; color: var(--text-secondary); flex-shrink: 0; }
+.bar-label { width: 70px; font-size: 16px; color: var(--text-secondary); flex-shrink: 0; }
 .bar-track { flex: 1; height: 28px; background: var(--glass); border-radius: 6px; overflow: hidden; position: relative; }
 .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width .6s ease; min-width: 0; }
-.bar-percent { color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; &.outside { color: var(--text); position: absolute; right: -40px; top: 50%; transform: translateY(-50%); } }
-.bar-count { width: 45px; font-size: 12px; color: var(--text-muted); text-align: right; flex-shrink: 0; }
+.bar-percent { color: var(--text); font-size: 15px; font-weight: 600; white-space: nowrap; &.outside { color: var(--text); position: absolute; right: -40px; top: 50%; transform: translateY(-50%); } }
+.bar-count { width: 45px; font-size: 15px; color: var(--text-muted); text-align: right; flex-shrink: 0; }
 
 // 热门提问
 .hot-questions-list { display: flex; flex-direction: column; gap: 8px; }
 .hot-q-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--glass); border-radius: 8px; }
-.hot-q-rank { width: 22px; height: 22px; border-radius: 6px; background: var(--glass); color: var(--text-muted); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; &.top3 { background: var(--glass); color: var(--champagne); } }
-.hot-q-text { flex: 1; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-q-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.hot-q-rank { width: 22px; height: 22px; border-radius: 6px; background: var(--glass); color: var(--text-muted); font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; &.top3 { background: var(--glass); color: var(--champagne); } }
+.hot-q-text { flex: 1; font-size: 16px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot-q-count { font-size: 14px; color: var(--text-muted); flex-shrink: 0; }
 
 // 服务建议
 .suggestions-list { display: flex; flex-direction: column; gap: 10px; }
@@ -322,7 +322,7 @@ onMounted(() => {
 .comment-item { padding: 12px 14px; background: var(--glass); border-radius: 8px; border-left: 3px solid var(--glass-line); }
 .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .sentiment-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.comment-sentiment-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
-.comment-time { font-size: 11px; color: var(--text-muted); margin-left: auto; }
-.comment-text { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0; }
+.comment-sentiment-label { font-size: 15px; color: var(--text-secondary); font-weight: 500; }
+.comment-time { font-size: 14px; color: var(--text-muted); margin-left: auto; }
+.comment-text { font-size: 16px; color: var(--text); line-height: 1.5; margin: 0; }
 </style>

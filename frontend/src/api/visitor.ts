@@ -63,7 +63,6 @@ export interface MessageItem {
     verifiedOn?: string
     language?: 'zh' | 'en'
     explanationMode?: 'standard' | 'child' | 'deep'
-    speechRate?: number
     textOnly?: boolean
     numericGuard?: string
     claimReview?: {status:string; checks:Array<{segment:number;supported:boolean;quotes:Array<{evidence_id:string;quote:string}>}>}
@@ -149,17 +148,18 @@ export function endTourSession(sessionId: number) {
 }
 
 /** 获取导览实时信息 */
-export function getTourLiveInfo(sessionId: number) {
+export function getTourLiveInfo(sessionId: number, signal?:AbortSignal) {
   return request({
     url: `/tour-session/live-info/${sessionId}`,
     method: 'get',
     timeout: 15000,
+    signal,
   })
 }
 
 /** 发送聊天消息 */
-export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number; language?: 'zh' | 'en'; explanation_mode?: 'standard' | 'child' | 'deep'; speech_rate?: 0.8 | 1.0; text_only?: boolean; persona?: 'modern' | 'qianlong'; defer_speech?: boolean }) {
-  const { language = 'zh', explanation_mode = 'standard', speech_rate = 1.0, text_only = false, persona = 'modern', defer_speech = false, ...requestOptions } = options || {}
+export function sendTourChatMessage(sessionId: number, message: string, currentSpotId?: number, nextSpotId?: number, avatarMode = 'audio', options?: { signal?: AbortSignal; timeout?: number; language?: 'zh' | 'en'; explanation_mode?: 'standard' | 'child' | 'deep'; text_only?: boolean; persona?: 'modern' | 'qianlong'; defer_speech?: boolean }) {
+  const { language = 'zh', explanation_mode = 'standard', text_only = false, persona = 'modern', defer_speech = false, ...requestOptions } = options || {}
   return request({
     url: '/tour-session/chat',
     headers: avatarHeaders(sessionId),
@@ -173,7 +173,6 @@ export function sendTourChatMessage(sessionId: number, message: string, currentS
       avatarMode,
       language,
       explanation_mode,
-      speech_rate,
       text_only,
       persona,
       defer_speech,
@@ -201,6 +200,7 @@ export interface RouteRecommendationResult {
   end_area?: 'auto' | 'east' | 'north' | 'south'
   end_label?: string
   queue_reserve_minutes?: number
+  avoid_steps?: boolean
   accessibility_status?: string
   walking_distance_meters?: number
   candidate_count?: number
@@ -351,24 +351,40 @@ export function checkNearbySpot(latitude: number, longitude: number, sessionId: 
 
 export interface RouteRepairOptions {
   message?: string
-  remaining_minutes?: number
+  remaining_minutes?: number | null
   pace: 'standard' | 'relaxed'
   end_area: 'auto' | 'east' | 'north' | 'south'
   excluded_spot_ids: number[]
   reserve_minutes: number
+  scenario?: 'time' | 'less_walking' | 'skip' | 'exit'
+  strategy?: 'highlights' | 'shortest'
+  required_spot_ids?: number[]
+  avoid_steps?: boolean
+  allow_reorder?: boolean
 }
 export interface RouteRepair {
+  original_route?: import('./tourExperience').RouteOverviewData
+  proposed_route?: import('./tourExperience').RouteOverviewData
   proposal_token: string
   feasible: boolean
   exit_only: boolean
-  remaining_minutes: number
+  remaining_minutes: number | null
   current_spot: string
   next_spots: Array<{spot_id:number;spot_name:string}>
   removed: Array<{spot_id:number;spot_name:string;reason:string}>
-  totals: {visit_minutes:number;walk_minutes:number;rest_minutes:number;exit_minutes:number;reserve_minutes:number;total_minutes:number;walking_meters:number}
-  original_totals: {total_minutes:number;walking_meters:number}
+  totals: {visit_minutes:number;walk_minutes:number|null;rest_minutes:number;exit_minutes:number|null;reserve_minutes:number;total_minutes:number|null;walking_meters:number|null}
+  original_totals: {total_minutes:number|null;walking_meters:number|null}
   end_anchor: string
   options: RouteRepairOptions
+  current_spot_id?: number
+  alternatives?: RouteRepair[]
+  failure_code?: string
+  strategy?: 'highlights' | 'shortest'
+  scenario?: string
+  reordered?: boolean
+  unchanged?: boolean
+  expires_at?: number
+  network_version?: string
 }
 export function previewTourRepair(sid:number, options:RouteRepairOptions, signal?:AbortSignal) {
   return request<{success:boolean;data:RouteRepair}>({url:`/tour-session/${sid}/replan/preview`,method:'post',data:options,headers:avatarHeaders(sid),signal,timeout:20000})

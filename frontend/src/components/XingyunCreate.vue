@@ -41,7 +41,7 @@ async function save() {
       <el-form-item :label='$t("角色设定")'><el-input v-model="form.character" type="textarea" maxlength="1000" :placeholder='$t("填写这个导游的讲解风格和特点")' /></el-form-item>
       <el-form-item :label='$t("音色名称")'><el-input v-model="form.voice_label" maxlength="80" :placeholder='$t("应用中所选音色的名称，可留空")' /></el-form-item>
         <el-form-item :label='$t("备用音色")' required><el-select v-model="form.voice_style"><el-option :label='$t("温厚男声")' value="male_wenhou" /><el-option :label='$t("洪亮男声")' value="male_hongliang" /><el-option :label='$t("温柔女声")' value="female_wenrou" /><el-option :label='$t("活泼女声")' value="female_huopo" /></el-select></el-form-item>
-        <p>{{ $t("备用音色用于慢速语音和英文合成，请与当前人物匹配；星云原声仍由平台应用设置。") }}</p>
+        <p>{{ $t("备用音色用于本地语音合成，请与当前人物匹配；星云原声仍由平台应用设置。") }}</p>
       <el-form-item :label='$t("展示封面")' required><FileUpload v-model="form.poster_image" file-type="image" /></el-form-item>
       <el-form-item :label='$t("头像")' required><FileUpload v-model="form.avatar" file-type="image" /></el-form-item>
     </el-form>

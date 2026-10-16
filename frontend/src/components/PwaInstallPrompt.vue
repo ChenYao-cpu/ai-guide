@@ -144,7 +144,7 @@ function copyLink() {
 <template>
   <el-dialog
     v-model="showDialog"
-    :title="$t(isInstalled ? '已安装成功' : '安装智游灵境')"
+    :title="$t(isInstalled ? '已安装成功' : '安装智游知境')"
     width="420px"
     :close-on-click-modal="false"
     :show-close="false"
@@ -162,7 +162,7 @@ function copyLink() {
       <div v-if="isInstalled" class="installed-msg">
 
         <strong>{{ $t("APP已就绪") }}</strong>
-        <p>{{ $t("在手机桌面找到「智游灵境」图标即可开始使用") }}</p>
+        <p>{{ $t("在手机桌面找到「智游知境」图标即可开始使用") }}</p>
         <el-button type="primary" @click="showDialog = false">{{ $t("开始导览") }}</el-button>
       </div>
 
@@ -283,7 +283,7 @@ function copyLink() {
         </div>
 
         <div class="qr-box">
-          <img v-if="installUrl && !installUrl.includes('null')" :src="qrCodeUrl" :alt='$t("扫码打开智游灵境")' class="qr-img" />
+          <img v-if="installUrl && !installUrl.includes('null')" :src="qrCodeUrl" :alt='$t("扫码打开智游知境")' class="qr-img" />
           <div v-else class="qr-placeholder">
             <p>{{ $t("URL无效") }}<br/>{{ $t("请检查服务是否启动") }}</p>
           </div>
