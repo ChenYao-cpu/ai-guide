@@ -1,0 +1,238 @@
+[
+  {
+    "route_id": 19,
+    "name": "皇家园林经典文化线",
+    "city": "北京",
+    "spots": [
+      "仁寿殿",
+      "长廊",
+      "佛香阁",
+      "昆明湖"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 北京 route 皇家园林经典文化线. Include a coherent composition inspired by: 仁寿殿, 长廊, 佛香阁, 昆明湖. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 20,
+    "name": "昆明湖摄影漫游线",
+    "city": "北京",
+    "spots": [
+      "长廊",
+      "昆明湖",
+      "十七孔桥"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 北京 route 昆明湖摄影漫游线. Include a coherent composition inspired by: 长廊, 昆明湖, 十七孔桥. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 21,
+    "name": "亲子湖山体验线",
+    "city": "北京",
+    "spots": [
+      "苏州街",
+      "长廊",
+      "昆明湖"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 北京 route 亲子湖山体验线. Include a coherent composition inspired by: 苏州街, 长廊, 昆明湖. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 1,
+    "name": "灵山朝圣一日游",
+    "city": "无锡",
+    "spots": [
+      "灵山大照壁",
+      "五智门",
+      "灵山大佛",
+      "灵山梵宫",
+      "五印坛城"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山朝圣一日游. Include a coherent composition inspired by: 灵山大照壁, 五智门, 灵山大佛, 灵山梵宫, 五印坛城. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 2,
+    "name": "灵山礼佛深度游",
+    "city": "无锡",
+    "spots": [
+      "祥符禅寺",
+      "九龙灌浴",
+      "阿育王柱",
+      "降魔浮雕",
+      "佛足坛"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山礼佛深度游. Include a coherent composition inspired by: 祥符禅寺, 九龙灌浴, 阿育王柱, 降魔浮雕, 佛足坛. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 3,
+    "name": "灵山亲子欢乐行",
+    "city": "无锡",
+    "spots": [
+      "灵山大佛",
+      "九龙灌浴",
+      "百子戏弥勒",
+      "佛教文化博物馆",
+      "天王殿"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山亲子欢乐行. Include a coherent composition inspired by: 灵山大佛, 九龙灌浴, 百子戏弥勒, 佛教文化博物馆, 天王殿. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 4,
+    "name": "灵山禅意慢游",
+    "city": "无锡",
+    "spots": [
+      "鹿鸣谷",
+      "梵天花海",
+      "五灯湖",
+      "拈花广场",
+      "灵山梵宫"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山禅意慢游. Include a coherent composition inspired by: 鹿鸣谷, 梵天花海, 五灯湖, 拈花广场, 灵山梵宫. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 5,
+    "name": "灵山建筑艺术之旅",
+    "city": "无锡",
+    "spots": [
+      "灵山梵宫",
+      "五印坛城",
+      "曼飞龙塔",
+      "大悲殿",
+      "灵山大照壁"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山建筑艺术之旅. Include a coherent composition inspired by: 灵山梵宫, 五印坛城, 曼飞龙塔, 大悲殿, 灵山大照壁. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 6,
+    "name": "灵山祈福半日游",
+    "city": "无锡",
+    "spots": [
+      "灵山大佛",
+      "九龙灌浴",
+      "祥符禅寺",
+      "佛足坛"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山祈福半日游. Include a coherent composition inspired by: 灵山大佛, 九龙灌浴, 祥符禅寺, 佛足坛. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 7,
+    "name": "拈花湾禅意夜游",
+    "city": "无锡",
+    "spots": [
+      "五灯湖",
+      "拈花广场",
+      "无名桥",
+      "沾花堂"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 拈花湾禅意夜游. Include a coherent composition inspired by: 五灯湖, 拈花广场, 无名桥, 沾花堂. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 8,
+    "name": "灵山文化研学游",
+    "city": "无锡",
+    "spots": [
+      "佛教文化博物馆",
+      "降魔浮雕",
+      "妙音台",
+      "无尽意斋",
+      "灵山大佛"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山文化研学游. Include a coherent composition inspired by: 佛教文化博物馆, 降魔浮雕, 妙音台, 无尽意斋, 灵山大佛. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 9,
+    "name": "灵山自然风光线",
+    "city": "无锡",
+    "spots": [
+      "鹿鸣谷",
+      "梵天花海",
+      "五灯湖",
+      "拈花广场"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山自然风光线. Include a coherent composition inspired by: 鹿鸣谷, 梵天花海, 五灯湖, 拈花广场. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 10,
+    "name": "灵山印象全景线",
+    "city": "无锡",
+    "spots": [
+      "灵山大佛",
+      "灵山梵宫",
+      "五印坛城",
+      "九龙灌浴",
+      "祥符禅寺",
+      "拈花广场"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山印象全景线. Include a coherent composition inspired by: 灵山大佛, 灵山梵宫, 五印坛城, 九龙灌浴, 祥符禅寺, 拈花广场. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 11,
+    "name": "成都经典一日游",
+    "city": "成都",
+    "spots": [
+      "都江堰",
+      "成都大熊猫繁育研究基地",
+      "青城山"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 成都 route 成都经典一日游. Include a coherent composition inspired by: 都江堰, 成都大熊猫繁育研究基地, 青城山. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 12,
+    "name": "古韵蓉城半日游",
+    "city": "成都",
+    "spots": [
+      "宽窄巷子",
+      "武侯祠"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 成都 route 古韵蓉城半日游. Include a coherent composition inspired by: 宽窄巷子, 武侯祠. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 13,
+    "name": "自然人文全景线",
+    "city": "成都",
+    "spots": [
+      "成都大熊猫繁育研究基地",
+      "青城山"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 成都 route 自然人文全景线. Include a coherent composition inspired by: 成都大熊猫繁育研究基地, 青城山. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 14,
+    "name": "成都亲子欢乐游",
+    "city": "成都",
+    "spots": [
+      "成都大熊猫繁育研究基地",
+      "宽窄巷子"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 成都 route 成都亲子欢乐游. Include a coherent composition inspired by: 成都大熊猫繁育研究基地, 宽窄巷子. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 15,
+    "name": "摄影打卡之旅",
+    "city": "成都",
+    "spots": [
+      "宽窄巷子",
+      "武侯祠"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 成都 route 摄影打卡之旅. Include a coherent composition inspired by: 宽窄巷子, 武侯祠. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 16,
+    "name": "无锡一日游",
+    "city": "无锡",
+    "spots": [
+      "五印坛城",
+      "祥符禅寺",
+      "拈花广场",
+      "五灯湖"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 无锡一日游. Include a coherent composition inspired by: 五印坛城, 祥符禅寺, 拈花广场, 五灯湖. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  },
+  {
+    "route_id": 18,
+    "name": "灵山半日游",
+    "city": "无锡",
+    "spots": [
+      "五印坛城",
+      "梵天花海",
+      "拈花广场"
+    ],
+    "prompt": "Landscape 3:2 refined editorial travel illustration for 无锡 route 灵山半日游. Include a coherent composition inspired by: 五印坛城, 梵天花海, 拈花广场. Painterly architectural detail, natural colors, luminous light. No text, lettering, numbers, logos, labels, badges, borders, UI or close-up people. Artistic route illustration, not a factual photograph or map."
+  }
+]

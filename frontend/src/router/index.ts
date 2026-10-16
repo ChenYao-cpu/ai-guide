@@ -46,7 +46,6 @@ const router = createRouter({
       path: '/m/tour/:sessionId',
       name: 'MobileTour',
       // Both browser entry points share dialogue state and capabilities.
-      // Native mini-program pages remain a separate application.
       component: () => import('@/views/visitor/TourInteractionView.vue'),
       props: true,
       meta: { title: '智能导览', requiresAuth: false },

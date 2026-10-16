@@ -649,7 +649,7 @@ watch(activeMenuTab, (tab) => {
             <div class="card-title">{{ $t("推荐路线") }}</div>
             <div class="routes-grid">
               <div v-for="route in routeList" :key="route.route_id" class="route-card" :class="{ selected: selectedRouteId === route.route_id }" @click="selectRoute(route)">
-                <div v-if="route.cover_image" class="route-cover"><img :src="route.cover_image" :alt="$t(route.name)" loading="lazy" /><small v-if="route.cover_generated">{{ $t("AI路线示意图") }}</small></div>
+                <div v-if="route.cover_image" class="route-cover"><img :src="route.cover_image" :alt="$t(route.name)" loading="lazy" /></div>
                 <div class="route-card-top"><span class="route-theme-tag">{{ $t(preferenceOptions.find(pref => pref.value === route.theme)?.label || '综合游览') }}</span><span class="route-time">{{ $t(route.estimated_time_minutes || '--') }} {{ $t("分钟") }}</span></div>
                 <h3 class="route-name">{{ $t(route.name) }}</h3>
                 <p class="route-desc">{{ $t(route.description || '综合游览路线') }}</p>

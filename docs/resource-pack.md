@@ -10,7 +10,7 @@
    python scripts/import_resource_pack.py resources/local-resources
    ```
 
-4. 重启后端并刷新网页。小程序也需配置为连接同一个后端，才能读取导入的图片。
+4. 重启后端并刷新网页。网页与 App 需连接同一个后端，才能读取导入的图片。
 5. 管理员在数字人管理页面填写自己的 App ID 和 App Secret，绑定应用后再上架。
 
 2026-10-15 本机快照包含 16 个颐和园景点、3 条路线、2 个未删除的数字人配置（小颐、文轩）、21 份知识文档、10 条路线景点关联及其引用素材。附带小颐的本地原生 3D 模型与依赖文件；Live2D 文件沿用源码中的 `frontend/public/live2d`。
@@ -30,3 +30,5 @@ python scripts/export_resource_pack.py work_dirs/local-resources --zip resources
 导出目录和压缩包必须尚不存在。工具使用明确的公开字段清单，只读取未删除资料和有效路线关联，导出时将本机素材地址转成可迁移路径，并检查已知密钥值、素材完整性及压缩包 CRC。
 
 原 `resources/summer-palace` 的 48 景点资源目录已被这份本机压缩包替换；旧版仍可从提交 `d4f23ac` 的 Git 历史恢复。本次删除的是当前分支文件，不改写 Git 历史。
+
+当前部署保留其他景区；导入资源包仅补充颐和园，不执行景区清理。
