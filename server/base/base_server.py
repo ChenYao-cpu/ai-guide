@@ -49,7 +49,7 @@ swagger_description = """
 
 ## 项目地址
 
-智游灵境 · AI 智能导览平台
+智游知境 · AI 智能导览平台
 
 基于开源多模态大模型的智能景区导览系统，支持语音/文本交互、数字人口型同步、
 个性化路线推荐和游客反馈分析。
@@ -102,9 +102,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="智游灵境 · AI 智能导览平台",
+    title="智游知境 · AI 智能导览平台",
     description=swagger_description,
-    summary="一个能够为游客提供实时智能问答、个性化路线讲解、情感互动的智游灵境。",
+    summary="一个能够为游客提供实时智能问答、个性化路线讲解、情感互动的智游知境。",
     version="2.0.0",
     license_info={
         "name": "AGPL-3.0 license",
@@ -126,8 +126,9 @@ app.include_router(scenic_spots.router)
 app.include_router(knowledge_base.router)
 app.include_router(tour_routes.router)
 app.include_router(tour_chat.router)
-from .routers import tour_adaptive
+from .routers import tour_adaptive, tour_experience
 app.include_router(tour_adaptive.router)
+app.include_router(tour_experience.router)
 app.include_router(tts.router)
 app.include_router(feedback_analytics.router)
 app.include_router(digital_guide.router)
@@ -150,7 +151,7 @@ app.mount(
 
 @app.get("/")
 async def hello():
-    return {"message": "智游灵境 · AI 智能导览平台"}
+    return {"message": "智游知境 · AI 智能导览平台"}
 
 
 @app.get("/system/status", summary="系统服务状态")

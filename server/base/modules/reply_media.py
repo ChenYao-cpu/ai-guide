@@ -6,15 +6,15 @@ from loguru import logger
 from ...web_configs import API_CONFIG, WEB_CONFIGS
 
 
-async def prepare_reply_media(guide, session_id, message_id, text, mode, language, rate, background_tasks):
+async def prepare_reply_media(guide, session_id, message_id, text, mode, language, background_tasks):
     from .edge_tts_client import synthesize_speech
     audio_url = ''
-    if not (mode == 'xingyun' and rate == 1.0):
+    if mode != 'xingyun':
         output = str(Path(WEB_CONFIGS.SERVER_FILE_ROOT) / WEB_CONFIGS.TOUR_FILE_DIR / 'tts')
         os.makedirs(output, exist_ok=True)
         try:
             path = await synthesize_speech(text, voice_style=guide.get('voice_style', 'female_wenrou'),
-                                           speed=rate, output_dir=output, language=language)
+                                           speed=1.0, output_dir=output, language=language)
             if path and os.path.exists(path):
                 audio_url = API_CONFIG.REQUEST_FILES_URL + '/' + WEB_CONFIGS.TOUR_FILE_DIR + '/tts/' + os.path.basename(path)
         except Exception as exc:

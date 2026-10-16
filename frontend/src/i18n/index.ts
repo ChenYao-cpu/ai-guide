@@ -17,7 +17,7 @@ const patterns = Object.entries(messages).filter(([key]) => /\{\w+\}/.test(key))
   return { regex:new RegExp('^'+source+'$'), value, names }
 })
 
-/** Translate application labels only. Unknown/user-authored text is preserved. */
+/** Translate interface labels and catalogued public content. Unknown/user-authored text is preserved. */
 export function t(value: unknown, params?: Record<string,unknown>): string {
   const key = String(value ?? '')
   let output = locale.value === 'en' ? (messages[key] ?? key) : key

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { t, locale } from '@/i18n'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as echarts from 'echarts'
+import { useResizeObserver } from '@vueuse/core'
 
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
@@ -31,15 +32,15 @@ function initChart() {
       formatter: '{b}: {c} ({d}%)',
     },
     legend: {
-      orient: 'vertical',
-      left: 'left',
-      top: props.title ? 40 : 10,
+      type: 'scroll', orient: 'horizontal',
+      left: 'center', top: props.title ? 40 : 0,
+      textStyle: { fontSize: 15 }, itemGap: 18,
     },
     series: [
       {
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['55%', '55%'],
+        radius: ['35%', '60%'],
+        center: ['50%', '58%'],
         avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 6,
@@ -47,7 +48,8 @@ function initChart() {
           borderWidth: 2,
         },
         label: {
-          show: true,
+          show: true, fontSize: 14, lineHeight: 22,
+          alignTo: 'edge', edgeDistance: 12, overflow: 'break',
           formatter: '{b}\n{d}%',
         },
         emphasis: {
@@ -78,6 +80,8 @@ watch(() => props.data, () => {
   }
 }, { deep: true })
 
+useResizeObserver(chartRef, () => chartInstance?.resize())
+onBeforeUnmount(() => chartInstance?.dispose())
 onMounted(() => { initChart() })
 watch(locale, () => initChart())
 </script>

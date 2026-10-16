@@ -15,6 +15,8 @@ import {
 } from '@/api/tourRoute'
 import { getSpotList, type ScenicSpotItem } from '@/api/scenicSpot'
 import { AxiosError } from 'axios'
+import VisitorContentPreview from '@/components/VisitorContentPreview.vue'
+const previewVisible=ref(false)
 
 // ======================== 列表数据 ========================
 
@@ -405,12 +407,14 @@ onMounted(async () => {
       </el-form>
 
       <template #footer>
+          <el-button :disabled="!form.spot_ids.length" @click="previewVisible=true">{{ $t('游客效果预览') }}</el-button>
         <div class="dialog-footer">
           <el-button type="primary" @click="handleSave" :loading="saving">{{ $t("保存") }}</el-button>
           <el-button @click="dialogVisible = false" :disabled="saving">{{ $t("取消") }}</el-button>
         </div>
       </template>
     </el-dialog>
+    <VisitorContentPreview v-if="previewVisible" :spot-ids="form.spot_ids" @close="previewVisible=false" />
   </div>
 </template>
 
@@ -457,7 +461,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-secondary);
 }
 
@@ -466,7 +470,7 @@ onMounted(async () => {
 }
 
 .card-desc {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-muted);
   line-height: 1.5;
   display: -webkit-box;
@@ -515,7 +519,7 @@ onMounted(async () => {
   border-radius: 50%;
   background: var(--el-color-primary);
   color: var(--text);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -530,7 +534,7 @@ onMounted(async () => {
 
 .spot-category {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 15px;
   color: var(--text-muted);
 }
 
@@ -543,7 +547,7 @@ onMounted(async () => {
 .sort-hint {
   display: block;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 15px;
   color: var(--text-muted);
 }
 

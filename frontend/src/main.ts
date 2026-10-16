@@ -14,6 +14,7 @@ import '@/style/index.scss'
 import '@/style/soft-ui.scss'
 import '@/style/soft-ui-charts'
 import '@/style/tour-backdrop.scss'
+import '@/style/admin-readability.scss'
 
 document.documentElement.dataset.uiTheme = 'soft-ui'
 

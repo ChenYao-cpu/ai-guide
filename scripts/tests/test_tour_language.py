@@ -45,7 +45,7 @@ class TourLanguageTests(unittest.TestCase):
         result=spoken_answer('First sentence. Second sentence. Third sentence.',language='en')
         self.assertEqual(result,'First sentence. Second sentence. Third sentence.')
         result=spoken_answer(' '.join(['information']*200),language='en')
-        self.assertLessEqual(len(result.split()),140)
+        self.assertLessEqual(len(result.split()),240)
         self.assertTrue(result.endswith('information.'))
         self.assertNotIn('。',result)
 

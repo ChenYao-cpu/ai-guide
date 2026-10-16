@@ -21,13 +21,13 @@
       <el-col :span="14">
         <el-card shadow="never" class="chart-card">
           <template #header><span class="card-title">{{ $t("近30天服务趋势") }}</span></template>
-          <div ref="trendChartRef" style="height: 360px" />
+          <div ref="trendChartRef" class="dashboard-chart dashboard-trend-chart" />
         </el-card>
       </el-col>
       <el-col :span="10">
         <el-card shadow="never" class="chart-card">
           <template #header><span class="card-title">{{ $t("热门景点TOP10") }}</span></template>
-          <div ref="spotChartRef" style="height: 360px" />
+          <div ref="spotChartRef" class="dashboard-chart dashboard-ranking-chart" />
         </el-card>
       </el-col>
     </el-row>
@@ -99,17 +99,17 @@
             <div class="emotion-bars">
               <div class="emotion-bar-item">
                 <span class="emotion-label">{{ $t("正面") }}</span>
-                <div class="emotion-track"><div class="emotion-fill positive" :style="{ width: emotionStats.positive_rate + '%' }">{{ $t(emotionStats.positive_rate) }}%</div></div>
+                <div class="emotion-track"><div class="emotion-fill positive" :style="{ width: emotionStats.positive_rate + '%' }"></div></div><span class="emotion-rate">{{ $t(emotionStats.positive_rate) }}%</span>
                 <span class="emotion-count">{{ $t(emotionStats.positive) }}</span>
               </div>
               <div class="emotion-bar-item">
                 <span class="emotion-label">{{ $t("中性") }}</span>
-                <div class="emotion-track"><div class="emotion-fill neutral" :style="{ width: (100 - emotionStats.positive_rate - emotionStats.negative_rate) + '%' }">{{ $t((100 - emotionStats.positive_rate - emotionStats.negative_rate).toFixed(1)) }}%</div></div>
+                <div class="emotion-track"><div class="emotion-fill neutral" :style="{ width: (100 - emotionStats.positive_rate - emotionStats.negative_rate) + '%' }"></div></div><span class="emotion-rate">{{ $t((100 - emotionStats.positive_rate - emotionStats.negative_rate).toFixed(1)) }}%</span>
                 <span class="emotion-count">{{ $t(emotionStats.neutral) }}</span>
               </div>
               <div class="emotion-bar-item">
                 <span class="emotion-label">{{ $t("负面") }}</span>
-                <div class="emotion-track"><div class="emotion-fill negative" :style="{ width: emotionStats.negative_rate + '%' }">{{ $t(emotionStats.negative_rate) }}%</div></div>
+                <div class="emotion-track"><div class="emotion-fill negative" :style="{ width: emotionStats.negative_rate + '%' }"></div></div><span class="emotion-rate">{{ $t(emotionStats.negative_rate) }}%</span>
                 <span class="emotion-count">{{ $t(emotionStats.negative) }}</span>
               </div>
             </div>
@@ -172,9 +172,11 @@
 
 <script setup lang="ts">import { t, locale } from '@/i18n'
 
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
+import { useResizeObserver } from '@vueuse/core'
+import { serviceTrendOption, popularSpotsOption } from '@/utils/dashboardCharts'
 import { AxiosError } from 'axios'
 import {
   getComprehensiveAnalytics, getKnowledgeGaps, generateAnalyticsReport,
@@ -230,57 +232,19 @@ const hourlyData = computed(() => comprehensive.value?.hourly_distribution || []
 // ====== 初始化趋势图 ======
 function initTrendChart() {
   if (!trendChartRef.value || !comprehensive.value?.daily_trend) return
-  if (trendChart) trendChart.dispose()
-  trendChart = echarts.init(trendChartRef.value, 'soft-ui')
-
-  const trend = comprehensive.value.daily_trend
-  const option: echarts.EChartsOption = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: [t("服务人次"), t("提问数"), t("满意度(%)")], bottom: 0 },
-    grid: { left: 50, right: 50, top: 10, bottom: 30 },
-    xAxis: { type: 'category', data: trend.map(t => t.date), axisLabel: { interval: 4, rotate: 30 } },
-    yAxis: [
-      { type: 'value', name: t("数量") },
-      { type: 'value', name: '%', max: 100 },
-    ],
-    series: [
-      { name: t("服务人次"), type: 'line', data: trend.map(t => t.sessions), smooth: true, symbol: 'none', areaStyle: { opacity: 0.1 } },
-      { name: t("提问数"), type: 'line', data: trend.map(t => t.questions), smooth: true, symbol: 'none', areaStyle: { opacity: 0.1 } },
-      { name: t("满意度(%)"), type: 'line', yAxisIndex: 1, data: trend.map(t => t.satisfaction), smooth: true, lineStyle: { type: 'dashed' }, symbol: 'none' },
-    ],
-  }
-  trendChart.setOption(option)
+  trendChart ??= echarts.init(trendChartRef.value, 'soft-ui')
+  trendChart.resize()
+  trendChart.setOption(serviceTrendOption(comprehensive.value.daily_trend, trendChartRef.value.clientWidth))
 }
-
-// 热门景点柱状图
 function initSpotChart() {
   if (!spotChartRef.value || !comprehensive.value?.spot_ranking) return
-  if (spotChart) spotChart.dispose()
-  spotChart = echarts.init(spotChartRef.value, 'soft-ui')
-
-  const spots = comprehensive.value.spot_ranking.slice(0, 10).reverse()
-  const option: echarts.EChartsOption = {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 100, right: 40, top: 10, bottom: 20 },
-    xAxis: { type: 'value', name: t("会话数") },
-    yAxis: { type: 'category', data: spots.map(s => s.spot_name), axisLabel: { fontSize: 11 } },
-    series: [{
-      type: 'bar',
-      data: spots.map((s, i) => ({
-        value: s.session_count,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#818cf8' }, { offset: 1, color: '#4f46e5' },
-          ]),
-          borderRadius: [0, 6, 6, 0],
-        },
-      })),
-      barMaxWidth: 28,
-      label: { show: true, position: 'right', fontSize: 11 },
-    }],
-  }
-  spotChart.setOption(option)
+  spotChart ??= echarts.init(spotChartRef.value, 'soft-ui')
+  spotChart.resize()
+  spotChart.setOption(popularSpotsOption(comprehensive.value.spot_ranking, spotChartRef.value.clientWidth))
 }
+useResizeObserver(trendChartRef, initTrendChart)
+useResizeObserver(spotChartRef, initSpotChart)
+onBeforeUnmount(() => { trendChart?.dispose(); spotChart?.dispose() })
 
 // ====== 数据加载 ======
 async function loadComprehensive() {
@@ -383,4 +347,20 @@ watch(locale, () => { initTrendChart(); initSpotChart() })
 .report-recommendations h4 { margin: 0 0 8px; font-size: 14px; }
 .rec-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--text); }
 .rec-item + .rec-item { border-top: 1px dashed var(--glass-line); }
+
+.dashboard-container { padding:0; container-type:inline-size; }
+.stat-row { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:14px; margin:0 0 24px!important; }
+.stat-row .el-col { width:auto; max-width:none; padding:0!important; }
+.stat-card { height:100%; padding:22px 18px; }
+.chart-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin:0 0 24px!important; }
+.chart-row .el-col { width:auto; max-width:none; padding:0!important; min-width:0; }
+.chart-row .el-col:only-child { grid-column:1/-1; }
+.chart-card { height:100%; }
+.chart-card :deep(.el-card__header) { padding:20px 24px; }
+.chart-card :deep(.el-card__body) { padding:20px 22px; }
+.dashboard-chart { width:100%; height:400px; }
+@container (max-width:1050px) {
+  .chart-row { grid-template-columns:minmax(0,1fr); }
+  .stat-row { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
 </style>

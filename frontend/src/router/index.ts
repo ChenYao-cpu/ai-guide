@@ -316,7 +316,7 @@ router.beforeEach((to, from, next) => {
   to.matched.some((item) => {
     if (!item.meta.title) return ''
 
-    const Title = '智游灵境'
+    const Title = '智游知境'
     if (Title) document.title = `${item.meta.title} | ${Title}`
     else document.title = item.meta.title as string
   })

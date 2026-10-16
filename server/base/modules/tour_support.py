@@ -4,7 +4,32 @@ The numeric check detects unseen numeric literals, not semantic entailment.
 It must never be presented as proof that every claim is factually correct.
 """
 import re
+import hashlib
 from .tour_knowledge import dossier_for
+
+
+def scenic_fact_evidence(spot, intents):
+    """Expose the exact public DB fields supplied to generation for verification.
+
+    A generated answer may use these fields even if a short FAQ fallback did
+    not quote them. Keeping snapshots avoids rejecting supported elaboration.
+    """
+    if not spot or not set(intents)&{'overview','history','architecture','highlights','photography'}:
+        return []
+    fields={'description':'景点简介'}
+    if set(intents)&{'overview','history','architecture','highlights'}:
+        fields.update(history_detail='历史详情',tour_tips='游览提醒')
+    if 'photography' in intents:fields['photo_tips']='拍照建议'
+    records=[]
+    for key,label in fields.items():
+        text=spot.get(key)
+        if not isinstance(text,str) or not text.strip():continue
+        text=text[:6000]
+        version=hashlib.sha256(text.encode()).hexdigest()[:16]
+        records.append(dict(id='db-'+key+'-'+version,document='景点数据库 · '+label,
+            spot=spot['spot_name'],topic=intents[0],excerpt=text,version=version,
+            retrieval_method='database-field-snapshot',rank=0))
+    return records
 
 CHILD_OBSERVATIONS = {
     '仁寿殿':'仁寿殿是皇帝处理政事、接见来宾的地方。可以观察院落里的建筑怎样围着中间排列。',
@@ -26,7 +51,7 @@ CHILD_OBSERVATIONS = {
 }
 
 AUDIENCE_POLICY = {
-    'standard':'普通游客：先回答核心，再补一项观察或行动建议，默认2至3句。',
+    'standard':'普通游客：介绍、历史、建筑和看点默认2至3个短段、220至420字，解释背景和可观察细节；具体数值、位置和设施问题直接回答。资料不足时宁可简短，不凑字数。',
     'child':'儿童讲解：使用小学生能懂的短句，解释生僻概念；可附一个安全的观察问题。严禁虚构人物对话、传说冒充史实或布置攀爬、触摸文物等任务。只回答所问主题，不把所有问题改成亲子介绍。',
     'deep':'深入讲解：分2至4个短段，围绕所问主题解释背景、证据和容易混淆的地方；只在证据存在时展开，不用篇幅掩盖未知。',
 }

@@ -5,6 +5,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { wgs84ToGcj02 } from '../../../../shared/coordinates.js'
+import { roadPaths } from '@/utils/routeGeometry'
 import {
   ArrowDown,
   ArrowLeft,
@@ -22,13 +23,16 @@ import {
   User,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getVisitorSpotList, getVisitorGuideList, getVisitorRouteList, getRouteRecommendation, aiChatRecommend } from '@/api/visitor'
+import { getVisitorSpotList, getVisitorGuideList, getVisitorRouteList, getRouteRecommendation, aiChatRecommend, getTourLiveInfo } from '@/api/visitor'
 import type { RouteRecommendationResult } from '@/api/visitor'
 import type { DigitalGuide } from '@/api/digitalHuman'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
 import QrFloating from '@/components/QrFloating.vue'
 import ScenicVisitContext from '@/components/ScenicVisitContext.vue'
 import VisitorAtmosphere from '@/components/VisitorAtmosphere.vue'
+import RouteOverview from '@/components/RouteOverview.vue'
+import { getRouteOverview, type RouteOverviewData } from '@/api/tourExperience'
+import { loadScenicMap } from '@/utils/leaflet'
 
 const router = useRouter()
 const mapDiv = ref<HTMLDivElement | null>(null)
@@ -38,21 +42,16 @@ let mapHasFittedSpots = false
 let mapResizeObserver: ResizeObserver | null = null
 let scenicBounds: any = null
 let mapIsOverview = true
+let routeLineLayer:any = null
+const mapLoadError=ref(false), routePreview=ref<RouteOverviewData|null>(null)
+const routePreviewLoading=ref(false),routePreviewError=ref(false)
+let previewVersion=0,previewController:AbortController|undefined
 
 // 高德瓦片（无需 API Key，国内可用）
 const AMAP_TILE = 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
 
 function loadLeaflet(): Promise<any> {
-  return new Promise((resolve) => {
-    if ((window as any).L) { resolve((window as any).L); return }
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-    document.head.appendChild(link)
-    const script = document.createElement('script')
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-    script.onload = () => resolve((window as any).L)
-    document.head.appendChild(script)
-  })
+  return loadScenicMap()
 }
 
 function initLeafletMap() {
@@ -70,7 +69,9 @@ function initLeafletMap() {
     })
     L.tileLayer(AMAP_TILE, { maxZoom: 18 }).addTo(leafletMap)
     leafletMap.on('zoomstart dragstart', () => { mapIsOverview = false })
+    mapLoadError.value=false
     refreshMapMarkers(L)
+    drawSelectedRoute(L)
     if (typeof ResizeObserver !== 'undefined') {
       mapResizeObserver = new ResizeObserver(() => {
         if (!leafletMap) return
@@ -80,7 +81,27 @@ function initLeafletMap() {
       mapResizeObserver.observe(mapDiv.value)
     }
     setTimeout(() => { if (leafletMap) leafletMap.invalidateSize() }, 300)
-  })
+  }).catch(()=>{mapLoadError.value=true})
+}
+
+function drawSelectedRoute(L=(window as any).L) {
+ if(!L||!leafletMap)return
+ if(routeLineLayer)leafletMap.removeLayer(routeLineLayer)
+ routeLineLayer=null
+ const paths=roadPaths(routePreview.value)
+ if(paths.length)routeLineLayer=L.polyline(paths,{color:'#7758ca',weight:5,opacity:.9,lineCap:'round',lineJoin:'round'}).addTo(leafletMap)
+ refreshMapMarkers(L)
+}
+async function refreshRoutePreview(){
+ const own=++previewVersion;previewController?.abort();routePreviewError.value=false
+ const ids=[...selectedSpotIds.value]
+ routePreview.value=null;drawSelectedRoute()
+ if(!ids.length){routePreview.value=null;routePreviewLoading.value=false;drawSelectedRoute();return}
+ previewController=new AbortController();routePreviewLoading.value=true
+ const plan=activeMenuTab.value==='personal'?preferenceRecommendation.value:null
+ try{const response=await getRouteOverview(ids,plan?.pace||walkingPace.value,previewController.signal,plan?{start_area:plan.start_area,end_area:plan.end_area,avoid_steps:plan.avoid_steps,reserve:plan.queue_reserve_minutes}:undefined);if(own!==previewVersion)return;if(!response.data.success)throw new Error();routePreview.value=response.data.data;drawSelectedRoute()}
+ catch(e:any){if(own===previewVersion&&e.code!=='ERR_CANCELED'){routePreview.value=null;routePreviewError.value=true;drawSelectedRoute()}}
+ finally{if(own===previewVersion)routePreviewLoading.value=false}
 }
 
 function refreshMapMarkers(L?: any) {
@@ -98,7 +119,7 @@ function refreshMapMarkers(L?: any) {
     const size = isSelected ? 28 : 22
     const icon = Lref.divIcon({
       className: 'spot-marker',
-      html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><div style="box-sizing:border-box;width:${size}px;height:${size}px;border-radius:50%;background:${isSelected ? '#3b5bff' : '#151925'};border:2px solid #fff;box-shadow:0 4px 12px rgba(18,25,46,.26);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;transition:background .2s,box-shadow .2s">${i + 1}</div></div>`,
+      html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><div style="box-sizing:border-box;width:${size}px;height:${size}px;border-radius:50%;background:${isSelected ? '#7356c5' : '#151925'};border:2px solid #fff;box-shadow:0 4px 12px rgba(18,25,46,.26);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;transition:background .2s,box-shadow .2s">${isSelected ? [...selectedSpotIds.value].indexOf(s.spot_id)+1 : i + 1}</div></div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14],
     })
@@ -156,6 +177,18 @@ function focusMapSpot(id: number) {
 
 type PlanningMode = 'route' | 'personal'
 const activeMenuTab = ref<PlanningMode>('route')
+const personalMapOpen=ref(false)
+const recoveryTour=ref<{id:number;spot:string;at:number}|null>(null),resuming=ref(false)
+try{const saved=JSON.parse(sessionStorage.getItem('zhiyou-active-tour')||'null');if(saved&&Number.isSafeInteger(saved.id)&&Date.now()-saved.at<86400000&&sessionStorage.getItem('xingyun-tour-'+saved.id))recoveryTour.value=saved}catch{/* No valid local tour. */}
+async function resumeTour(){
+ if(!recoveryTour.value||resuming.value)return
+ resuming.value=true
+ try{const id=recoveryTour.value.id;const response=await getTourLiveInfo(id)
+ if(!response.data.success||response.data.data?.live_status===2){dismissRecovery();ElMessage.info(t('本次导览已结束，请返回重新规划'));return}
+ const failure=await router.push({path:props.tourPathPrefix+id});if(failure)throw failure
+ }catch{ElMessage.error(t('暂时无法恢复导览，请重试'))}finally{resuming.value=false}
+}
+function dismissRecovery(){recoveryTour.value=null;sessionStorage.removeItem('zhiyou-active-tour')}
 // 两种规划方式各自保留行程与数字人，切换模块不修改另一份行程。
 const drafts = reactive<Record<PlanningMode, {
   guide: DigitalGuide | null
@@ -203,6 +236,8 @@ const selectedGuide = computed(() => activeDraft.value.guide)
 const selectedSpotIds = computed({ get: () => activeDraft.value.spotIds, set: value => { activeDraft.value.spotIds = value } })
 const loading = ref(false)
 const starting = ref(false)
+const startError = ref('')
+let pendingTour: { key: string; sessionId: number; avatarToken?: string } | null = null
 const guideList = ref<DigitalGuide[]>([])
 const guideChoicePoster = computed(() => {
   const guide = selectedGuide.value || guideList.value[0]
@@ -226,17 +261,6 @@ const categoryFilter = ref('all')
 const showSelectedOnly = ref(false)
 const detailVisible = ref(false)
 const activeSpot = ref<any>(null)
-
-const getSpotTags = (spot: any) => String(spot?.tags || '')
-  .split(/[;；,，]/)
-  .map((tag) => tag.trim())
-  .filter(Boolean)
-  .slice(0, 6)
-
-const formatCoordinate = (value: unknown) => {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue.toFixed(5) : '--'
-}
 
 const props = withDefaults(defineProps<{ tourPathPrefix?: string }>(), { tourPathPrefix: '/visitor/' })
 const selectedPreferences = ref<string[]>([])
@@ -300,7 +324,7 @@ const selectedSpots = computed(() => [...selectedSpotIds.value].map(id => spotLi
 const selectedSpotNames = computed(() => selectedSpots.value.map(spot => spot.spot_name))
 const selectedDuration = computed(() => {
   const estimate = activeMenuTab.value === 'route'
-    ? routeList.value.find(route => route.route_id === selectedRouteId.value)?.estimated_time_minutes
+    ? routePreview.value?.total_minutes ?? routeList.value.find(route => route.route_id === selectedRouteId.value)?.estimated_time_minutes
     : preferenceRecommendation.value?.estimated_time_minutes
   return Number(estimate) || selectedSpots.value.reduce((sum, spot) => sum + (Number(spot.visit_duration) || 20), 0)
 })
@@ -356,7 +380,6 @@ const generatePreferenceRoute = async () => {
   }
   preferenceRecommendationLoading.value = true
   try {
-    const signature = plannerSignature.value
     const response = await getRouteRecommendation([...selectedPreferences.value], { ...planningOptions.value })
     const body = response.data
     if (body.code !== 0 || !body.data?.spot_ids?.length) {
@@ -364,7 +387,8 @@ const generatePreferenceRoute = async () => {
       return
     }
     preferenceRecommendation.value = body.data
-    generatedSignature.value = signature
+    if (body.data.pace) walkingPace.value = body.data.pace
+    generatedSignature.value = plannerSignature.value
     drafts.personal.spotIds = new Set(body.data.spot_ids)
     ElMessage.success(t("已生成 {p0} 个景点的个性化路线", {p0: body.data.spot_count}))
   } catch {
@@ -465,6 +489,8 @@ const selectGuideModel = (model: { guideId: number }) => {
 }
 
 const startTour = async () => {
+  if (starting.value) return
+  startError.value = ''
   if (activeMenuTab.value === 'personal' && planNeedsRefresh.value) {
     ElMessage.warning(t("条件已修改，请重新生成路线"))
     return
@@ -483,23 +509,35 @@ const startTour = async () => {
     route_id: String(selectedRouteId.value || 0),
     visitor_preferences: activeMenuTab.value === 'personal' ? selectedPreferences.value.join(',') : '',
     spot_ids: JSON.stringify([...selectedSpotIds.value]),
-    ...(activeMenuTab.value === 'personal' ? {planning: JSON.stringify(planningOptions.value)} : {}),
+    ...(activeMenuTab.value === 'personal' ? {planning: JSON.stringify({...planningOptions.value, avoid_steps:preferenceRecommendation.value?.avoid_steps})} : {}),
   })
 
+  let navigating = false
   try {
-    const response = await fetch(`/tour-session/visitor-create?${params.toString()}`, { method: 'POST' })
-    const json = await response.json()
-    const sid = json?.data?.session_id
-    if (sid) {
-      if (json.data.avatar_access_token) sessionStorage.setItem('xingyun-tour-' + sid, json.data.avatar_access_token)
-      // 模型、姓名、声音均以服务端会话中的 guide_id 为准，防止前后端配置不一致。
-      router.push({ path: `${props.tourPathPrefix}${sid}` })
-    } else {
-      ElMessage.error(t("创建会话失败: ") + (json?.message || t("未知错误")))
+    const key = params.toString()
+    if (!pendingTour || pendingTour.key !== key) {
+      const response = await fetch(`/tour-session/visitor-create?${key}`, { method: 'POST' })
+      const json = await response.json()
+      const sid = Number(json?.data?.session_id)
+      if (response.ok === false || json?.success === false || !Number.isSafeInteger(sid) || sid <= 0) {
+        startError.value = t("创建会话失败: ") + (json?.message || t("未知错误"))
+        ElMessage.error(startError.value)
+        return
+      }
+      pendingTour = { key, sessionId: sid, avatarToken: json.data.avatar_access_token }
     }
+    const { sessionId: sid, avatarToken } = pendingTour
+    if (avatarToken) sessionStorage.setItem('xingyun-tour-' + sid, avatarToken)
+    try{sessionStorage.setItem('zhiyou-active-tour',JSON.stringify({id:sid,spot:'',at:Date.now()}))}catch{/* Optional recovery shortcut. */}
+    // Keep the loading state until the lazy-loaded tour page actually opens.
+    // If navigation fails, retry the existing session rather than creating another.
+    navigating = true
+    const failure = await router.push({ path: `${props.tourPathPrefix}${sid}` })
+    if (failure) throw failure
   } catch (e: any) {
-    console.error('[VisitorHome] 创建异常:', e)
-    ElMessage.error(t("网络异常，请重试"))
+    console.error('[VisitorHome] 导览启动异常:', e)
+    startError.value = t(navigating ? '导览页面打开失败，请再次点击开始导览' : '网络异常，请重试')
+    ElMessage.error(startError.value)
   } finally {
     starting.value = false
   }
@@ -508,6 +546,7 @@ const startTour = async () => {
 const goBack = () => router.push('/login')
 onMounted(() => { fetchData() })
 onBeforeUnmount(() => {
+  previewVersion++;previewController?.abort()
   mapResizeObserver?.disconnect()
   leafletMap?.remove()
   leafletMap = null
@@ -516,6 +555,7 @@ onBeforeUnmount(() => {
 // 选中变化时刷新地图标记
 watch(locale, () => { for (const marker of leafletMarkers) marker.remove(); leafletMarkers = []; nextTick(() => refreshMapMarkers()) })
 watch(selectedSpotIds, () => { nextTick(() => refreshMapMarkers()) }, { deep: true })
+watch(()=>[[...selectedSpotIds.value],walkingPace.value,preferenceRecommendation.value,activeMenuTab.value],refreshRoutePreview,{deep:true})
 // 切到游览路线 tab 时刷新地图尺寸
 watch(activeMenuTab, (tab) => {
   if (tab === 'route') {
@@ -526,6 +566,10 @@ watch(activeMenuTab, (tab) => {
   }
 })
 </script>
+
+<style scoped>
+.tour-recovery-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 20px;margin:0 0 18px;border-radius:16px;background:#f0edf9;color:#514275;font-size:15px}.tour-recovery-bar>div{display:flex;gap:8px}.tour-recovery-bar strong{font-weight:400}.route-order-note{font-size:13px;line-height:1.6;color:var(--text-secondary);margin:10px 0 0}.selected-route-overview{border-top:1px solid #ece8f5;margin-top:12px;padding-top:4px}
+</style>
 
 <template>
   <main class="visitor-home">
@@ -570,6 +614,7 @@ watch(activeMenuTab, (tab) => {
 
     </div>
 
+    <aside v-if="recoveryTour" class="tour-recovery-bar"><span>{{ $t('上次导览') }}<strong v-if="recoveryTour.spot"> · {{ $t(recoveryTour.spot) }}</strong></span><div><el-button :loading="resuming" @click="resumeTour">{{ $t('继续导览') }}</el-button><el-button text @click="dismissRecovery">{{ $t('忽略') }}</el-button></div></aside>
     <!-- 两种独立的行程规划方式 -->
     <div v-loading="loading" class="visitor-main">
       <!-- 中间内容区 -->
@@ -581,6 +626,13 @@ watch(activeMenuTab, (tab) => {
           <div class="content-card map-card">
             <div class="map-card-heading"><h3>{{ $t("景区地图") }}</h3><div class="map-heading-actions"><span>{{ $t("点击标记选择景点") }}</span><button type="button" class="map-overview-button" @click="showMapOverview">{{ $t("景区全景") }}</button></div></div>
             <div class="map-container" ref="mapDiv"></div>
+            <p v-if="mapLoadError" role="alert">{{ $t('地图暂时无法加载') }} <button type="button" @click="initLeafletMap">{{ $t('重试') }}</button></p>
+            <div v-if="spotCount" class="selected-route-overview">
+              <p v-if="routePreviewLoading" role="status">{{ $t('正在计算路线详情…') }}</p>
+              <p v-else-if="routePreviewError" role="alert">{{ $t('路线详情暂时无法加载') }} <button type="button" @click="refreshRoutePreview">{{ $t('重试') }}</button></p>
+              <RouteOverview v-else :overview="routePreview" :show-map="false" compact />
+              <p class="route-order-note">{{ $t('紫色线沿园内步道连接，数字表示游览顺序。') }}</p>
+            </div>
             <div class="map-spots" v-if="spotList.length">
               <button v-for="(spot, index) in spotList.slice(0, 6)" :key="spot.spot_id" type="button" class="map-spot-tag" @click="focusMapSpot(spot.spot_id)">{{ $t(index + 1) }} {{ $t(spot.spot_name) }}</button>
               <select v-if="spotList.length > 6" class="map-locate-select" :aria-label='$t("定位更多景点")' @change="focusMapSpot(Number(($event.target as HTMLSelectElement).value))">
@@ -632,8 +684,7 @@ watch(activeMenuTab, (tab) => {
                   <span class="spot-choice-check" aria-hidden="true"><el-icon v-if="selectedSpotIds.has(spot.spot_id)"><Check /></el-icon></span>
                   <img v-if="spot.image_path" :src="spot.image_path" alt="" class="spot-option-photo" loading="lazy" />
                   <span class="spot-choice-copy">
-                    <span class="spot-choice-title"><strong>{{ $t(spot.spot_name) }}</strong><em>{{ $t(getCategoryLabel(spot.category || '其他')) }}</em></span>
-                    <span class="spot-choice-description">{{ $t(spot.description || spot.location || '景区特色景点') }}</span>
+                    <span class="spot-choice-title"><strong>{{ $t(spot.spot_name) }}</strong></span>
                   </span>
                 </button>
                 <button class="spot-option-detail" type="button" :aria-label="$t('{p0}详情', {p0: spot.spot_name})" @click="openSpotDetail(spot)">{{ $t("详情") }}<el-icon><ArrowRight /></el-icon></button>
@@ -644,6 +695,7 @@ watch(activeMenuTab, (tab) => {
 
         <!-- 个性化选择 TAB -->
         <div v-show="activeMenuTab === 'personal'" class="tab-content">
+          <section v-if="routePreview" class="content-card"><button type="button" class="map-overview-button" :aria-expanded="personalMapOpen" @click="personalMapOpen=!personalMapOpen">{{ $t(personalMapOpen?'收起路线地图':'查看路线地图') }}</button><RouteOverview v-if="personalMapOpen" :overview="routePreview" compact /></section>
           <!-- 游览偏好 -->
           <div class="content-card">
             <div class="spot-section-heading"><h3>{{ $t("游览偏好") }}</h3><span class="spot-selection-count">{{ $t(spotList.length) }} {{ $t("个景点可规划") }}</span></div>
@@ -759,6 +811,7 @@ watch(activeMenuTab, (tab) => {
           <el-input v-model="visitorName" :placeholder='$t("输入昵称（选填）")' :aria-label='$t("导览昵称")' maxlength="12" />
           <el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">{{ $t("开始导览") }}</el-button>
         </div>
+        <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
       </aside>
     </div>
 
@@ -779,7 +832,7 @@ watch(activeMenuTab, (tab) => {
       <p v-if="!guideList.length" class="planning-empty">{{ $t("暂无可用数字人") }}</p>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" size="520px" :with-header="false" class="spot-detail-drawer">
+    <el-drawer v-model="detailVisible" size="min(640px, 100vw)" :with-header="false" class="spot-detail-drawer">
       <div v-if="activeSpot" class="spot-detail">
         <header class="spot-detail-hero">
           <button class="spot-detail-close" type="button" :aria-label='$t("关闭景点详情")' @click="detailVisible = false">
@@ -788,14 +841,10 @@ watch(activeMenuTab, (tab) => {
           <span class="spot-category">{{ $t(getCategoryLabel(activeSpot.category || '其他')) }}</span>
           <h2>{{ $t(activeSpot.spot_name) }}</h2>
           <p>{{ $t(activeSpot.description || '暂无景点简介。') }}</p>
-          <div v-if="getSpotTags(activeSpot).length" class="spot-tag-list">
-            <span v-for="tag in getSpotTags(activeSpot)" :key="tag">{{ $t(tag) }}</span>
-          </div>
         </header>
 
         <section class="spot-detail-metrics">
           <div><small>{{ $t("建议游览") }}</small><strong>{{ $t(activeSpot.visit_duration || 20) }} {{ $t("分钟") }}</strong></div>
-          <div><small>{{ $t("最佳季节") }}</small><strong>{{ $t(activeSpot.best_season || '四季皆宜') }}</strong></div>
           <div><small>{{ $t("自动播报") }}</small><strong>{{ $t(Math.round(activeSpot.trigger_radius || 50)) }} {{ $t("米内") }}</strong></div>
         </section>
 
@@ -804,9 +853,6 @@ watch(activeMenuTab, (tab) => {
           <div>
             <small>{{ $t("景点位置") }}</small>
             <strong>{{ $t(activeSpot.location || '颐和园景区内') }}</strong>
-            <span v-if="activeSpot.latitude && activeSpot.longitude">
-              {{ $t(formatCoordinate(activeSpot.latitude)) }}, {{ $t(formatCoordinate(activeSpot.longitude)) }}
-            </span>
           </div>
         </section>
 
@@ -816,6 +862,10 @@ watch(activeMenuTab, (tab) => {
         </section>
 
         <div class="spot-guide-grid">
+          <article v-if="activeSpot.best_season">
+            <div class="spot-section-title"><el-icon><Compass /></el-icon><strong>{{ $t("最佳季节") }}</strong></div>
+            <p>{{ $t(activeSpot.best_season) }}</p>
+          </article>
           <article v-if="activeSpot.photo_tips">
             <div class="spot-section-title"><el-icon><Camera /></el-icon><strong>{{ $t("推荐取景") }}</strong></div>
             <p>{{ $t(activeSpot.photo_tips) }}</p>
@@ -831,7 +881,6 @@ watch(activeMenuTab, (tab) => {
         </div>
 
         <footer class="spot-detail-footer">
-          <div><strong>{{ $t("AI 数字导游已就绪") }}</strong><span>{{ $t("加入路线后，可获得位置触发讲解与知识问答服务") }}</span></div>
           <el-button type="primary" size="large" @click="toggleSpot(activeSpot.spot_id)">
             {{ $t(selectedSpotIds.has(activeSpot.spot_id) ? '移出路线' : '加入路线') }}
           </el-button>
@@ -1190,15 +1239,15 @@ watch(activeMenuTab, (tab) => {
   color: var(--text);
   background: var(--glass);
   h2 { margin: 12px 0 10px; font-size: 30px; font-weight: 800; letter-spacing: -.04em; }
-  > p { max-width: 430px; margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.85; }
+  > p { margin: 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; overflow-wrap: anywhere; }
 }
 .spot-detail-close {
   position: absolute;
   top: 20px;
   right: 20px;
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border: 1px solid var(--glass-line);
   border-radius: 10px;
@@ -1215,21 +1264,14 @@ watch(activeMenuTab, (tab) => {
   border-radius: 999px;
   color: var(--text-muted);
   background: rgba(99,102,241,0.09);
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
-}
-.spot-tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 18px;
-  span { padding: 4px 8px; border-radius: 6px; color: var(--text-muted); background: var(--glass); font-size: 10px; font-weight: 700; }
 }
 .spot-detail-metrics {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   margin: -18px 24px 18px;
   overflow: hidden;
@@ -1238,8 +1280,8 @@ watch(activeMenuTab, (tab) => {
   background: var(--glass);
   box-shadow: var(--glass-shadow);
   div { min-width: 0; padding: 15px 12px; background: var(--glass); text-align: center; }
-  small { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 10px; }
-  strong { display: block; overflow: hidden; color: var(--text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  small { display: block; margin-bottom: 7px; color: var(--text-secondary); font-size: 15px; }
+  strong { display: block; color: var(--text); font-size: 18px; line-height: 1.6; font-weight: 500; overflow-wrap: anywhere; }
 }
 .spot-location-card,
 .spot-story-card,
@@ -1255,9 +1297,8 @@ watch(activeMenuTab, (tab) => {
   background: var(--glass);
   .el-icon { display: grid; width: 38px; height: 38px; flex-shrink: 0; place-items: center; border-radius: 10px; color: var(--champagne-text); background: var(--glass); font-size: 18px; }
   div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-  small { color: var(--text-muted); font-size: 10px; }
-  strong { color: var(--text); font-size: 13px; }
-  span { color: var(--text-muted); font-size: 10px; letter-spacing: .04em; }
+  small { color: var(--text-secondary); font-size: 15px; }
+  strong { color: var(--text); font-size: 17px; line-height: 1.7; font-weight: 500; overflow-wrap: anywhere; }
 }
 .spot-story-card {
   margin-top: 14px;
@@ -1265,41 +1306,38 @@ watch(activeMenuTab, (tab) => {
   border: 1px solid var(--glass-line);
   border-radius: 12px;
   background: var(--glass);
-  > p { margin: 11px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.85; }
+  > p { margin: 14px 0 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; white-space: pre-line; overflow-wrap: anywhere; }
 }
 .spot-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--text);
-  .el-icon { color: var(--champagne-text); font-size: 16px; }
-  strong { font-size: 13px; font-weight: 800; }
+  .el-icon { color: var(--champagne-text); font-size: 20px; }
+  strong { font-size: 20px; font-weight: 600; }
 }
 .spot-guide-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 12px;
   article { padding: 17px; border: 1px solid var(--glass-line); border-radius: 12px; background: var(--glass); }
   article.wide { grid-column: 1 / -1; }
-  p { margin: 10px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.75; }
+  p { margin: 14px 0 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; white-space: pre-line; overflow-wrap: anywhere; }
 }
 .spot-detail-footer {
   position: sticky;
   bottom: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin-top: 18px;
   padding: 16px 0 20px;
   border-top: 1px solid var(--glass-line);
   background: var(--glass);
   backdrop-filter: none;
-  div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-  strong { color: var(--text); font-size: 12px; }
-  span { color: var(--text-muted); font-size: 10px; line-height: 1.45; }
-  .el-button { flex-shrink: 0; min-width: 108px; border-color: var(--glass-line); border-radius: 10px; background: var(--glass); box-shadow: var(--glass-shadow); }
+  .el-button { flex-shrink: 0; min-width: 132px; min-height: 46px; font-size: 17px; border-color: var(--glass-line); border-radius: 10px; background: var(--glass); box-shadow: var(--glass-shadow); }
 }
 
 @media (max-width: 1100px) {
@@ -1780,35 +1818,34 @@ watch(activeMenuTab, (tab) => {
 /* A continuous selection grid avoids empty columns after every category. */
 .spot-card-section { padding: 20px 22px; container-type: inline-size; }
 .spot-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.spot-section-heading h3 { margin: 0; color: var(--text); font-size: 18px; font-weight: 600; }
-.spot-selection-count { color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+.spot-section-heading h3 { margin: 0; color: var(--text); font-size: 22px; font-weight: 600; }
+.spot-selection-count { color: var(--text-secondary); font-size: 16px; white-space: nowrap; }
 .spot-selection-count strong { color: var(--champagne-text); font-size: 20px; font-weight: 600; }
 .spot-selection-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .spot-selection-tools .el-input { flex: 1 1 240px; max-width: 400px; }
-.spot-selection-tools .el-button { margin: 0; min-height: 36px; font-size: 13px; }
+.spot-selection-tools .el-button { margin: 0; min-height: 40px; font-size: 16px; }
+.spot-selection-tools :deep(.el-input__inner) { font-size: 16px; }
 .spot-category-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 0; border-bottom: 1px solid rgba(99,102,241,0.08); }
-.spot-category-filters button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 5px 12px; border: 0; border-radius: 8px; color: var(--text-secondary); background: transparent; font-size: 14px; font-weight: 400; cursor: pointer; transition: background .18s, color .18s; }
-.spot-category-filters button span { font-size: 12px; color: var(--text-muted); }
+.spot-category-filters button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 14px; border: 0; border-radius: 10px; color: var(--text-secondary); background: transparent; font-size: 18px; font-weight: 400; cursor: pointer; transition: background .18s, color .18s; }
+.spot-category-filters button span { font-size: 16px; color: var(--text-secondary); }
 .spot-category-filters button:hover { color: var(--text); background: rgba(99,102,241,0.04); }
 .spot-category-filters button.active { color: var(--champagne-text); background: rgba(99,102,241,0.1); }
 .spot-category-filters button.active span { color: var(--champagne-text); }
-.spot-selection-summary { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; color: var(--text-secondary); font-size: 13px; }
+.spot-selection-summary { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; color: var(--text-secondary); font-size: 16px; }
 .spot-selection-summary > span { color: var(--champagne-text); white-space: nowrap; }
 .spot-selection-summary p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
 .spot-options-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 22px; margin-top: 6px; }
-.spot-option { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 102px; padding: 14px 10px; border: 1px solid transparent; border-bottom-color: rgba(99,102,241,0.08); border-radius: 0; background: transparent; transition: background .18s, border-color .18s; }
+.spot-option { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 80px; padding: 14px 10px; border: 1px solid transparent; border-bottom-color: rgba(99,102,241,0.08); border-radius: 0; background: transparent; transition: background .18s, border-color .18s; }
 .spot-option:hover { background: rgba(99,102,241,0.035); }
 .spot-option.selected { background: rgba(99,102,241,0.06); border-bottom-color: rgba(99,102,241,0.25); }
 .spot-choice { display: flex; align-items: center; flex: 1; min-width: 0; gap: 12px; padding: 0; border: 0; text-align: left; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
-.spot-choice-check { display: grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; border: 1px solid rgba(99,102,241,0.12); border-radius: 6px; color: var(--champagne-text); background: rgba(99,102,241,0.03); }
+.spot-choice-check { display: grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px; border: 1px solid rgba(99,102,241,0.18); border-radius: 6px; color: var(--champagne-text); background: rgba(99,102,241,0.03); }
 .spot-option.selected .spot-choice-check { border-color: rgba(99,102,241,0.25); background: rgba(99,102,241,0.16); }
 .spot-option-photo { flex: 0 0 64px; width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
 .spot-choice-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 6px; }
 .spot-choice-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; }
-.spot-choice-title strong { color: var(--text); font-size: 16px; line-height: 1.5; font-weight: 600; }
-.spot-choice-title em { color: var(--text-muted); font-size: 12px; line-height: 1.5; font-style: normal; font-weight: 400; }
-.spot-choice-description { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text-secondary); font-size: 13px; line-height: 1.6; font-weight: 400; }
-.spot-option-detail { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 3px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--champagne-text); font-size: 13px; font-weight: 400; cursor: pointer; }
+.spot-choice-title strong { color: var(--text); font-size: 20px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
+.spot-option-detail { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 4px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--champagne-text); font-size: 16px; font-weight: 400; cursor: pointer; }
 .spot-option-detail:hover { background: rgba(99,102,241,0.08); }
 @container (min-width: 1100px) { .spot-options-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
 @container (max-width: 620px) {
@@ -2046,7 +2083,6 @@ watch(activeMenuTab, (tab) => {
 }
 .spot-options-grid { column-gap: 24px; }
 .spot-option { border-bottom-color: rgba(123, 139, 161, .1); }
-.spot-choice-title em { color: #778397; }
 .visitor-home .start-panel {
   background: linear-gradient(110deg, #f1effa, #f0f6f5);
   border: 1px solid rgba(123, 136, 161, .08);
@@ -2155,6 +2191,7 @@ watch(activeMenuTab, (tab) => {
 .guide-select-button .el-icon { margin-left: 8px; transition: transform .25s ease; }
 .guide-select-button:hover .el-icon { transform: translateX(3px); }
 .has-guide .guide-choice-aura { animation: none; opacity: .18; }
+.start-error { grid-column: 1 / -1; margin: 12px 0 0; color: #b42336; font-size: 15px; line-height: 1.5; }
 @keyframes guide-choice-breathe {
   0%, 100% { opacity: .18; transform: scale(.98); }
   50% { opacity: .52; transform: scale(1.04); }

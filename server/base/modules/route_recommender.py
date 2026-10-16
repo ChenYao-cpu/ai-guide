@@ -47,16 +47,17 @@ def _features(spot):
     reasons={p:f"已配置分类与标签：{tags or category}" for p,v in affinities.items() if v>=3}
     return {'affinities':affinities,'stairs':any(k in tags for k in ('登山','台阶','爬山')),'reasons':reasons}
 
-def _distance(a,b):
+def _distance(a,b,avoid_steps=False):
     if get_spot_profile(a) and get_spot_profile(b):
-        return WALKS['distances_meters'][_get_value(a,'spot_name')][_get_value(b,'spot_name')]
+        from .walking_network import distance_between
+        return distance_between(a,b,avoid_steps)
     return _haversine_meters(a,b)*1.5
 
 async def recommend_route(preferences,spot_list,time_budget_minutes=None,city='',pace='standard',start_area='auto',
                           end_area='auto', queue_reserve_minutes=0, excluded_spot_ids=None):
     preferences=normalize_preferences(preferences)
     budget=max(15,min(480,int(time_budget_minutes or 120)))
-    pace='relaxed' if pace=='relaxed' else 'standard'
+    pace='relaxed' if pace=='relaxed' or 'family' in preferences else 'standard'
     groups={}
     for spot in spot_list:
         c=spot_city(spot)
@@ -65,7 +66,8 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
     if not selected_city and groups:
         # Choose a feasible city from actual data instead of blindly using the
         # largest group, which can have no matches or exceed the time budget.
-        plans=[await recommend_route(preferences,spot_list,budget,c,pace,start_area) for c in sorted(groups)]
+        plans=[await recommend_route(preferences,spot_list,budget,c,pace,start_area,
+            end_area,queue_reserve_minutes,excluded_spot_ids) for c in sorted(groups)]
         return max(plans,key=lambda p:(bool(p['spot_ids']),
             len({pref for detail in p['score_details'] for pref in detail['matched_preferences']}),
             sum(detail['score'] for detail in p['score_details']),p['spot_count']))
@@ -88,15 +90,15 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
         if not matches:continue
         score=sum(profile['affinities'][p] for p in active)/len(active)*20
         candidates.append({'spot':spot,'score':score,'profile':profile,'matched':matches})
-    speed=55 if pace=='relaxed' or 'family' in preferences else 75
+    from .walking_network import gate_distance, NETWORK
+    avoid_steps = pace=='relaxed'
+    speed=55 if pace=='relaxed' else 75
     def totals(route):
         visit=sum(int(_get_value(i['spot'],'visit_duration',20) or 20) for i in route)
-        legs=[_distance(a['spot'],b['spot']) for a,b in zip(route,route[1:])]
-        if origin and route:legs.insert(0,_distance(origin,route[0]['spot']))
-        # Exit anchors are nearby POIs, not surveyed gate coordinates. Reserve
-        # another five minutes for the final approach; expose this assumption.
-        exit_meters=_distance(route[-1]['spot'],destination) if destination and route else 0
-        exit_minutes=(math.ceil(exit_meters/speed)+5 if math.isfinite(exit_meters) else float('inf')) if destination and route else 0
+        legs=[_distance(a['spot'],b['spot'],avoid_steps) for a,b in zip(route,route[1:])]
+        if origin and route:legs.insert(0,gate_distance(route[0]['spot'],start_area,avoid_steps))
+        exit_meters=gate_distance(route[-1]['spot'],end_area,avoid_steps) if destination and route else 0
+        exit_minutes=(math.ceil(exit_meters/speed) if math.isfinite(exit_meters) else float('inf')) if destination and route else 0
         meters=sum(legs)
         walk=sum(math.ceil(leg/speed) for leg in legs) if math.isfinite(meters) else float('inf')
         rest=math.ceil((visit+walk+exit_minutes)*(0.15 if speed==55 else 0.08)) if route and math.isfinite(walk+exit_minutes) else 0
@@ -120,7 +122,7 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
     details=[]
     for index,item in enumerate(selected):
         previous=selected[index-1]['spot'] if index else origin
-        leg=round(_distance(previous,item['spot'])) if previous else 0
+        leg=(round(_distance(previous,item['spot'],avoid_steps)) if index else gate_distance(item['spot'],start_area,avoid_steps)) if previous else 0
         reasons=[item['profile']['reasons'][p] for p in item['matched'] if p in item['profile']['reasons']]
         details.append({'spot_id':_get_value(item['spot'],'spot_id'),'spot_name':_get_value(item['spot'],'spot_name'),
             'score':round(item['score'],1),'diversity_penalty':0,'components':item['profile']['affinities'],
@@ -129,17 +131,17 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
     explanation=f'从 {len(spots)} 个景点中筛出 {len(candidates)} 个兴趣匹配且适合当前节奏的候选，选入 {len(selected)} 个；停留、步行、休息、离园和预留合计 {total} / {budget} 分钟。'
     if stair_excluded: explanation+=f'避开 {stair_excluded} 个台阶较多的景点。'
     return {'city':selected_city,'name':' · '.join(LABELS[p] for p in preferences)+'路线','theme':get_primary_theme(preferences),'description':basis,
-        'preferences':preferences,'pace':pace,'start_area':start_area if origin else 'auto','start_label':f'{start_name}附近' if origin else '首个景点起步',
+        'preferences':preferences,'avoid_steps':avoid_steps,'pace':pace,'start_area':start_area if origin else 'auto','start_label':NETWORK['gates'][start_area]['label'] if origin else '首个景点起步',
         'spot_ids':[_get_value(i['spot'],'spot_id') for i in selected],'spot_names':[_get_value(i['spot'],'spot_name') for i in selected],
         'spot_count':len(selected),'candidate_count':len(candidates),'catalog_count':len(spots),'stairs_excluded_count':stair_excluded,
         'estimated_time_minutes':total,'visit_time_minutes':visit,'walking_time_minutes':walk,'rest_time_minutes':rest,'walking_distance_meters':round(meters),
         'exit_time_minutes':exit_minutes,'exit_distance_meters':round(exit_meters),'end_area':end_area if destination else 'auto',
-        'end_label':f'{end_name}附近离园' if destination else '末站结束（未计离园）','queue_reserve_minutes':queue_reserve if selected else 0,
+        'end_label':NETWORK['gates'][end_area]['label']+'离园' if destination else '末站结束（未计离园）','queue_reserve_minutes':queue_reserve if selected else 0,
         'excluded_spot_ids':sorted(excluded & {_get_value(s,'spot_id') for s in spots}),
-        'accessibility_status':'仅排除已标注多台阶景点，沿途坡度、路段和轮椅通行尚未逐段核实；不是无障碍路线认证。',
+        'accessibility_status':'避开已标注台阶路段及多台阶景点；未标注障碍和实时开放状态仍需现场确认，不是无障碍路线认证。',
         'requested_time_minutes':budget,'excluded_spot_count':len(spots)-len(selected),'algorithm_version':ALGORITHM_VERSION,
         'recommendation_explanation':explanation,'data_basis':basis,'planning_note':
-        ('离园按末站步行至所选出口附近景点，再加5分钟进出预留估算。' if destination else '未选择离园区域，预算只覆盖至末站。')
+        ('离园沿园内路网计算至所选出口，未额外虚加接近出口的固定时间。' if destination else '未选择离园区域，预算只覆盖至末站。')
         +'排队预留由游客设置，不是实时客流。步行、停留和休息均为估算，不含船渡；开放与通行以现场为准。',
         'source_urls':CATALOG['source_urls']+(['https://www.openstreetmap.org/copyright'] if all_profiles else []),'score_details':details}
 

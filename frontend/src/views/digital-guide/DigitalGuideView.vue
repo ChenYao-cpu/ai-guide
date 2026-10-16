@@ -18,6 +18,8 @@ import {
   type DigitalGuide,
 } from '@/api/digitalHuman'
 import FileUpload from '@/components/FileUpload.vue'
+import VisitorContentPreview from '@/components/VisitorContentPreview.vue'
+const previewVisible=ref(false)
 import { AxiosError } from 'axios'
 // Live2DGuide 使用动态 import 避免阻塞页面加载
 
@@ -452,12 +454,14 @@ onMounted(() => {
       </el-form>
 
       <template #footer>
+          <el-button :disabled="!form.name" @click="previewVisible=true">{{ $t('游客效果预览') }}</el-button>
         <div class="dialog-footer">
           <el-button type="primary" @click="handleSave" :loading="saving">{{ $t("保存") }}</el-button>
           <el-button @click="dialogVisible = false" :disabled="saving">{{ $t("取消") }}</el-button>
         </div>
       </template>
     </el-dialog>
+    <VisitorContentPreview v-if="previewVisible" :guide-id="form.guide_id" :guide-draft="form" @close="previewVisible=false" />
 
 
   </div>
@@ -572,7 +576,7 @@ onMounted(() => {
     border-radius: 999px;
     background: var(--glass);
     color: var(--text);
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 650;
     backdrop-filter: none;
   }
@@ -606,7 +610,7 @@ onMounted(() => {
   }
 
   strong {
-    font-size: 14px;
+    font-size: 16px;
     letter-spacing: 0.08em;
   }
 }
@@ -678,7 +682,7 @@ onMounted(() => {
 
 .guide-code {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: .14em;
 }
@@ -697,7 +701,7 @@ onMounted(() => {
     border-radius: 999px;
     background: var(--glass);
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 700;
   }
 
@@ -717,7 +721,7 @@ onMounted(() => {
   border-radius: 6px;
   background: var(--glass);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -737,7 +741,7 @@ onMounted(() => {
   p {
     margin: 5px 0 0;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 550;
   }
 }
@@ -748,7 +752,7 @@ onMounted(() => {
   border-radius: 6px;
   background: var(--glass);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.07em;
 }
@@ -766,7 +770,7 @@ onMounted(() => {
     border-radius: 6px;
     background: var(--glass);
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1;
   }
 }
@@ -775,7 +779,7 @@ onMounted(() => {
   min-height: 42px;
   margin: 12px 0 16px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.7;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -811,12 +815,12 @@ onMounted(() => {
   span {
     margin-bottom: 4px;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 14px;
   }
 
   strong {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 650;
   }
 }
@@ -887,7 +891,7 @@ onMounted(() => {
 
   :deep(.el-slider__marks-text) {
     white-space: nowrap;
-    font-size: 11px;
+    font-size: 14px;
   }
 }
 
@@ -900,7 +904,7 @@ onMounted(() => {
 .form-hint {
   display: block;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 15px;
   color: var(--text-muted);
   line-height: 1.2;
 }

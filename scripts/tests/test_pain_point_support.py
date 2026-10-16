@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +25,9 @@ class PainPointSupportTests(unittest.TestCase):
                 self.assertEqual(p['estimated_time_minutes'],sum(p[k] for k in
                     ('visit_time_minutes','walking_time_minutes','rest_time_minutes','exit_time_minutes','queue_reserve_minutes')))
                 if p['spot_ids']:
-                    self.assertGreaterEqual(p['exit_time_minutes'],5)
+                    from server.base.modules.walking_network import gate_distance
+                    last = next(s for s in SPOTS if s['spot_id']==p['spot_ids'][-1])
+                    self.assertEqual(p['exit_time_minutes'], math.ceil(gate_distance(last,end,p['pace']=='relaxed')/(55 if p['pace']=='relaxed' else 75)))
                     self.assertEqual(p['queue_reserve_minutes'],20)
                     self.assertIn('不是实时客流',p['planning_note'])
 
@@ -50,7 +53,7 @@ class PainPointSupportTests(unittest.TestCase):
         self.assertEqual(child_fallback(resolve_turn('介绍长廊',other),other,'other'),'other')
 
     def test_invalid_accessibility_options_rejected_at_api_boundary(self):
-        for options in ({'speech_rate':2},{'explanation_mode':'anything'},{'language':'anything'}):
+        for options in ({'explanation_mode':'anything'},{'language':'anything'}):
             with self.assertRaises(ValueError):TourChatItem(sessionId=1,**options)
 
     def test_hybrid_evidence_is_scoped_versioned_and_reproducible(self):
@@ -71,6 +74,9 @@ class KnowledgeReviewTests(unittest.TestCase):
     def setUp(self):
         self.engine=create_engine('sqlite://')
         SQLModel.metadata.create_all(self.engine)
+        # The retriever also reads scenic records; keep that read inside this test database.
+        self.db_patch=patch('server.base.database.init_db.DB_ENGINE',self.engine)
+        self.db_patch.start()
         self.tmp=tempfile.TemporaryDirectory()
         self.root=Path(self.tmp.name)
         self.file=self.root/'new.md'
@@ -85,7 +91,7 @@ class KnowledgeReviewTests(unittest.TestCase):
         self.index_patch.start()
 
     def tearDown(self):
-        self.index_patch.stop();self.root_patch.stop();self.engine.dispose();self.tmp.cleanup()
+        self.index_patch.stop();self.root_patch.stop();self.db_patch.stop();self.engine.dispose();self.tmp.cleanup()
 
     def review(self,decision='publish',user=1,digest=None):
         return asyncio.run(knowledge_review.review_document(self.engine,1,user,decision,'核对原文来源',digest or self.digest))
