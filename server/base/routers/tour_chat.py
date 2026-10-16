@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException, Request
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -266,7 +266,7 @@ async def begin_tour(sessionId: int):
 @router.get("/spots", summary="获取景点列表（游客公开接口）")
 async def get_visitor_spots():
     """游客端获取所有可用景点（免登录）"""
-    from ..modules.route_city import spot_city
+    from ..modules.route_city import spot_city, is_summer_palace_spot
     from ..modules.route_recommender import get_spot_profile
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
@@ -281,6 +281,7 @@ async def get_visitor_spots():
         covers={}
         for link, route in session.exec(select(TourRouteSpot,TourRoute).join(TourRoute,TourRouteSpot.route_id==TourRoute.route_id).where(TourRoute.delete==False).order_by(TourRoute.route_id)).all():
             if route.cover_image:covers.setdefault(link.spot_id,API_CONFIG.REQUEST_FILES_URL+'/'+route.cover_image)
+    spots.sort(key=lambda s: (not is_summer_palace_spot(s), s.spot_id))
     spot_list = []
     for s in (spots or []):
         spot_list.append({
@@ -398,9 +399,10 @@ async def get_visitor_routes():
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import TourRoute, TourRouteSpot, ScenicSpotInfo
-    from ..modules.route_city import route_city
+    from ..modules.route_city import route_city, is_summer_palace_spot
 
     route_list = []
+    summer_palace_route_ids = set()
     with Session(DB_ENGINE) as session:
         routes = session.exec(
             select(TourRoute).where(and_(TourRoute.delete == False))
@@ -430,6 +432,8 @@ async def get_visitor_routes():
                 logger.warning(f'Route {r.route_id} has unconfigured or mixed cities; excluded from visitor routes')
                 continue
 
+            if all(is_summer_palace_spot(spot) for spot in route_members):
+                summer_palace_route_ids.add(r.route_id)
             route_list.append({
                 "route_id": r.route_id,
                 "city": city,
@@ -444,6 +448,7 @@ async def get_visitor_routes():
                 "spot_count": len(spot_ids),
             })
 
+    route_list.sort(key=lambda r: (r['route_id'] not in summer_palace_route_ids, r['route_id']))
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"route_list": route_list, "total": len(route_list)})
 
 

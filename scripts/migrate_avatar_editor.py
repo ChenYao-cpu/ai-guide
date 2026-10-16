@@ -29,9 +29,3 @@ source = source.replace('选择 VRM 模型', '选择 Live2D 卡通模型')
 source = source.replace('将 .vrm 模型文件放入 public/models/ 目录，即可在此选择。\n            模型列表会根据所选声线自动筛选，避免男性模型使用女声或女性模型使用男声。', '模型清单由后端读取本地文件。真人形象请在导游卡片中上传基础视频。')
 source = source.replace("{{ modelGender(item.live2d_model_path) === 'male' ? '男性模型' : '女性模型' }}", "{{ item.live2d_model_path.endsWith('.vrm') ? '旧模型 · 待迁移' : 'Live2D 配置' }}")
 path.write_text(source, encoding='utf-8')
-
-for page in (path.parents[4] / 'miniprogram/pages').rglob('*.vue'):
-    contents = page.read_text(encoding='utf-8')
-    updated = contents.replace('rgba(248,241,229,0.92)', '#f6f7fa').replace('rgba(248, 241, 229, 0.92)', '#f6f7fa')
-    if updated != contents:
-        page.write_text(updated, encoding='utf-8')

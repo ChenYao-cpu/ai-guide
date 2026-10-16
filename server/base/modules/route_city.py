@@ -1,5 +1,22 @@
 """City constraints grounded in saved city fields or explicit street addresses."""
 import re
+import json
+from functools import lru_cache
+from pathlib import Path
+
+
+@lru_cache(maxsize=1)
+def summer_palace_names():
+    source = Path(__file__).resolve().parents[3] / 'data/summer_palace_locations.json'
+    return set(json.loads(source.read_text(encoding='utf-8'))['spots'])
+
+
+def is_summer_palace_spot(spot):
+    """Recognize the park from the saved catalog, without changing record IDs."""
+    def value(key):
+        return spot.get(key, '') if isinstance(spot, dict) else getattr(spot, key, '')
+    return value('spot_name') in summer_palace_names() or any(
+        '颐和园' in str(value(key) or '') for key in ('location', 'description', 'tags'))
 
 
 def normalize_city(city):

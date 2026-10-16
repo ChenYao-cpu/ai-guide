@@ -17,7 +17,7 @@ from ..models.tour_models import AvatarPerformance
 
 ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / 'static/digital_guide/3d'
-MODEL_SOURCE = ROOT / 'miniprogram/static/models'
+MODEL_SOURCE = ROOT / 'frontend/public/models'
 
 
 def read_glb(path):
