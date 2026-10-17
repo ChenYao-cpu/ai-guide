@@ -1,7 +1,7 @@
 <template>
   <view class="auth-page" :class="{'app-english':appLanguage==='en'}">
     <view class="auth-language" role="group" :aria-label="t('界面语言')"><button :class="{active:tourLanguage==='zh'}" :aria-pressed="tourLanguage==='zh'" @tap="setTourLanguage('zh')">中文</button><button :class="{active:tourLanguage==='en'}" :aria-pressed="tourLanguage==='en'" @tap="setTourLanguage('en')">English</button></view>
-    <view class="auth-brand"><BrandLogo stacked animated /><text class="auth-eyebrow">{{ t('AI 数字人景区导览') }}</text></view>
+    <view class="auth-brand"><BrandLogo stacked animated /></view>
     <view class="welcome-card">
       <text class="welcome-label">{{ t('山水之间 · 智游相伴') }}</text>
       <text class="welcome-title">{{ t('让每一程，都有故事') }}</text>
