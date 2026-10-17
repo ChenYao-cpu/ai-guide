@@ -149,6 +149,7 @@ def create_or_update_db_guide_by_id(guide_id: int, new_info: DigitalGuideInfo, u
             guide_info.is_enabled = new_info.is_enabled
             guide_info.avatar = new_info.avatar
             guide_info.voice_style = new_info.voice_style
+            guide_info.language = getattr(new_info, "language", "zh")
             guide_info.voice_speed = new_info.voice_speed
             guide_info.outfit_images = new_info.outfit_images
             guide_info.tts_weight_tag = new_info.tts_weight_tag

@@ -13,4 +13,8 @@ class XingyunGuideBinding(SQLModel, table=True):
     app_id: str
     secret_encrypted: str
     voice_label: str = ""
+    # 同一角色的英文应用（星云里另建一个英文音色应用），英文模式优先用它。
+    app_id_en: str = ""
+    secret_encrypted_en: str = ""
+    voice_label_en: str = ""
 

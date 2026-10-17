@@ -14,7 +14,7 @@
           <text class="tb-icon iconfont" :class="item.icon"></text>
         </view>
         <text v-else class="tb-icon iconfont" :class="item.icon"></text>
-        <text class="tb-label">{{ item.label }}</text>
+        <text class="tb-label">{{ t(item.label) }}</text>
         <!-- 选中指示 -->
         <view v-if="current === item.key" class="tb-dot"></view>
       </view>

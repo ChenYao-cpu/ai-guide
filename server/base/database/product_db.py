@@ -88,8 +88,8 @@ async def get_db_product_info(
 
     # 将路径换成服务器路径
     for product in product_list:
-        product.image_path = API_CONFIG.REQUEST_FILES_URL + product.image_path
-        product.instruction = API_CONFIG.REQUEST_FILES_URL + product.instruction
+        product.image_path = (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + product.image_path.lstrip('/')) if product.image_path else ''
+        product.instruction = (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + product.instruction.lstrip('/')) if product.instruction else ''
 
     logger.info(product_list)
     logger.info(f"len {len(product_list)}")

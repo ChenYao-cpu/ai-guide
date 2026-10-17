@@ -1,67 +1,75 @@
 <template>
-  <view class="auth-page">
-    <view class="auth-brand"><BrandLogo stacked animated /><text class="auth-eyebrow">AI 数字人景区导览</text></view>
+  <view class="auth-page" :class="{ 'auth-english': tourLanguage === 'en' }">
+    <view class="auth-language" role="group" :aria-label="t('界面语言')">
+      <button :class="{ active: tourLanguage === 'zh' }" :aria-pressed="tourLanguage === 'zh'" @tap="setLanguage('zh')">中文</button>
+      <button :class="{ active: tourLanguage === 'en' }" :aria-pressed="tourLanguage === 'en'" @tap="setLanguage('en')">English</button>
+    </view>
+    <view class="auth-brand"><BrandLogo stacked animated /></view>
     <view class="welcome-card">
-      <text class="welcome-label">山水之间 · 智游相伴</text>
-      <text class="welcome-title">让每一程，都有故事</text>
-      <text class="welcome-copy">登录后开启导览，跟随数字人探索园中山水。</text>
+      <text class="welcome-label">{{ t('山水之间 · 智游相伴') }}</text>
+      <text class="welcome-title">{{ t('让每一程，都有故事') }}</text>
+      <text class="welcome-copy">{{ t('登录后开启导览，跟随数字人探索园中山水。') }}</text>
       <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
-      <view class="welcome-tags"><text>行程规划</text><text>景点讲解</text><text>沿途问答</text></view>
+      <view class="welcome-tags"><text>{{ t('行程规划') }}</text><text>{{ t('景点讲解') }}</text><text>{{ t('沿途问答') }}</text></view>
     <view class="login-area">
       <view v-if="appLogin">
-        <input v-if="registering" class="nickname-input" style="margin-bottom:20rpx" v-model="nickname" placeholder="昵称（用于登录）" maxlength="40" :disabled="logining" />
-        <input class="nickname-input" v-model="account" :placeholder="registering ? '邮箱地址' : '昵称'" maxlength="254" :disabled="logining" />
-        <input class="nickname-input" style="margin:20rpx 0" v-model="password" password placeholder="密码" :disabled="logining" />
-        <input v-if="registering" class="nickname-input" style="margin:20rpx 0" v-model="confirmPassword" password placeholder="再次输入密码（至少8位）" :disabled="logining" />
+        <input v-if="registering" class="nickname-input" style="margin-bottom:20rpx" v-model="nickname" :placeholder="t('昵称（用于登录）')" maxlength="40" :disabled="logining" />
+        <input class="nickname-input" v-model="account" :placeholder="t(registering ? '邮箱地址' : '昵称')" maxlength="254" :disabled="logining" />
+        <input class="nickname-input" style="margin:20rpx 0" v-model="password" password :placeholder="t('密码')" :disabled="logining" />
+        <input v-if="registering" class="nickname-input" style="margin:20rpx 0" v-model="confirmPassword" password :placeholder="t('再次输入密码（至少8位）')" :disabled="logining" />
         <view v-if="registering">
-          <input class="nickname-input" v-model="emailCode" type="number" maxlength="6" placeholder="邮箱验证码" :disabled="logining" />
-          <button class="dialog-cancel" style="margin:20rpx 0" :disabled="sendingCode || logining || codeRetryAt>0" @tap="sendEmailCode">{{ sendingCode ? '正在发送…' : codeRetryAt>0 ? '请稍后再发送' : '发送验证码' }}</button>
+          <input class="nickname-input" v-model="emailCode" type="number" maxlength="6" :placeholder="t('邮箱验证码')" :disabled="logining" />
+          <button class="dialog-cancel" style="margin:20rpx 0" :disabled="sendingCode || logining || codeRetryAt>0" @tap="sendEmailCode">{{ t(sendingCode ? '正在发送…' : codeRetryAt>0 ? '请稍后再发送' : '发送验证码') }}</button>
         </view>
       </view>
-      <button class="primary" :disabled="logining" @tap="beginLogin">{{ logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录' }}</button>
-      <button v-if="appLogin" class="dialog-cancel" style="margin-top:20rpx" :disabled="logining" @tap="toggleRegistration">{{ registering ? '已有账号，去登录' : '没有账号？邮箱注册' }}</button>
-      <text v-if="appLogin && registering && codeNotice" class="notice">{{ codeNotice }}</text>
-      <text v-if="error && !showProfileDialog" class="error">{{ error }}</text>
-      <text v-if="developmentLogin" class="notice">开发模式</text>
+      <button class="primary" :disabled="logining" @tap="beginLogin">{{ t(logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录') }}</button>
+      <button v-if="appLogin" class="dialog-cancel" style="margin-top:20rpx" :disabled="logining" @tap="toggleRegistration">{{ t(registering ? '已有账号，去登录' : '没有账号？邮箱注册') }}</button>
+      <text v-if="appLogin && registering && codeNotice" class="notice">{{ t(codeNotice) }}</text>
+      <text v-if="error && !showProfileDialog" class="error">{{ t(error) }}</text>
+      <text v-if="developmentLogin" class="notice">{{ t('开发模式') }}</text>
     </view>
     </view>
     <view v-if="showProfileDialog" class="profile-overlay" @touchmove.stop.prevent="">
       <view class="profile-dialog">
-      <text class="dialog-title">完善个人资料</text>
+      <text class="dialog-title">{{ t('完善个人资料') }}</text>
 
       <form @submit="handleProfileLogin">
         <view class="profile-fields">
           <button class="avatar-picker" :disabled="logining" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
             <image v-if="avatarPath" :src="avatarPath" class="profile-avatar" mode="aspectFill" />
-            <text v-else>选择头像</text>
+            <text v-else>{{ t('选择头像') }}</text>
           </button>
-          <input class="nickname-input" type="nickname" name="nickname" :value="nickname" placeholder="填写微信昵称" maxlength="40" />
+          <input class="nickname-input" type="nickname" name="nickname" :value="nickname" :placeholder="t('填写微信昵称')" maxlength="40" />
         </view>
       <view class="dialog-actions">
-      <button class="dialog-cancel" :disabled="logining" @tap="showProfileDialog=false">取消</button>
-      <button class="primary dialog-confirm" form-type="submit" :disabled="logining">{{ logining ? '正在保存…' : '确定' }}</button>
+      <button class="dialog-cancel" :disabled="logining" @tap="showProfileDialog=false">{{ t('取消') }}</button>
+      <button class="primary dialog-confirm" form-type="submit" :disabled="logining">{{ t(logining ? '正在保存…' : '确定') }}</button>
       </view>
       </form>
-      <text v-if="error" class="error">{{ error }}</text>
+      <text v-if="error" class="error">{{ t(error) }}</text>
       </view>
     </view>
   </view>
 </template>
 <script>
+import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 import BrandLogo from '../../components/BrandLogo.vue'
 import { BASE_URL, DEVELOPMENT_LOGIN, LOGIN_PROVIDER, APP_LOGIN } from '../../common/config.js'
 export default {
   components: { BrandLogo },
   data() { return {appLogin:APP_LOGIN,emailCode:'',sendingCode:false,codeRetryAt:0,codeNotice:'',registering:false,confirmPassword:'',account:'',password:'',logining:false,error:'',developmentLogin:DEVELOPMENT_LOGIN,avatarPath:'',nickname:'',showProfileDialog:false} },
-  onShow() { uni.setNavigationBarColor({frontColor:'#000000',backgroundColor:'#f8fafc',animation:{duration:0,timingFunc:'linear'}}) },
+  onShow() { this.tourLanguage=uni.getStorageSync(LANGUAGE_STORAGE_KEY)==='en'?'en':'zh'; uni.setNavigationBarColor({frontColor:'#000000',backgroundColor:'#f8fafc',animation:{duration:0,timingFunc:'linear'}}) },
   onUnload() { clearTimeout(this._emailCodeTimer);clearTimeout(this._wxLoginTimer) },
   onLoad() {
-    if(uni.getStorageSync('login_provider')===LOGIN_PROVIDER && !uni.getStorageSync('login_auto_disabled')) {
-      if(uni.getStorageSync('token'))this.restoreSession()
-      else this.handleWxLogin()
-    } else if(DEVELOPMENT_LOGIN)this.enterDevelopment()
+    if(uni.getStorageSync('login_auto_disabled')) return
+    // 登录一次即长期免登录：本地有 token 就直接恢复会话。
+    if(uni.getStorageSync('token')) { this.restoreSession(); return }
+    if(uni.getStorageSync('login_provider')===LOGIN_PROVIDER) { this.handleWxLogin() }
+    else if(DEVELOPMENT_LOGIN) this.enterDevelopment()
   },
   methods: {
+    t(value) { return translateTour(value, this.tourLanguage) },
+    setLanguage(language) { this.tourLanguage=language;uni.setStorageSync(LANGUAGE_STORAGE_KEY,language) },
     networkError(e) {
       const message=e&&e.errMsg||''
       this.error=/domain|url not in domain/i.test(message) ? '连接被微信拦截，请配置服务器合法域名' : '无法连接导览服务，请稍后重试'
@@ -217,8 +225,13 @@ export default {
 .auth-page{padding-top:calc(140rpx + env(safe-area-inset-top));background:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%)!important;}
 .auth-brand{margin-bottom:48rpx;gap:12rpx;}.auth-eyebrow{font-size:22rpx;color:#8b84ac;letter-spacing:4rpx;}
 .welcome-card{border:0;border-radius:36rpx;padding:32rpx;background:rgba(255,255,255,.92);box-shadow:0 20rpx 60rpx -24rpx rgba(70,54,130,.12);}
-.welcome-label{font-size:23rpx;color:#8b74c9;margin-bottom:14rpx;}.welcome-title{font-size:36rpx;color:#30285e;line-height:1.5;}.welcome-copy{font-size:25rpx;margin-top:14rpx;color:#8a84a0;}
+.welcome-label{font-size:23rpx;color:#8b74c9;margin-bottom:14rpx;display:block;text-align:center;}.welcome-title{font-size:36rpx;color:#30285e;line-height:1.5;display:block;text-align:center;}.welcome-copy{font-size:25rpx;margin-top:14rpx;color:#8a84a0;display:block;text-align:center;}
 .welcome-landscape{background:transparent;margin:20rpx 0 0;height:190rpx;}.hill-back{background:#d1cff2;width:250rpx;height:180rpx;left:auto;right:100rpx;top:40rpx;border-radius:28rpx;transform:rotate(45deg);}.hill-front{background:#bba6ee;width:190rpx;height:160rpx;left:100rpx;right:auto;top:65rpx;border-radius:24rpx;transform:rotate(45deg);}.landscape-lake{height:40rpx;border-bottom:2rpx solid #9edcf1;background:rgba(255,255,255,.6);border-radius:50%;}.landscape-sun{background:#7c4dea;width:32rpx;height:32rpx;right:60rpx;top:55rpx;}
 .welcome-tags{justify-content:space-around;padding-top:24rpx;}.welcome-tags text{background:transparent;color:#8b84a3;font-size:24rpx;padding:6rpx;}
 .login-area{margin-top:26rpx;padding:0;border:0;box-shadow:none;background:transparent;}.primary{border-radius:22rpx;}
+.auth-page{position:relative;}
+.auth-language{position:absolute;right:36rpx;top:calc(32rpx + env(safe-area-inset-top));display:flex;padding:6rpx;border:1rpx solid rgba(139,116,201,.2);border-radius:40rpx;background:rgba(255,255,255,.75);}
+.auth-language button{margin:0;padding:0 24rpx;height:60rpx;line-height:60rpx;border-radius:32rpx;background:transparent;color:#79718f;font-size:24rpx;}
+.auth-language button::after{border:0;}.auth-language button.active{background:#6c4ce4;color:#fff;box-shadow:0 4rpx 14rpx rgba(108,76,228,.2);}
+.auth-english .auth-eyebrow{letter-spacing:1rpx;}.auth-english .welcome-title{font-size:36rpx;letter-spacing:0;}.auth-english .welcome-tags{gap:8rpx;}.auth-english .welcome-tags text{font-size:22rpx;}
 </style>

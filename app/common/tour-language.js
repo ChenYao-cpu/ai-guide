@@ -1,8 +1,70 @@
 // Reuse the Web application's translations; keep user messages unchanged.
 import webEnglish from '../../frontend/src/i18n/en.json'
+import appUiEnglish from './ui.en.json'
 
 export const LANGUAGE_STORAGE_KEY = 'zhiyou.app-language'
 const appEnglish = {
+  "验证码已发送，有效期10分钟": "Code sent. It is valid for 10 minutes.",
+  "该邮箱已注册，请登录": "This email is already registered. Please sign in.",
+  "验证码请求过于频繁，请稍后再试": "Too many code requests. Please try again later.",
+  "验证码已失效，请重新获取": "The code expired. Please request a new one.",
+  "验证码错误": "Incorrect verification code.",
+  "该昵称已被使用，请换一个": "This nickname is taken. Please choose another.",
+  "邮箱或昵称已被使用，请登录或更换": "Email or nickname already in use. Sign in or choose another.",
+  "昵称需为1至40个字符，不能包含 @": "Use a nickname of 1\u201340 characters without @.",
+  "密码至少 8 位，UTF-8 编码不超过 72 字节": "Use at least 8 characters and no more than 72 UTF-8 bytes.",
+  "登录服务未配置 JWT 密钥": "The sign-in service is not configured.",
+  "验证码发送失败，请稍后重试或联系管理员": "Could not send the code. Try again later or contact support.",
+
+  "AI 数字人景区导览": "AI Digital Tour Guide",
+  "山水之间 · 智游相伴": "Explore nature · Travel with AI",
+  "让每一程，都有故事": "Every journey has a story",
+  "登录后开启导览，跟随数字人探索园中山水。": "Sign in and explore scenic wonders with your digital guide.",
+  "行程规划": "Trip planning",
+  "景点讲解": "Scenic stories",
+  "沿途问答": "Ask your guide",
+  "昵称（用于登录）": "Nickname (for sign-in)",
+  "邮箱地址": "Email address",
+  "昵称": "Nickname",
+  "密码": "Password",
+  "再次输入密码（至少8位）": "Confirm password (at least 8 characters)",
+  "邮箱验证码": "Email verification code",
+  "正在发送…": "Sending…",
+  "请稍后再发送": "Try again shortly",
+  "发送验证码": "Send code",
+  "正在处理…": "Processing…",
+  "注册并登录": "Create account & sign in",
+  "登录": "Sign in",
+  "开发测试登录": "Developer sign-in",
+  "微信授权登录": "Sign in with WeChat",
+  "已有账号，去登录": "Already have an account? Sign in",
+  "没有账号？邮箱注册": "New here? Register by email",
+  "开发模式": "Development mode",
+  "完善个人资料": "Complete your profile",
+  "选择头像": "Choose avatar",
+  "填写微信昵称": "WeChat nickname",
+  "取消": "Cancel",
+  "正在保存…": "Saving…",
+  "确定": "Confirm",
+  "无法连接导览服务，请稍后重试": "Cannot connect to the guide service. Please try again.",
+  "登录已过期，请重新输入账号密码": "Your session expired. Please sign in again.",
+  "登录状态验证失败": "Could not verify your session.",
+  "请等待60秒后再发送验证码": "Please wait 60 seconds before requesting another code.",
+  "请先填写注册邮箱": "Enter your email address first.",
+  "验证码发送失败": "Could not send the verification code.",
+  "请填写昵称，不能包含 @": "Enter a nickname without @.",
+  "请输入邮箱和密码": "Enter your email and password.",
+  "密码至少8位": "Use at least 8 characters for your password.",
+  "两次输入的密码不一致": "The passwords do not match.",
+  "请输入6位邮箱验证码": "Enter the 6-digit email verification code.",
+  "注册失败，请稍后重试": "Registration failed. Please try again.",
+  "请输入账号和密码": "Enter your nickname and password.",
+  "账号或密码错误": "Incorrect nickname or password.",
+  "登录失败，请稍后重试": "Sign-in failed. Please try again.",
+  "请先选择头像并填写微信昵称": "Choose an avatar and enter your WeChat nickname.",
+  "资料保存失败": "Could not save your profile.",
+  "登录失败": "Sign-in failed.",
+
   '预计剩余约 {minutes} 分钟': 'About {minutes} min remaining',
   '路线游览完毕': 'Route completed',
   '选择问题或直接提问': 'Choose a question or ask your own',
@@ -40,6 +102,6 @@ const appEnglish = {
 
 export function translateTour(value, language, params = {}) {
   const key = value == null ? '' : String(value)
-  const text = language === 'en' ? (appEnglish[key] || webEnglish[key] || key) : key
+  const text = language === 'en' ? (appEnglish[key] || appUiEnglish[key] || webEnglish[key] || key) : key
   return text.replace(/\{(\w+)\}/g, (token, name) => params[name] == null ? token : String(params[name]))
 }

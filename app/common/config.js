@@ -5,10 +5,13 @@ export const LAN_SERVER_ORIGIN = 'http://10.205.242.153:18000'
 const runtimePlatform = typeof wx !== 'undefined'
   ? (wx.getDeviceInfo ? wx.getDeviceInfo().platform : wx.getSystemInfoSync().platform)
   : ''
-// Android USB development uses `adb reverse tcp:18000 tcp:18000`.
+// 真机使用局域网地址。HBuilderX 重跑时会清理自定义 USB 转发，
+// 不能让开发版固定依赖手机自己的 127.0.0.1:18000。
 let usbDevelopment = false
-// #ifdef APP-PLUS
-usbDevelopment = import.meta.env.MODE === 'development'
+// Local browser previews connect to the same backend as USB development.
+// #ifdef H5
+usbDevelopment = import.meta.env.MODE === 'development' &&
+  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 // #endif
 export const SERVER_ORIGIN = runtimePlatform === 'devtools' || usbDevelopment
   ? 'http://127.0.0.1:18000'
@@ -38,6 +41,10 @@ export function assetUrl(value) {
 export const DEVELOPMENT_LOGIN = import.meta.env.MODE === 'development' && runtimePlatform === 'devtools'
 let appLogin = false
 // #ifdef APP-PLUS
+appLogin = true
+// #endif
+// Browser previews of the App use the same real password-login API.
+// #ifdef H5
 appLogin = true
 // #endif
 export const APP_LOGIN = appLogin

@@ -1,25 +1,25 @@
 <template>
   <view class="page">
-    <view class="nav" :style="{paddingTop:headerTop+'px'}"><text class="nav-back" @tap="goBack">‹</text><text class="nav-title">游览记录</text></view>
+    <view class="nav" :style="{paddingTop:headerTop+'px'}"><text class="nav-back" @tap="goBack">‹</text><text class="nav-title">{{ t("游览记录") }}</text></view>
     <scroll-view scroll-y class="main">
-      <view v-if="loading" class="empty">加载中…</view>
-      <view v-else-if="error" class="empty" @tap="loadData">{{ error }}，点击重试</view>
-      <view v-else-if="list.length===0" class="empty">暂无导览历史，开始导览后会自动记录</view>
+      <view v-if="loading" class="empty">{{ t("加载中…") }}</view>
+      <view v-else-if="error" class="empty" @tap="loadData">{{ t(error) }}{{ t("，点击重试") }}</view>
+      <view v-else-if="list.length===0" class="empty"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text>{{ t("暂无导览历史，开始导览后会自动记录") }}</text></view>
       <view v-for="s in list" :key="s.session_id" class="card" @tap="openSession(s)">
         <view class="c-info">
-          <text class="c-name">{{ s.city ? s.city+' · ' : '' }}{{ s.name }}</text>
-          <text class="c-desc">{{ s.spot_names.join(' → ') }}</text>
-          <text class="c-desc">{{ s.live_status===2 ? '已结束' : s.live_status===1 ? '进行中' : '未开始' }}</text>
-          <text class="c-time">开始：{{ s.start_time }}</text><text v-if="s.end_time" class="c-time">结束：{{ s.end_time }}</text>
+          <text class="c-name">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ t(s.name) }}</text>
+          <text class="c-desc">{{ (s.spot_names || []).map(function(n){ return t(n) }).join(' → ') }}</text>
+          <text class="c-desc">{{ s.live_status===2 ? t('已结束') : s.live_status===1 ? t('进行中') : t('未开始') }}</text>
+          <text class="c-time">{{ t('开始：') }}{{ s.start_time }}</text><text v-if="s.end_time" class="c-time">{{ t('结束：') }}{{ s.end_time }}</text>
         </view>
       </view>
       <view v-if="selected" class="history-detail">
-        <text class="c-name">{{ selected.name }} · 对话记录</text>
-        <view class="history-close" @tap="selected=null">关闭</view>
-        <view v-if="messagesLoading" class="empty">对话加载中…</view>
-        <view v-else-if="messagesError" class="empty" @tap="openSession(selected)">{{ messagesError }}，点击重试</view>
-        <view v-else-if="!messages.length" class="empty">这次导览暂无对话记录</view>
-        <view v-for="(m,i) in messages" :key="i" class="history-message"><text class="c-desc">{{ m.role==='user' ? '我' : '导游' }} · {{ m.send_time }}</text><text class="message-text">{{ m.message }}</text></view>
+        <text class="c-name">{{ t(selected.name) }} · {{ t('· 对话记录') }}</text>
+        <view class="history-close" @tap="selected=null">{{ t("关闭") }}</view>
+        <view v-if="messagesLoading" class="empty">{{ t("对话加载中…") }}</view>
+        <view v-else-if="messagesError" class="empty" @tap="openSession(selected)">{{ t(messagesError) }}{{ t('，点击重试') }}</view>
+        <view v-else-if="!messages.length" class="empty">{{ t("这次导览暂无对话记录") }}</view>
+        <view v-for="(m,i) in messages" :key="i" class="history-message"><text class="c-desc">{{ m.role==='user' ? t('我') : t('导游') }} · {{ m.send_time }}</text><text class="message-text">{{ m.message }}</text></view>
       </view>
     </scroll-view>
   </view>
@@ -50,4 +50,4 @@ export default {
 .c-img{width:88rpx;height:88rpx;border-radius:14rpx;flex-shrink:0}.c-img-df{width:88rpx;height:88rpx;border-radius:14rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:36rpx;flex-shrink:0}
 .c-info{flex:1;min-width:0}.c-name{font-size:28rpx;font-weight:600;color:var(--ng-text);display:block}.c-desc{font-size:22rpx;color:var(--ng-secondary);display:block;margin-top:4rpx}.c-time{font-size:20rpx;color:var(--ng-secondary);margin-top:4rpx;display:block}
 .history-detail{padding:24rpx;background:var(--ng-surface);border-radius:18rpx;margin-bottom:30rpx}.history-close{padding:18rpx 0;color:var(--ng-secondary)}.history-message{padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}.message-text{display:block;font-size:28rpx;line-height:1.7;margin-top:8rpx}
-</style>
+.empty-art{width:280rpx;margin:0 auto 16rpx;opacity:.95}</style>

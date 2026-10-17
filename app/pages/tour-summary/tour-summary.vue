@@ -4,20 +4,27 @@
 
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <view class="nav-back" @tap="goHome"><text>‹</text></view>
-      <text class="nav-title">游览回顾</text>
+      <text class="nav-title">{{ t("导览记录") }}</text>
       <view class="nav-share" @tap="shareTour"><text class="iconfont icon-fenxiang"></text></view>
     </view>
 
-    <scroll-view scroll-y class="main" v-if="!loading && sessionData">
+    <view v-if="loading" class="state-tip"><text>{{ t("加载中...") }}</text></view>
+    <view v-else-if="!sessionData" class="state-tip">
+      <image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image>
+      <text class="state-title">{{ t("无法读取本次导览记录") }}</text>
+      <view class="state-btn" @tap="goHome">{{ t("返回首页") }}</view>
+    </view>
+
+    <scroll-view scroll-y class="main" v-else>
       <!-- 游记封面 -->
       <view class="hero" :style="heroImg ? 'background-image:url('+heroImg+')' : ''">
         <view class="hero-shade"></view>
         <view class="hero-content">
-          <text class="hero-title">{{ sessionData.name || '我的景区导览' }}</text>
+          <text class="hero-title">{{ t(sessionData.name) || t('我的景区导览') }}</text>
           <view class="hero-meta">
             <view class="hm-item">
               <text class="iconfont icon-daolan hm-icon"></text>
-              <text class="hm-text">{{ guideName }}</text>
+              <text class="hm-text">{{ guideDisplayName }}</text>
             </view>
             <view class="hm-item">
               <text class="iconfont icon-shijian hm-icon"></text>
@@ -26,7 +33,7 @@
           </view>
           <view class="hero-badge" v-if="totalDuration > 0">
             <text class="hb-num">{{ totalDuration }}</text>
-            <text class="hb-unit">分钟游览</text>
+            <text class="hb-unit">{{ t("分钟游览") }}</text>
           </view>
         </view>
       </view>
@@ -35,21 +42,21 @@
       <view class="stats-row">
         <view class="stat-card">
           <text class="stat-num">{{ spotTimeline.length }}</text>
-          <text class="stat-label">景点游览</text>
+          <text class="stat-label">{{ t("景点游览") }}</text>
         </view>
         <view class="stat-card">
           <text class="stat-num">{{ questionCount }}</text>
-          <text class="stat-label">提问互动</text>
+          <text class="stat-label">{{ t("提问互动") }}</text>
         </view>
         <view class="stat-card">
           <text class="stat-num">{{ messageCount }}</text>
-          <text class="stat-label">对话总数</text>
+          <text class="stat-label">{{ t("对话总数") }}</text>
         </view>
       </view>
 
       <!-- 游览时间轴 -->
       <view class="section">
-        <view class="section-head"><view class="sh-dot"></view><text>游览路线</text></view>
+        <view class="section-head"><view class="sh-dot"></view><text>{{ t("游览路线") }}</text></view>
         <view class="timeline">
           <view v-for="(s, i) in spotTimeline" :key="i" class="tl-item" :class="{last: i === spotTimeline.length - 1}">
             <view class="tl-marker">
@@ -64,9 +71,9 @@
                 <image v-if="s.image_path" :src="fixImg(s.image_path)" class="tl-img" mode="aspectFill"></image>
                 <view v-else class="tl-img-df"></view>
                 <view class="tl-info">
-                  <text class="tl-name">{{ s.spot_name }}</text>
-                  <text class="tl-cat" v-if="s.category">{{ s.category }} · 约{{ s.visit_duration || 20 }}分钟</text>
-                  <text class="tl-desc" v-if="s.description">{{ s.description.substring(0, 50) }}...</text>
+                  <text class="tl-name">{{ t(s.spot_name) }}</text>
+                  <text class="tl-cat" v-if="s.category">{{ catLabel(s.category) }}{{ t('· 约') }}{{ s.visit_duration || 20 }}{{ t('分钟') }}</text>
+                  <text class="tl-desc" v-if="s.description">{{ t(s.description).substring(0, 50) }}...</text>
                 </view>
               </view>
             </view>
@@ -76,7 +83,7 @@
 
       <!-- 知识亮点 -->
       <view class="section" v-if="highlights.length > 0">
-        <view class="section-head"><view class="sh-dot"></view><text>导览知识亮点</text></view>
+        <view class="section-head"><view class="sh-dot"></view><text>{{ t("导览知识亮点") }}</text></view>
         <view class="highlight-list">
           <view v-for="(h, i) in highlights" :key="i" class="hl-card">
             <view class="hl-q" v-if="h.question">
@@ -97,7 +104,7 @@
 
       <!-- AI总结 -->
       <view class="section" v-if="aiSummary">
-        <view class="section-head"><view class="sh-dot"></view><text>AI 导览总结</text></view>
+        <view class="section-head"><view class="sh-dot"></view><text>{{ t("AI 导览总结") }}</text></view>
         <view class="ai-summary-card">
 
           <text class="as-text">{{ aiSummary }}</text>
@@ -106,17 +113,15 @@
 
       <!-- 偏好回顾 -->
       <view class="section" v-if="preferences.length > 0">
-        <view class="section-head"><view class="sh-dot"></view><text>本次偏好</text></view>
+        <view class="section-head"><view class="sh-dot"></view><text>{{ t("本次偏好") }}</text></view>
         <view class="pref-tags">
-          <view v-for="p in preferences" :key="p" class="pref-tag">
-            <text>{{ p }}</text>
-          </view>
+          <view v-for="p in preferences" :key="p" class="pref-tag">{{ t(p) }}</view>
         </view>
       </view>
 
       <!-- 知识问答打卡 -->
       <view class="section" v-if="quizQuestions.length > 0">
-        <view class="section-head"><view class="sh-dot"></view><text>知识问答打卡</text></view>
+        <view class="section-head"><view class="sh-dot"></view><text>{{ t("知识问答打卡") }}</text></view>
         <view class="quiz-wrap">
           <view v-for="(q, qi) in quizQuestions" :key="qi" class="quiz-card">
             <view class="quiz-q-row">
@@ -143,12 +148,12 @@
 
 
 
-            <text class="qr-text">答对 {{ quizScore }}/{{ quizQuestions.length }} 题</text>
-            <text class="qr-badge" v-if="quizScore === quizQuestions.length">景区达人</text>
-            <text class="qr-badge" v-else-if="quizScore > 0">继续努力</text>
+            <text class="qr-text">{{ t('答对') }} {{ quizScore }}/{{ quizQuestions.length }} {{ t('题') }}</text>
+            <text class="qr-badge" v-if="quizScore === quizQuestions.length">{{ t("景区达人") }}</text>
+            <text class="qr-badge" v-else-if="quizScore > 0">{{ t("继续努力") }}</text>
           </view>
           <view class="quiz-submit" v-if="!quizChecked && quizQuestions.length > 0" @tap="checkQuiz">
-            <text>提交答案</text>
+            <text>{{ t("提交答案") }}</text>
           </view>
         </view>
       </view>
@@ -159,13 +164,12 @@
     <!-- 加载 -->
     <view class="loading-wrap" v-if="loading">
       <view class="loading-pulse"><view class="lp-ring"></view><view class="lp-ring2"></view></view>
-      <text class="loading-text">生成游览回顾…</text>
+      <text class="loading-text">{{ t("生成游览回顾…") }}</text>
     </view>
 
     <!-- 底部操作栏 -->
     <view class="action-bar" v-if="!loading && sessionData">
-      <view class="ab-btn secondary" @tap="goHome">返回首页</view>
-      <view class="ab-btn primary" @tap="shareTour">分享游记</view>
+      <view class="ab-btn secondary" @tap="goHome">{{ t("返回首页") }}</view>
     </view>
   </view>
 </template>
@@ -208,9 +212,10 @@ export default {
     }
   },
   computed: {
-    guideName: function() {
+    guideDisplayName: function() {
       var g = this.sessionData && this.sessionData.guide_info
-      return g ? g.name : 'AI导游'
+      if (!g) return this.t('AI导游')
+      return (this.tourLanguage === 'en' && g.name_en) ? g.name_en : g.name
     },
     heroImg: function() {
       var s = this.spots && this.spots[0]
@@ -259,6 +264,7 @@ export default {
     },
   },
   methods: {
+    catLabel: function (c) { var m = { historical: '历史', natural: '自然', cultural: '文化' }; return this.t(m[c] || c) },
     fixImg: function(u) { if (!u) return ''; return assetUrl(u) },
     goHome: function() {
       uni.reLaunch({ url: '/pages/tour-guide/tour-guide' })
@@ -332,7 +338,7 @@ export default {
     var s = uni.getSystemInfoSync()
     this.statusH = (s.statusBarHeight || 20) + 6
     this.sid = Number(opts.sessionId || 0)
-    if (!this.sid) { uni.showToast({ title: '参数无效', icon: 'none' }); return }
+    if (!this.sid) { this.loading = false; uni.showToast({ title: '参数无效', icon: 'none' }); return }
     this.loadData()
   },
 }
@@ -454,4 +460,8 @@ export default {
 .ab-btn{flex:1;height:80rpx;line-height:80rpx;text-align:center;border-radius:40rpx;font-size:28rpx;font-weight:600}
 .ab-btn.secondary{background:var(--ng-surface);border:1rpx solid var(--ng-border);color:var(--ng-text)}
 .ab-btn.primary{background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(99,102,241,0.15));color:var(--ng-text)}
+.state-tip{padding:120rpx 40rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--ng-secondary);font-size:28rpx}
+.state-tip .empty-art{width:320rpx;margin-bottom:24rpx}
+.state-title{font-size:28rpx;color:var(--ng-text);margin-bottom:28rpx}
+.state-btn{padding:18rpx 48rpx;border-radius:40rpx;background:#4f46e5;color:#fff;font-size:28rpx}
 </style>

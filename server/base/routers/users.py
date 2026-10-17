@@ -238,7 +238,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
 
     # 过期时间
-    token_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    token_expires = datetime.now(timezone.utc) + timedelta(days=90)  # 登录一次长期有效，避免每次打开都要登录
 
     # token 生成包含内容，记录 IP 的原因是防止被其他人拿到用户的 token 进行假冒访问
     token_data = {

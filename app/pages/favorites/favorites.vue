@@ -4,22 +4,22 @@
     <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
     <view class="nav">
       <text class="nav-back" @tap="goBack">‹</text>
-      <text class="nav-title">我的收藏</text>
+      <text class="nav-title">{{ t("我的收藏") }}</text>
     </view>
     <scroll-view scroll-y class="main">
-      <view v-if="loading" class="load">加载中...</view>
-      <view v-if="error" class="empty" @tap="loadData">{{ error }}，点击重试</view>
-      <view v-else-if="!loading && list.length===0" class="empty">暂无收藏</view>
+      <view v-if="loading" class="load">{{ t("加载中...") }}</view>
+      <view v-if="error" class="empty" @tap="loadData"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text>{{ t(error) }}{{ t("，点击重试") }}</text></view>
+      <view v-else-if="!loading && list.length===0" class="empty">{{ t("暂无收藏") }}</view>
       <view v-for="s in list" :key="s.spot_id" class="card" @tap="openDetail(s)">
         <image v-if="s.image_path" :src="fixImg(s.image_path)" class="c-img" mode="aspectFill"></image>
         <view v-else class="c-img-df"></view>
         <view class="c-info">
-          <text class="c-name">{{ s.spot_name }}</text>
-          <text class="c-desc">{{ (s.description||s.location||'').substring(0,40) }}</text>
+          <text class="c-name">{{ t(s.spot_name) }}</text>
+          <text class="c-desc">{{ (t(s.description)||t(s.location)||'').substring(0,40) }}</text>
         </view>
         <view class="c-like liked" @tap.stop="unlike(s.spot_id)">
           <text class="iconfont icon-huore"></text>
-          <text>已收藏</text>
+          <text>{{ t("已收藏") }}</text>
         </view>
       </view>
       <view style="height:40rpx"></view>
@@ -29,16 +29,16 @@
       <view class="drawer-mask"></view>
       <view class="drawer-panel" @tap.stop="">
         <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ detailSpot.spot_name }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ t(detailSpot.spot_name) }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
         <scroll-view scroll-y class="dp-body">
           <image v-if="detailSpot.image_path" :src="fixImg(detailSpot.image_path)" class="dp-hero" mode="aspectFill"></image>
-          <text class="dp-desc">{{ detailSpot.description||'暂无简介' }}</text>
-          <view class="dp-row"><text>位置</text><text>{{ detailSpot.location||'暂无' }}</text></view>
-          <view class="dp-row"><text>分类</text><text>{{ detailSpot.category||'景点' }}</text></view>
+          <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
+          <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.location)||t('暂无') }}</text></view>
+          <view class="dp-row"><text>{{ t("分类") }}</text><text>{{ t(detailSpot.category)||t('景点') }}</text></view>
         </scroll-view>
         <view class="dp-like-bar">
           <view class="dpl-btn-star" @tap="unlike(detailSpot.spot_id);detailSpot=null">
-            <text>{{ ' 已收藏 (取消)' }}</text>
+            <text>{{ t(' 已收藏 (取消)') }}</text>
           </view>
         </view>
       </view>
@@ -85,4 +85,4 @@ export default {
 .dp-like-bar{display:flex;padding:12rpx 28rpx 20rpx;padding-bottom:calc(20rpx + env(safe-area-inset-bottom))}
 .dpl-btn-star{flex:1;padding:18rpx;text-align:center;border-radius:14rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:26rpx;font-weight:700}
 .c-like-count{position:absolute;bottom:10rpx;right:10rpx;display:flex;align-items:center;gap:4rpx;font-size:18rpx;color:var(--ng-text);z-index:2}.c-like-count .iconfont{font-size:22rpx}
-</style>
+.empty-art{width:280rpx;margin:0 auto 16rpx;opacity:.95}</style>

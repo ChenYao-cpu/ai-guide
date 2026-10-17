@@ -167,6 +167,9 @@ class DigitalGuideInfo(SQLModel, table=True):
 
     voice_style: str = "female_wenrou"  # 声音风格: female_wenrou / female_huopo / male_wenhou / male_hongliang
     voice_speed: float = 1.0  # 语速倍率: 0.8 ~ 1.5
+    language: str = "zh"  # 导游语言: zh / en / both（英文模式优先选 en 的导游）
+    name_en: str = ""  # 英文模式展示的名字
+    character_en: str = ""  # 英文模式展示的人物简介
 
     outfit_images: str = ""  # 换装图片，JSON数组
 

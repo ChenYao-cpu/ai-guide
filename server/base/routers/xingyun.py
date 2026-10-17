@@ -44,6 +44,9 @@ class BindingInput(BaseModel):
     app_id: str = InputField(min_length=1, max_length=200)
     app_secret: str = InputField(default="", max_length=500)
     voice_label: str = InputField(default="", max_length=80)
+    app_id_en: str = InputField(default="", max_length=200)
+    app_secret_en: str = InputField(default="", max_length=500)
+    voice_label_en: str = InputField(default="", max_length=80)
     use_xingyun: bool = True
     voice_style: Literal['female_wenrou','female_huopo','male_wenhou','male_hongliang'] | None = None
 
@@ -95,6 +98,9 @@ def binding_info(guide_id: int, user_id: int = Depends(require_guide_admin)):
         return {"app_id": binding.app_id if binding else "",
                 "secret_configured": bool(binding and binding.secret_encrypted),
                 "voice_label": binding.voice_label if binding else "",
+                "app_id_en": binding.app_id_en if binding else "",
+                "secret_configured_en": bool(binding and binding.secret_encrypted_en),
+                "voice_label_en": binding.voice_label_en if binding else "",
                 "voice_style": guide.voice_style,
                 "use_xingyun": guide.render_mode == "xingyun"}
 
@@ -115,6 +121,16 @@ def save_binding(guide_id: int, data: BindingInput, user_id: int = Depends(requi
         if secret:
             binding.secret_encrypted = encrypt_secret(secret)
         binding.voice_label = data.voice_label.strip()
+        app_id_en, secret_en = data.app_id_en.strip(), data.app_secret_en.strip()
+        if app_id_en:
+            binding.app_id_en = app_id_en
+            if secret_en:
+                binding.secret_encrypted_en = encrypt_secret(secret_en)
+            elif not binding.secret_encrypted_en or binding.app_id_en != app_id_en:
+                raise HTTPException(400, "修改英文 App ID 时必须同时填写英文 App Secret")
+            binding.voice_label_en = data.voice_label_en.strip()
+        elif secret_en:
+            raise HTTPException(400, "填写英文 App Secret 前请先填写英文 App ID")
         # 即使留空沿用，也验证旧凭据仍能解密。
         decrypt_secret(binding.secret_encrypted)
         guide.render_mode = "xingyun" if data.use_xingyun else "realistic"
@@ -194,7 +210,7 @@ def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
 
 
 @router.api_route("/session/{guide_id}", methods=["POST", "DELETE"])
-async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False,
+async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False, language: str = "zh",
                         x_tour_access: str = Header(default=""), authorization: str = Header(default="")):
     raw = await request.body()
     if len(raw) > 65536:
@@ -245,7 +261,10 @@ async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_
                 tour = authorize_tour(db, tour_id, guide_id, x_tour_access, authorization)
                 owner_id = tour.user_id or 0
             binding = db.get(XingyunGuideBinding, guide_id)
-            app_id, encrypted = binding.app_id, binding.secret_encrypted
+            if str(language or "zh").lower().startswith("en") and binding.app_id_en and binding.secret_encrypted_en:
+                app_id, encrypted = binding.app_id_en, binding.secret_encrypted_en
+            else:
+                app_id, encrypted = binding.app_id, binding.secret_encrypted
             record = XingyunSession(user_id=owner_id, guide_id=guide_id, tour_id=tour_id,
                                      access_hash=access_hash, app_id=app_id, secret_encrypted=encrypted)
             db.add(record)

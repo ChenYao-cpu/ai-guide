@@ -20,17 +20,11 @@
 
     </view>
       <view v-if="spotCards.length <= 1" class="nav-spacer"></view>
-      <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
+      <view class="nav-end" @tap="endTour"><text>✕</text></view>
     </view>
 
-    <view class="tour-language-bar">
-      <view class="tour-language" role="group" :aria-label="t('界面语言')">
-        <button class="tour-language-button" :class="{active:tourLanguage==='zh'}" :aria-pressed="tourLanguage==='zh'" :disabled="languageBusy" @tap="setTourLanguage('zh')">中文</button>
-        <button class="tour-language-button" :class="{active:tourLanguage==='en'}" :aria-pressed="tourLanguage==='en'" :disabled="languageBusy" @tap="setTourLanguage('en')">English</button>
-      </view>
-    </view>
     <!-- 数字导游 -->
-    <view class="guide-stage">
+    <view class="guide-stage" :style="!tourVisible || leavingTour ? 'visibility:hidden' : ''">
       <view v-if="spotCards.length" class="tp-stats stage-progress">
         <text class="tp-stat" v-if="remainingDuration > 0">{{ t('预计剩余约 {minutes} 分钟', {minutes:remainingDuration}) }}</text>
         <text class="tp-stat done" v-else>{{ t('路线游览完毕') }}</text>
@@ -49,7 +43,7 @@
           <image v-if="knowCard.image" :src="knowCard.image" class="kc-img" mode="aspectFill"></image>
         </view>
       </view>
-      <template v-if="!(appXingyun && guideProvider==='xingyun' && xingyunConnected)">
+      <template v-if="tourVisible && !leavingTour && !(appXingyun && guideProvider==='xingyun' && (xingyunConnected || xingyunActive))">
       <view v-if="avatarMode==='3d'&&threeDModelUrl&&!threeDError" class="native-3d-stage">
         <tour-avatar-3d v-if="avatarWidth>0&&avatarHeight>0" id="guide-avatar-3d" :motion-url="threeDModelUrl" :motion-started-at="motionStartedAt" :portrait="true" :width="Math.round(avatarWidth*avatarPixelRatio)" :height="Math.round(avatarHeight*avatarPixelRatio)" :key="threeDSceneUrl||threeDModelUrl" :scene-url="threeDSceneUrl||threeDModelUrl" :animation="threeDAnimation" :progress="threeDProgress" :duration="threeDDuration" :speaking="speaking" :style="{width:avatarWidth+'px',height:avatarHeight+'px',display:'block'}" @ready="threeDReady" @error="threeDFailed" />
       </view>
@@ -63,6 +57,7 @@
     </view>
 
     <!-- #ifdef APP-PLUS -->
+    <view v-if="guideProvider==='xingyun' && xingyunFailed && avatarMessage" class="stage-footer"><text class="avatar-runtime-status">{{ t(avatarMessage) }}</text></view>
     <button v-if="guideProvider==='xingyun'&&xingyunFailed" class="xingyun-open" @tap="connectXingyun">{{ t('重新连接数字人') }}</button>
     <!-- #endif -->
     <!-- #ifndef APP-PLUS -->
@@ -80,9 +75,9 @@
         <view class="ss-info">
           <view class="ss-top">
             <text class="ss-cat">{{ spotIdx+1 }}/{{ spotCards.length }}</text><text class="ss-name">{{ t(currentSpot.spot_name) }}</text>
-            <text class="ss-cat">{{ t(!currentSpot.image_path && currentSpot.route_cover_image ? '路线示意图' : (currentSpot.category||'景点')) }}</text>
+            <text class="ss-cat">{{ t(!currentSpot.image_path && currentSpot.route_cover_image ? '路线示意图' : (t(currentSpot.category)||'景点')) }}</text>
           </view>
-          <text class="ss-desc">{{ t(currentSpot.description||'').substring(0,50) }}...</text>
+          <text class="ss-desc">{{ t(t(currentSpot.description)||'').substring(0,50) }}...</text>
         </view>
       </view>
       <view class="ss-arrow" @tap="nextSpot"><text>›</text></view>
@@ -98,6 +93,10 @@
       <view v-for="(m,i) in msgs" :key="i" :id="'msg-'+i" class="msg-row" :class="m.role==='guide'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <text class="msg-text">{{ m.message }}</text>
+          <view v-if="m.role==='guide'" class="msg-voice-btn" :class="{muted:voiceMuted}" :aria-label="t(voiceMuted ? '继续播放' : '暂停语音播报')" @tap.stop="toggleVoiceMute(m)">
+            <view v-if="voiceMuted" class="vm-play"></view>
+            <view v-else class="vm-pause"><text class="vm-bar"></text><text class="vm-bar"></text></view>
+          </view>
           <text class="msg-time">{{ fmtTime(m.send_time) }}</text>
         </view>
       </view>
@@ -167,11 +166,12 @@ export default {
   },
   data: function() {
     return {
-      tourLanguage: uni.getStorageSync(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'zh',
-      showEndConfirm: false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
+
+      showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
       motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
-      guideName: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
+      guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
+      voiceMuted: false,
       threeDSceneUrl:'',threeDAnimation:'idle',threeDProgress:0,threeDDuration:0,threeDError:false,
       avatarMode:'audio',avatarMessage:'语音导览',videoUrl:'',avatarCapability:null,guideId:0,
       lastMsgId: 'bottom', _voiceManager: null,
@@ -188,7 +188,7 @@ export default {
   },
   computed: {
     languageBusy: function() { return this.loading || this.recording || this.voicePressing || this.transcribing },
-    guideDisplayName: function() { return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
+    guideDisplayName: function() { if (this.tourLanguage === 'en' && this.guideNameEn) return this.guideNameEn; return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
     threeDModelUrl:function(){return assetUrl(this.avatarCapability&&this.avatarCapability.threeD&&this.avatarCapability.threeD.modelUrl||'')},
     cartoonPreviewUrl:function(){return assetUrl(this.avatarCapability && this.avatarCapability.cartoon.previewUrl || '')},
     spotName: function() {
@@ -249,29 +249,58 @@ export default {
     },
   },
   methods: {
-    connectXingyun:function(){
+    connectXingyun:async function(){
+      if(this._xingyunClosePromise)await this._xingyunClosePromise
+      if(!this.tourVisible||this.leavingTour||this.endingTour)return
       // #ifdef APP-PLUS
       if(this.xingyunActive||!this.guideId||!this.sid)return
-      this.xingyunActive=true;this.xingyunFailed=false;this.avatarMessage=''
+      this.xingyunActive=true;this.xingyunFailed=false;this.avatarMessage='正在连接数字人…'
       var self=this,version=this._xingyunVersion=(this._xingyunVersion||0)+1
       request({url:'/xingyun/config/'+this.guideId}).then(function(res){
         if(version!==self._xingyunVersion)return
         if(!res.data.configured)throw new Error('所选星云数字人未启用或未绑定')
-        self._xingyunGateway=BASE_URL+'/xingyun/session/'+self.guideId+'?tour_id='+self.sid
+        self._xingyunGateway=BASE_URL+'/xingyun/session/'+self.guideId+'?tour_id='+self.sid+'&language='+(self.tourLanguage||'zh')
         self.xingyunPayload={id:Date.now(),command:'connect',text:self._xingyunPending||'',gateway:self._xingyunGateway,sdkUrl:res.data.sdkUrl,accessToken:uni.getStorageSync('xingyun-tour-'+self.sid),token:uni.getStorageSync('token')}
       }).catch(function(error){if(version!==self._xingyunVersion)return;self.xingyunActive=false;self.xingyunFailed=true;self.avatarMessage=error.message||'星云连接失败，请重试'})
       // #endif
     },
     onXingyunState:function(event){
+      if(event.state==='closed'){if(this._xingyunClosed&&event.id===this._xingyunCloseId){this._xingyunClosed();this._xingyunClosed=null}return}
       if(event.gateway!==this._xingyunGateway)return
-      if(event.state==='connected'){this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage=''}
+      if(event.state==='connected'){
+        this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage='';this.xingyunActive=true
+        var pending=this._xingyunPending;if(pending&&this._xingyunGateway){this._xingyunPending='';this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:pending})}
+      }
       else if(event.state==='playing'){this.speaking=true;this.avatarMessage='星云数字人正在讲解'}
       else if(event.state==='ended'){this.speaking=false;this.avatarMessage=''}
       else if(event.state==='error'){this.speaking=false;this.xingyunConnected=false;this.xingyunActive=false;this.xingyunFailed=true;this.avatarMessage=event.message||'星云连接失败，请重试'}
-      else if(event.state!=='progress'&&event.message)this.avatarMessage=event.message
+      else if(event.message)this.avatarMessage=event.message
     },
-    speakXingyun:function(text){if(!text)return;if(this.xingyunActive&&!this._xingyunGateway){this._xingyunPending=text;return}if(!this.xingyunActive){this.avatarMessage='数字人尚未连接，回答已显示；请重新连接';return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
-    closeXingyun:function(){this._xingyunVersion=(this._xingyunVersion||0)+1;this._xingyunGateway='';this.xingyunPayload={command:'close',id:Date.now()};this.xingyunActive=false;this.xingyunConnected=false},
+    toggleVoiceMute:function(m){
+      if(this.voiceMuted){
+        this.voiceMuted=false;uni.removeStorageSync('tour_voice_muted')
+        var text=(m&&m.message)||this._lastSpoken||''
+        if(text){this.speakXingyun(text);uni.showToast({title:this.t('已恢复语音播报'),icon:'none'})}
+        else uni.showToast({title:this.t('已经播报完毕'),icon:'none'})
+        return
+      }
+      this.voiceMuted=true;uni.removeStorageSync('tour_voice_muted')
+      if(m&&m.message)this._lastSpoken=m.message
+      this.stopPlayback()
+      uni.showToast({title:this.t('已暂停语音播报'),icon:'none'})
+    },
+    speakAnswer:function(text){if(!text)return;this._lastSpoken=text;if(this.guideProvider==='xingyun'){this.speakXingyun(text);return}if(this.$refs.xfyun&&this.$refs.xfyun.sessionId){this.$refs.xfyun.speak(text);return}this.speakXingyun(text)},
+    speakXingyun:function(text){if(this.voiceMuted)return;if(!text)return;this._lastSpoken=text;if(!this._xingyunGateway||!this.xingyunActive){this._xingyunPending=text;if(this._xingyunGateway)this.connectXingyun();return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
+    closeXingyun:function(){
+      this._xingyunVersion=(this._xingyunVersion||0)+1;this._xingyunGateway='';this._xingyunPending=''
+      if(this._xingyunClosePromise)return this._xingyunClosePromise
+      var self=this,id=this._xingyunCloseId=(this._xingyunCloseId||0)+1
+      this.xingyunActive=false;this.xingyunConnected=false
+      var closed=this.appXingyun&&this.guideProvider==='xingyun'?new Promise(function(resolve){self._xingyunClosed=resolve}):Promise.resolve()
+      this._xingyunClosePromise=closed.then(function(){self._xingyunClosePromise=null})
+      this.xingyunPayload={command:'close',id:id}
+      return this._xingyunClosePromise
+    },
     openXingyun: function() { uni.navigateTo({url:'/pages/xingyun/xingyun?sessionId='+this.sid}) },
     measureAvatar:function(){this.avatarPixelRatio=Math.min(uni.getSystemInfoSync().pixelRatio||1,3);var self=this;uni.createSelectorQuery().in(this).select('.guide-stage').boundingClientRect(function(rect){if(rect&&rect.width&&rect.height){self.avatarWidth=rect.width;self.avatarHeight=rect.height}}).exec()},
     stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}if(this._threeDTimer){clearInterval(this._threeDTimer);this._threeDTimer=null}if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}this._pending3DAudio=null;this.threeDSceneUrl='';this.threeDAnimation='idle';this.threeDProgress=0;this.threeDDuration=0;this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
@@ -311,16 +340,16 @@ export default {
         }
       }).catch(function() {})
       // 发送消息（附带景点上下文）
-      Promise.resolve(self._capabilityPromise).then(function(){return api.sendMessage(self.sid, t, self.avatarMode, currentSpot&&currentSpot.spot_id, nextSpot?nextSpot.spot_id:null)}).then(function(res) {
+      Promise.resolve(self._capabilityPromise).then(function(){return api.sendMessage(self.sid, t, self.avatarMode, currentSpot&&currentSpot.spot_id, nextSpot?nextSpot.spot_id:null,self.tourLanguage)}).then(function(res) {
         var d = res.data
         if (d && d.success) {
           // TTS自动播报
           if(playbackVersion===self._playbackVersion){
             // #ifdef MP-WEIXIN
-            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){self.$refs.xfyun.speak(d.data&&d.data.message);self.refresh();return}
+            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){if(!self.voiceMuted)self.$refs.xfyun.speak(d.data&&d.data.message);self.refresh();return}
             // #endif
             // #ifdef APP-PLUS
-            if(self.guideProvider==='xingyun')self.speakXingyun(d.data&&d.data.message)
+            if(self.guideProvider==='xingyun')self.speakAnswer(d.data&&d.data.message)
             // #endif
             var job=d.data&&d.data.avatarJob
             var performance=d.data&&d.data.avatarPerformance
@@ -348,6 +377,7 @@ export default {
           if (data.guide_info) {
             self.guideProvider = data.guide_info.render_mode || ''
             self.guideName = data.guide_info.name || ''
+            self.guideNameEn = data.guide_info.name_en || ''
             var gid=data.guide_info.guide_id
             self.guideAvatar=data.guide_info.avatar||data.guide_info.poster_image||''
             self.guideSourceVideo=assetUrl(data.guide_info.base_mp4_path||'')
@@ -380,15 +410,29 @@ export default {
         }
       }).catch(function() {})
     },
-    goBack: function() {
-      uni.navigateBack({ delta: 1, fail: function() { uni.reLaunch({url:'/pages/tour-guide/tour-guide'}) } })
-    },
-    confirmEnd: function() { this.showEndConfirm=true },
-    endTour: function() {
+    goBack: function() { this.leaveTour() },
+    // 重建首页并移除导览页；返回不能依赖渲染层回调或云端响应。
+    leaveTour: function(url) {
+      if(this.leavingTour)return
+      this.leavingTour=true
       this.showEndConfirm=false
-      var sid=this.sid
-      api.endSession(sid).catch(function(){})
-      uni.redirectTo({ url:'/pages/tour-summary/tour-summary?sessionId='+sid })
+      this.cancelRecord();this.stopPlayback();this.stopGps()
+      this.closeXingyun()
+      var self=this
+      uni.reLaunch({url:url||'/pages/tour-guide/tour-guide',fail:function(){
+        self.leavingTour=false
+        uni.showToast({title:'返回首页失败，请重试',icon:'none'})
+      }})
+    },
+    confirmEnd: function() { if(!this.endingTour&&!this.leavingTour)this.showEndConfirm=true },
+    endTour: function() {
+      if(this.endingTour||this.leavingTour)return
+      this.endingTour=true
+      this.showEndConfirm=false
+      api.endSession(this.sid).then(function(result){
+        if(!result.data||!result.data.success)throw new Error(result.data&&result.data.message||'结束记录保存失败')
+      }).catch(function(){uni.showToast({title:'已退出，结束状态未保存，请在导览记录中检查',icon:'none'})})
+      this.leaveTour('/pages/tour-summary/tour-summary?sessionId='+this.sid)
     },
     toggleGps: function() {
       if (this.gpsTracking) { this.stopGps() }
@@ -502,13 +546,13 @@ export default {
   },
   onReady:function(){this.measureAvatar()},
   onResize:function(){this.$nextTick(this.measureAvatar)},
-  onUnload:function(){this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
-  onHide:function(){this.cancelRecord();this.stopPlayback();this.closeXingyun();
+  onUnload:function(){this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
+  onHide:function(){this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
     // #ifdef MP-WEIXIN
     if(this.$refs.xfyun)this.$refs.xfyun.close()
     // #endif
   },
-  onShow:function(){if(this.guideProvider==='xingyun')this.connectXingyun()},
+  onShow:async function(){this.tourVisible=true;if(this._xingyunClosePromise)await this._xingyunClosePromise;if(this.guideProvider==='xingyun')this.connectXingyun()},
   onLoad: function(opts) {
     // #ifdef APP-PLUS
     this.appXingyun=true
@@ -669,4 +713,16 @@ export default {
 .sm-section{margin-top:8rpx}
 .sm-section-title{font-size:22rpx;font-weight:600;color:var(--ng-text);display:block;margin-bottom:4rpx}
 .sm-section-text{font-size:22rpx;color:var(--ng-secondary);line-height:1.6}
+.voice-mute-btn{position:absolute;right:24rpx;top:calc(18rpx + env(safe-area-inset-top));z-index:8;width:64rpx;height:64rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:6rpx;background:rgba(255,255,255,.86);border:1rpx solid rgba(99,102,241,.22);box-shadow:0 6rpx 20rpx rgba(30,41,59,.12)}
+.voice-mute-btn.muted{background:rgba(148,163,184,.28);border-color:rgba(148,163,184,.35)}
+.vm-pause{display:flex;align-items:center;gap:6rpx}
+.vm-bar{width:8rpx;height:26rpx;border-radius:4rpx;background:#4f46e5;display:block}
+.voice-mute-btn.muted .vm-bar{background:#64748b}
+.vm-play{width:0;height:0;border-left:22rpx solid #64748b;border-top:13rpx solid transparent;border-bottom:13rpx solid transparent;margin-left:6rpx}
+.msg-voice-btn{display:inline-flex;align-items:center;justify-content:center;gap:5rpx;width:44rpx;height:44rpx;margin-left:10rpx;border-radius:50%;background:rgba(99,102,241,.12);vertical-align:middle}
+.msg-voice-btn.muted{background:rgba(148,163,184,.22)}
+.msg-voice-btn .vm-bar{width:6rpx;height:20rpx;border-radius:3rpx;background:#4f46e5;display:block}
+.msg-voice-btn.muted .vm-bar{background:#64748b}
+.msg-voice-btn .vm-play{width:0;height:0;border-left:16rpx solid #64748b;border-top:10rpx solid transparent;border-bottom:10rpx solid transparent;margin-left:4rpx}
+.voice-mute-btn{display:none}
 </style>

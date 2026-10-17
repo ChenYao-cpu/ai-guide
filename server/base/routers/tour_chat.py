@@ -337,7 +337,7 @@ async def set_random_durations():
 @router.post("/ai-chat-recommend", summary="自然语言个性化路线推荐")
 async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minutes: int = 120,
                             pace: str = "standard", start_area: str = "auto", end_area: str = "auto",
-                            queue_reserve_minutes: int = 0, excluded_spot_ids: str = ""):
+                            queue_reserve_minutes: int = 0, excluded_spot_ids: str = "", language: str = "zh"):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -392,6 +392,16 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
                 result["model"] = os.getenv("LLM_MODEL_NAME", "")
         except Exception as error:
             logger.warning(f"Recommendation explanation fallback: {type(error).__name__}")
+    if str(language or 'zh').lower().startswith('en'):
+        # 英文模式下：行程文本经统一翻译通道转英文，景点名走固定映射。
+        from ..modules.tour_language import translate_answer, ENGLISH_SPOT_NAMES
+        from ..routers.llm import get_llm_res
+        generate = get_llm_res if _llm_is_configured() else None
+        try:
+            result["ai_response"] = await translate_answer(result["ai_response"], generate)
+        except Exception as error:
+            logger.warning(f"Recommendation English translation failed: {type(error).__name__}")
+        result["spot_names"] = [ENGLISH_SPOT_NAMES.get(name, name) for name in result.get("spot_names", [])]
     return make_return_data(True, ResultCode.SUCCESS, "推荐完成", result)
 
 
@@ -459,7 +469,7 @@ async def get_visitor_routes():
 
 
 @router.get("/guides", summary="获取数字导游列表（游客公开接口）")
-async def get_visitor_guides():
+async def get_visitor_guides(language: str = "zh"):
     """游客端获取所有可用数字导游（免登录）"""
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
@@ -473,20 +483,35 @@ async def get_visitor_guides():
             .order_by(DigitalGuideInfo.guide_id)
         ).all()
         guides = [g for g in guides if selectable(session, g)]
-        voice_labels = {g.guide_id: (session.get(XingyunGuideBinding, g.guide_id).voice_label if g.render_mode == "xingyun" else "") for g in guides}
+        if str(language or "zh").lower().startswith("en"):
+            # 英文模式优先英文导游（language=en），没有时仍回退到中文导游。
+            guides = sorted(guides, key=lambda g: 0 if str(getattr(g, "language", "zh") or "zh").startswith("en") else 1)
+        english_mode = str(language or "zh").lower().startswith("en")
+        bindings = {g.guide_id: session.get(XingyunGuideBinding, g.guide_id) for g in guides if g.render_mode == "xingyun"}
+        def _voice_label(g):
+            binding = bindings.get(g.guide_id)
+            if binding is None:
+                return ""
+            if english_mode:
+                return binding.voice_label_en or ""
+            return binding.voice_label or ""
+        voice_labels = {g.guide_id: _voice_label(g) for g in guides}
 
     guide_list = []
     for g in (guides or []):
         model_path = resolve_model_path(g.voice_style, g.live2d_model_path)
         guide_list.append({
             "guide_id": g.guide_id,
-            "name": g.name,
-            "character": g.character,
+            "name": (getattr(g, "name_en", "") or g.name) if english_mode else g.name,
+            "character": (getattr(g, "character_en", "") or g.character) if english_mode else g.character,
             "avatar": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.avatar.lstrip('/')) if g.avatar and not g.avatar.startswith(('http://','https://')) else (g.avatar or ""),
             "poster_image": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.poster_image.lstrip('/')) if g.poster_image and not g.poster_image.startswith(('http://','https://')) else (g.poster_image or ""),
             "base_mp4_path": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.base_mp4_path.lstrip('/')) if g.base_mp4_path and not g.base_mp4_path.startswith(('http://','https://')) else (g.base_mp4_path or ""),
             "voice_style": resolve_guide_voice(g.voice_style, model_path, g.render_mode),
             "voice_speed": g.voice_speed,
+            "language": getattr(g, "language", "zh") or "zh",
+            "name_en": getattr(g, "name_en", "") or "",
+            "character_en": getattr(g, "character_en", "") or "",
             "live2d_model_path": model_path,
             "render_mode": g.render_mode,
             "voice_label": voice_labels[g.guide_id],
@@ -887,7 +912,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
 
 
 @router.post("/recognize-spot", summary="拍照识景")
-async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), user_id: int = Depends(get_current_user_info)):
+async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), language: str = Form('zh'), user_id: int = Depends(get_current_user_info)):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -903,7 +928,7 @@ async def recognize_spot(file: UploadFile = File(...), question: str = Form('', 
                         'city':s.city or '', 'description':(s.description or '')[:600]} for s in spots]
         if not catalog:
             raise HTTPException(503, '景点资料尚未配置，暂时无法识别')
-        result = await recognize_photo(content, catalog, question)
+        result = await recognize_photo(content, catalog, question, language)
         with Session(DB_ENGINE) as db:
             record = ScenicRecognition(user_id=user_id, result_json=json.dumps(result, ensure_ascii=False))
             db.add(record)

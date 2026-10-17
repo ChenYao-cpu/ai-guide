@@ -14,22 +14,22 @@
 
     <!-- 标题 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
-      <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">清空</text>
+      <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">{{ t("清空") }}</text>
     </view>
 
     <!-- 快捷提示 -->
     <view class="quick-hints" v-if="msgs.length === 0">
-      <view class="qh-chip" @tap="quickSend('我想带孩子玩2小时，喜欢自然风光')">亲子2小时自然游</view>
-      <view class="qh-chip" @tap="quickSend('推荐颐和园的历史文化景点，半天时间')">颐和园历史文化半天</view>
-      <view class="qh-chip" @tap="quickSend('帮我规划一个适合拍照的一日游路线')">拍照打卡一日游</view>
-      <view class="qh-chip" @tap="quickSend('周末带朋友玩半天，喜欢美食和拍照')">周末美食拍照</view>
+      <view class="qh-chip" @tap="quickSend(t('我想带孩子玩2小时，喜欢自然风光'))">{{ t("亲子2小时自然游") }}</view>
+      <view class="qh-chip" @tap="quickSend(t('推荐颐和园的历史文化景点，半天时间'))">{{ t("颐和园历史文化半天") }}</view>
+      <view class="qh-chip" @tap="quickSend(t('帮我规划一个适合拍照的一日游路线'))">{{ t("拍照打卡一日游") }}</view>
+      <view class="qh-chip" @tap="quickSend(t('周末带朋友玩半天，喜欢美食和拍照'))">{{ t("周末美食拍照") }}</view>
     </view>
 
     <!-- 对话区 -->
     <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="true">
       <view v-if="msgs.length === 0 && !loading" class="chat-empty">
 
-        <text class="ce-title">想去哪里？</text>
+        <text class="ce-title">{{ t("想去哪里？") }}</text>
 
       </view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
@@ -37,13 +37,13 @@
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
           <text v-if="m.content" class="msg-text">{{ m.content }}</text>
           <view v-if="m.role==='ai' && m.content" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" @tap="replayTTS(m.content,i)">
-            <text>{{ speakingIndex===i ? (ttsLoading ? '正在生成语音…' : '停止播报') : '语音播报' }}</text>
+            <text>{{ speakingIndex===i ? (ttsLoading ? t('正在生成语音…') : t('停止播报')) : t('语音播报') }}</text>
           </view>
         </view>
       </view>
       <view v-if="loading" class="msg-row msg-l">
         <view class="msg-bubble ai typing">
-          <text class="msg-text">AI思考中...</text>
+          <text class="msg-text">{{ t("AI思考中...") }}</text>
         </view>
       </view>
       <view id="bottom"></view>
@@ -52,10 +52,10 @@
     <!-- 路线预览时间轴 -->
     <view class="route-preview" v-if="lastSpotIds.length > 0 && !loading">
       <view class="rp-head">
-        <text class="rp-title"> 路线预览</text>
-        <text class="rp-count">{{ recommendSpots.length || lastSpotIds.length }} 个景点</text>
+        <text class="rp-title">{{ t("路线预览") }}</text>
+        <text class="rp-count">{{ recommendSpots.length || lastSpotIds.length }}{{ t("个景点") }}</text>
       </view>
-      <view v-if="recommendLoading" class="rp-loading"><text>路线加载中...</text></view>
+      <view v-if="recommendLoading" class="rp-loading"><text>{{ t("路线加载中...") }}</text></view>
       <view v-else-if="recommendSpots.length" class="rp-timeline">
         <view v-for="(s, i) in recommendSpots" :key="s.spot_id" class="rp-item">
           <view class="rp-rail">
@@ -66,15 +66,15 @@
             <image v-if="s.image_path" :src="fixImg(s.image_path)" class="rp-img" mode="aspectFill"></image>
             <view v-else class="rp-img rp-img-df"></view>
             <view class="rp-info">
-              <text class="rp-name">{{ s.spot_name }}</text>
-              <text class="rp-cat">{{ s.category || '景点' }} · 预计 {{ s.visit_duration || 20 }}分钟</text>
-              <text v-if="i < recommendSpots.length - 1" class="rp-walk">↓ 步行约 {{ walkText(s, recommendSpots[i + 1]) }}</text>
+              <text class="rp-name">{{ t(s.spot_name) }}</text>
+              <text class="rp-cat">{{ t(s.category) || t('景点') }} · {{ t('预计') }} {{ s.visit_duration || 20 }}{{ t('分钟') }}</text>
+              <text v-if="i < recommendSpots.length - 1" class="rp-walk">{{ t('↓ 步行约') }} {{ walkText(s, recommendSpots[i + 1]) }}</text>
             </view>
           </view>
         </view>
         <view class="rp-total">
-          <text class="rp-total-label">预计总时长</text>
-          <text class="rp-total-value">{{ totalDuration }} 分钟</text>
+          <text class="rp-total-label">{{ t("预计总时长") }}</text>
+          <text class="rp-total-value">{{ totalDuration }}{{ t('分钟') }}</text>
         </view>
       </view>
     </view>
@@ -82,41 +82,41 @@
     <!-- 推荐结果 -->
     <view class="result-bar" v-if="lastSpotIds.length > 0 && !loading">
       <text> 已推荐 {{ lastSpotIds.length }} 个景点</text>
-      <view class="rb-btn" @tap="applyRecommend">使用路线</view>
+      <view class="rb-btn" @tap="applyRecommend">{{ t("使用路线") }}</view>
     </view>
 
-    <view v-if="voiceError && !transcribing" class="voice-status">{{ voiceError }}</view>
+    <view v-if="voiceError && !transcribing" class="voice-status">{{ t(voiceError) }}</view>
     <!-- 语音录音提示 -->
     <view class="recording-hint" v-if="recording">
       <view class="rh-wave">
         <view v-for="i in 5" :key="i" class="rh-bar" :style="{animationDelay:(i*0.12)+'s'}"></view>
       </view>
-      <text class="rh-text">{{ recordingText }}</text>
+      <text class="rh-text">{{ t(recordingText) }}</text>
     </view>
 
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
     <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible}">
       <view v-if="pendingPhoto || recognitionError" class="photo-draft">
         <view v-if="pendingPhoto" class="draft-thumbnail"><image :src="pendingPhoto" mode="aspectFill" @tap="previewChatPhoto(pendingPhoto)" /><button class="draft-remove" @tap="pendingPhoto=''">×</button></view>
-        <text v-if="pendingPhoto" class="draft-note">已选择图片，点击发送后识别</text>
-        <text v-if="recognitionError" class="photo-error">{{ recognitionError }}</text>
+        <text v-if="pendingPhoto" class="draft-note">{{ t("已选择图片，点击发送后识别") }}</text>
+        <text v-if="recognitionError" class="photo-error">{{ t(recognitionError) }}</text>
       </view>
       <!-- 输入栏 -->
     <view class="input-bar">
-      <button class="photo-add" :disabled="recognizing" aria-label="拍照或相册识景" @tap="chooseScenicPhoto">＋</button>
+      <button class="photo-add" :disabled="recognizing" :aria-label="t('拍照或相册识景')" @tap="chooseScenicPhoto">＋</button>
       <view class="voice-btn" :class="{ active: voiceMode }" @tap="toggleVoiceMode">
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
-      <input v-if="!voiceMode" v-model="text" class="msg-input" placeholder="描述你的游览需求..." confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
+      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('描述你的游览需求...')" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
       <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
-        <text>{{ transcribing ? '正在识别…' : voicePressing ? '正在录音，松开发送' : '按住说话' }}</text>
+        <text>{{ transcribing ? t('正在识别…') : voicePressing ? t('正在录音，松开发送') : t('按住说话') }}</text>
       </view>
       <view v-if="!voiceMode" class="send-btn" :class="{ disabled: (!text.trim() && !pendingPhoto) || loading || recognizing }" @tap="sendText">
-        <text>发送</text>
+        <text>{{ t("发送") }}</text>
       </view>
     </view>
 
-    <view v-show="!keyboardVisible" class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">智能导览</text></view><view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">AI小导游</text><view class="tb-dot"></view></view><view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">我的</text></view></view><view class="tb-safe"></view></view>
+    <view v-show="!keyboardVisible" class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ t("智能导览") }}</text></view><view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ t("AI小导游") }}</text><view class="tb-dot"></view></view><view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ t("我的") }}</text></view></view><view class="tb-safe"></view></view>
     </view>
   </view>
 </template>
@@ -219,23 +219,23 @@ export default {
       this.recognizing=true;this.loading=true;this.scrollChat();this.saveHistory()
       const showFailure=message=>{this.msgs.push({role:'ai',content:message});this.pendingPhoto=path}
       uni.uploadFile({url:BASE_URL+'/tour-session/recognize-spot',filePath:path,name:'file',timeout:90000,
-        formData:{question:caption},header:{Authorization:'Bearer '+uni.getStorageSync('token')},
+        formData:{question:caption,language:this.tourLanguage||'zh'},header:{Authorization:'Bearer '+uni.getStorageSync('token')},
         success:r=>{try{const d=JSON.parse(r.data)
           if(r.statusCode===200&&d.success&&d.data){
             const result=d.data
             const reply=result.status==='candidate'
-              ? ['可能是：'+result.spot_name,result.city,'识别依据：'+result.evidence,result.description,result.message].filter(Boolean).join('\n')
+              ? [this.t('可能是：')+result.spot_name,result.city,this.t('识别依据：')+result.evidence,result.description,result.message].filter(Boolean).join('\n')
               : result.message
             this.msgs.push({role:'ai',content:reply,recognition_id:result.recognition_id})
-          }else showFailure(typeof d.detail==='string'?d.detail:d.message||'识景失败，请稍后重试')
-        }catch(e){showFailure('识景服务返回格式异常')}},
-        fail:()=>showFailure('照片上传失败，请检查网络连接'),
+          }else showFailure(typeof d.detail==='string'?d.detail:d.message||this.t('识景失败，请稍后重试'))
+        }catch(e){showFailure(this.t('识景服务返回格式异常'))}},
+        fail:()=>showFailure(this.t('照片上传失败，请检查网络连接')),
         complete:()=>{this.recognizing=false;this.loading=false;this.scrollChat();this.saveHistory()}})
     },
     scrollChat:function(){this.$nextTick(()=>{this.chatScrollTop+=100000})},
     saveHistory:function(){try{uni.setStorageSync('ai_chat_msgs',JSON.stringify(this.msgs))}catch(e){}},
     loadHistory:function(){try{var r=uni.getStorageSync('ai_chat_msgs');if(r)this.msgs=JSON.parse(r)}catch(e){this.msgs=[]}},
-    clearHistory:function(){this.msgs=[];this.lastSpotIds=[];this.recommendSpots=[];uni.removeStorageSync('ai_chat_msgs');uni.showToast({title:'已清除',icon:'none'})},
+    clearHistory:function(){this.msgs=[];this.lastSpotIds=[];this.recommendSpots=[];uni.removeStorageSync('ai_chat_msgs');uni.showToast({title:this.t('已清除'),icon:'none'})},
     fixImg: function (u) { if (!u) return ''; return assetUrl(u) },
     walkKm: function (a, b) {
       if (!a || !b || !a.latitude || !a.longitude || !b.latitude || !b.longitude) return 0
@@ -276,22 +276,22 @@ export default {
       self.msgs.push({ role: 'user', content: msg })
       self.text = ''; self.loading = true; self.scrollChat()
       request({
-        url: '/tour-session/ai-chat-recommend?message=' + encodeURIComponent(msg),
+        url: '/tour-session/ai-chat-recommend?message=' + encodeURIComponent(msg) + '&language=' + (self.tourLanguage || 'zh'),
         method: 'POST', data: {},
       }).then(function (res) {
         var d = res.data
         if (d && d.success && d.data) {
           var dd = d.data
-          self.msgs.push({ role: 'ai', content: dd.ai_response || '已为您推荐景点' })
+          self.msgs.push({ role: 'ai', content: dd.ai_response || self.t('已为您推荐景点') })
           if (dd.spot_ids && dd.spot_ids.length) {
             self.lastSpotIds = dd.spot_ids
             uni.setStorageSync('ai_spot_ids', JSON.stringify(dd.spot_ids))
             self.fetchRecommendSpots(dd.spot_ids)
           }
           self.playTTS(dd.ai_response,self.msgs.length-1)
-        } else { self.msgs.push({ role: 'ai', content: d && d.message || '没有找到匹配路线，请调整需求。' }) }
+        } else { self.msgs.push({ role: 'ai', content: d && d.message || self.t('没有找到匹配路线，请调整需求。') }) }
       }).catch(function (error) {
-        self.msgs.push({ role: 'ai', content: error.message || '无法连接推荐服务，请检查网络。' })
+        self.msgs.push({ role: 'ai', content: error.message || self.t('无法连接推荐服务，请检查网络。') })
       })
       .finally(function () { self.loading = false; self.scrollChat(); self.saveHistory() })
     },
@@ -314,7 +314,7 @@ export default {
       // #ifdef APP-PLUS || H5
       request({url:'/xingyun/chat-voice'}).then(function(res){
         if(requestId!==self._ttsRequestId)return
-        self.voicePayload={id:requestId,text:clean,sdkUrl:res.data.sdk_url,gateway:BASE_URL+'/xingyun/session/'+res.data.guide_id+'?chat_speech=true',token:uni.getStorageSync('token')}
+        self.voicePayload={id:requestId,text:clean,sdkUrl:res.data.sdk_url,gateway:BASE_URL+'/xingyun/session/'+res.data.guide_id+'?chat_speech=true&language='+(self.tourLanguage||'zh'),token:uni.getStorageSync('token')}
       }).catch(function(error){if(requestId!==self._ttsRequestId)return;self.stopTTS();uni.showToast({title:error.message||'默认数字人未连接',icon:'none'})})
       return
       // #endif

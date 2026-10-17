@@ -10,14 +10,14 @@
     </view>
 
     <scroll-view scroll-y class="main">
-      <view v-if="loading" class="load">加载中...</view>
+      <view v-if="loading" class="load">{{ t("加载中...") }}</view>
       <view class="card-grid">
         <view v-for="(s,i) in spots" :key="s.spot_id" class="card" :style="s.image_path?'background-image:url('+fixImg(s.image_path)+')':''" @tap="openDetail(s)">
           <view class="card-overlay"></view>
           <view class="c-rank" :class="'r'+Math.min(i+1,3)">{{ i+1 }}</view>
           <view class="c-info">
-            <text class="c-name">{{ s.spot_name }}</text>
-            <text class="c-desc">{{ (s.description||s.location||'').substring(0,30) }}</text>
+            <text class="c-name">{{ t(s.spot_name) }}</text>
+            <text class="c-desc">{{ (t(s.description)||t(s.location)||'').substring(0,30) }}</text>
           </view>
           <view v-if="countsLoaded" class="c-like-count">
             <text class="iconfont icon-huore"></text>
@@ -33,21 +33,21 @@
       <view class="drawer-mask"></view>
       <view class="drawer-panel" @tap.stop="">
         <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ detailSpot.spot_name }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ t(detailSpot.spot_name) }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
         <scroll-view scroll-y class="dp-body">
           <image v-if="detailSpot.image_path" :src="fixImg(detailSpot.image_path)" class="dp-hero" mode="aspectFill"></image>
-          <text class="dp-desc">{{ detailSpot.description||'暂无简介' }}</text>
-          <view class="dp-row"><text>位置</text><text>{{ detailSpot.location||'暂无' }}</text></view>
-          <view class="dp-row"><text>分类</text><text>{{ detailSpot.category||'景点' }}</text></view>
-          <view class="dp-row"><text>标签</text><text>{{ detailSpot.tags||'暂无' }}</text></view>
+          <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
+          <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.location)||t('暂无') }}</text></view>
+          <view class="dp-row"><text>{{ t("分类") }}</text><text>{{ t(detailSpot.category)||t('景点') }}</text></view>
+          <view class="dp-row"><text>{{ t("标签") }}</text><text>{{ detailSpot.tags||t('暂无') }}</text></view>
         </scroll-view>
         <view class="dp-like-bar">
           <view class="dpl-btn" :class="{on:liked[detailSpot.spot_id]}" @tap="toggleLike(detailSpot.spot_id)">
             <text class="iconfont icon-huore"></text>
-            <text>{{ liked[detailSpot.spot_id]?'已收藏':'收藏' }}</text>
+            <text>{{ liked[detailSpot.spot_id]?t('已收藏'):t('收藏') }}</text>
           </view>
           <view class="dpl-btn-star" @tap="toggleLike(detailSpot.spot_id)">
-            <text>{{ liked[detailSpot.spot_id]?' 已收藏':' 收藏景点' }}</text>
+            <text>{{ liked[detailSpot.spot_id]?t(' 已收藏'):t(' 收藏景点') }}</text>
           </view>
         </view>
       </view>

@@ -2,8 +2,8 @@
   <web-view v-if="src" :src="src" @error="failed" />
   <view v-else class="notice">
     <text>{{ message }}</text>
-    <button v-if="!loading" @tap="load">重试</button>
-    <button @tap="back">返回导览</button>
+    <button v-if="!loading" @tap="load">{{ t("重试") }}</button>
+    <button @tap="back">{{ t("返回导览") }}</button>
   </view>
 </template>
 <script>

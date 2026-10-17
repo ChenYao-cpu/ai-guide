@@ -11,41 +11,47 @@
     <view class="top-tabs">
       <view class="tt-item" :class="{on:tab==='route'}" @tap="switchPlanningTab('route')">
         <text class="iconfont icon-zuobiao tt-icon"></text>
-        <view class="tt-text"><text class="tt-label">游览路线</text><view class="tt-underline"></view></view>
+        <view class="tt-text"><text class="tt-label">{{ t("游览路线") }}</text><view class="tt-underline"></view></view>
       </view>
       <view class="tt-item" :class="{on:tab==='personal'}" @tap="switchPlanningTab('personal')">
         <text class="iconfont icon-xueshengdenglu tt-icon"></text>
-        <view class="tt-text"><text class="tt-label">个性化</text><view class="tt-underline"></view></view>
+        <view class="tt-text"><text class="tt-label">{{ t("个性化") }}</text><view class="tt-underline"></view></view>
       </view>
     </view>
 
     <view class="main">
-      <view v-if="loading" class="load">加载中...</view>
-      <view v-if="error" class="err"><text>{{error}}</text><view class="retry" @tap="loadData">重试</view></view>
+      <view v-if="loading" class="sk-wrap">
+        <view class="sk-block" v-for="n in 3" :key="n">
+          <view class="sk-line sk-w40"></view>
+          <view class="sk-line sk-w100"></view>
+          <view class="sk-line sk-w70"></view>
+        </view>
+      </view>
+      <view v-if="error" class="err"><text>{{ t(error) }}</text><view class="retry" @tap="loadData">{{ t("重试") }}</view></view>
 
       <!-- ===== 游览路线 ===== -->
       <view v-if="tab==='route'">
         <view class="block">
-          <view class="bl-hd"><view class="bl-dot"></view><text>景区地图</text></view>
+          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("景区地图") }}</text></view>
           <view class="map-wrap">
             <map v-if="pageReady && pageVisible && mapMarkers.length && !showMapPreview && !detailSpot && !routeDetail && !guidePicker && !previewingGuide" class="mini-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :markers="mapMarkers" :scale="12" :enable-scroll="false" :enable-zoom="false" :enable-rotate="false" @markertap="onMarkerTap"></map>
-            <view v-else class="map-empty">{{ mapMarkers.length ? '' : loading ? '地图加载中…' : '暂无可定位的景点' }}</view>
+            <view v-else class="map-empty">{{ mapMarkers.length ? '' : loading ? t('地图加载中…') : t('暂无可定位的景点') }}</view>
           </view>
         </view>
 
         <view class="block" v-if="pageReady && pageVisible && routes.length">
-          <view class="bl-hd"><view class="bl-dot"></view><text>导览路线</text></view>
+          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("导览路线") }}</text></view>
           <view class="route-carousel-wrap">
             <swiper class="route-carousel" :current="routeIndex" @change="routeIndex=$event.detail.current" :autoplay="routes.length > 1 && !routeDetail && !showMapPreview && !detailSpot && !guidePicker && !previewingGuide" :interval="4500" :indicator-dots="routes.length > 1" :circular="routes.length > 1" indicator-color="#64748b" indicator-active-color="#ffffff" :duration="350">
               <swiper-item v-for="r in routes" :key="r.route_id" class="route-slide">
                 <view class="route-card" :class="{on:pickedRouteId===r.route_id}" @tap="openRoute(r)">
                   <image v-if="r.cover_image" :src="fixImg(r.cover_image)" class="route-cover-photo" mode="aspectFill" />
-                  <view v-else class="route-cover-empty">暂无路线图片</view>
+                  <view v-else class="route-cover-empty">{{ t("暂无路线图片") }}</view>
                   <view class="route-cover-shade"></view>
-                  <view class="rc-top"><text class="rc-tag"><text class="iconfont" :class="themeIcon(r.theme)"></text> {{ themeMap[r.theme]||'综合' }}</text><text class="rc-time">{{ r.estimated_time_minutes ? r.estimated_time_minutes+'分钟' : '时长待配置' }}</text></view>
+                  <view class="rc-top"><text class="rc-tag"><text class="iconfont" :class="themeIcon(r.theme)"></text> {{ t(themeMap[r.theme])||t('综合') }}</text><text class="rc-time">{{ r.estimated_time_minutes ? r.estimated_time_minutes+t('分钟') : t('时长待配置') }}</text></view>
                   <view class="rc-bottom">
-                    <text class="rc-name">{{ r.city ? r.city+' · ' : '' }}{{ r.name }}</text>
-                    <text class="rc-meta">{{ (r.spot_ids||[]).length }}个景点</text>
+                    <text class="rc-name">{{ t(r.city) ? t(r.city)+' · ' : '' }}{{ t(r.name) }}</text>
+                    <text class="rc-meta">{{ (r.spot_ids||[]).length }}{{ t("个景点") }}</text>
                   </view>
                 </view>
               </swiper-item>
@@ -56,57 +62,57 @@
         </view>
 
         <view class="block">
-          <view class="bl-hd"><view class="bl-dot"></view><text>景点选择</text><text class="sub">{{ pickedCount }}/{{ filteredSpots.length }}</text></view>
-          <view class="search-row"><input class="search-input" v-model="keyword" placeholder="搜索景点或城市"/></view>
+          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("景点选择") }}</text><text class="sub">{{ pickedCount }}/{{ filteredSpots.length }}</text></view>
+          <view class="search-row"><input class="search-input" v-model="keyword" :placeholder="t('搜索景点或城市')"/></view>
           <scroll-view scroll-x class="cat-tabs">
-            <text v-for="c in spotCats" :key="c.value" class="cat-tab" :class="{on:spotCat===c.value}" @tap="spotCat=c.value">{{ c.label }}</text>
+            <text v-for="c in spotCats" :key="c.value" class="cat-tab" :class="{on:spotCat===c.value}" @tap="spotCat=c.value">{{ t(c.label) }}</text>
           </scroll-view>
           <view class="spot-list" v-if="filteredSpots.length">
             <view v-for="s in filteredSpots" :key="s.spot_id" class="spot-card" :class="{on:isPicked(s.spot_id)}">
               <image v-if="s.image_path" :src="fixImg(s.image_path)" class="sc-img" mode="aspectFill"></image>
               <view v-else class="sc-img-df"></view>
               <view class="sc-body" @tap="toggleSpot(s.spot_id)">
-                <view class="sc-info"><text class="sc-name">{{ s.spot_name }}</text><text class="sc-cat">{{ s.city ? s.city+' · ' : '' }}{{ s.category||'景点' }}</text></view>
+                <view class="sc-info"><text class="sc-name">{{ t(s.spot_name) }}</text><text class="sc-cat">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ catLabel(s.category)||t('景点') }}</text></view>
               </view>
-              <view class="sc-btn" @tap="openDetail(s)">详情</view>
+              <view class="sc-btn" @tap="openDetail(s)">{{ t("详情") }}</view>
             </view>
           </view>
-          <view class="empty" v-else-if="!loading">暂无景点</view>
+          <view class="empty" v-else-if="!loading"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text class="empty-title">{{ t("暂无景点") }}</text><text class="empty-hint">{{ t("换个分类或关键词再试试") }}</text></view>
         </view>
       </view>
 
-      <view v-if="tab==='route'&&pickedCount>0&&!canStart" class="selection-next" @tap="goSelectGuide">选择导游</view>
+      <view v-if="tab==='route'&&pickedCount>0&&!canStart" class="selection-next" @tap="goSelectGuide">{{ t("选择导游") }}</view>
       <!-- ===== 个性化 ===== -->
       <view v-if="tab==='personal'">
         <view class="block">
-          <view id="guide-selection" class="bl-hd"><view class="bl-dot"></view><text>数字人形象</text></view>
+          <view id="guide-selection" class="bl-hd"><view class="bl-dot"></view><text>{{ t("数字人形象") }}</text></view>
           <view class="guide-grid" v-if="guides.length">
             <view v-for="g in guides" :key="g.guide_id" class="guide-card" :class="{on:pickedGuide&&pickedGuide.guide_id===g.guide_id}" @tap="pickedGuide=g">
               <image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" @error="imageFailed(g)" />
-              <view v-else-if="g.model3dUrl" class="gc-empty">暂无预览</view>
-              <view v-else class="gc-empty">{{ g.previewLoading ? '正在加载形象…' : '形象未配置' }}</view>
-              <view v-if="g.model3dUrl||guideImage(g)||g.base_mp4_path" class="gc-preview" @tap.stop="previewGuide(g)">预览</view>
-              <view class="gc-name">{{ g.name }}{{ pickedGuide&&pickedGuide.guide_id===g.guide_id ? ' · 已选择' : '' }}</view>
+              <view v-else-if="g.model3dUrl" class="gc-empty">{{ t("暂无预览") }}</view>
+              <view v-else class="gc-empty">{{ g.previewLoading ? t('正在加载形象…') : t('形象未配置') }}</view>
+              <view v-if="g.model3dUrl||guideImage(g)||g.base_mp4_path" class="gc-preview" @tap.stop="previewGuide(g)">{{ t("预览") }}</view>
+              <view class="gc-name">{{ guideName(g) }}{{ pickedGuide&&pickedGuide.guide_id===g.guide_id ? t(' · 已选择') : '' }}</view>
             </view>
           </view>
-          <view class="empty" v-else-if="!loading">暂无导游</view>
+          <view class="empty" v-else-if="!loading"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text class="empty-title">{{ t("暂无导游") }}</text><text class="empty-hint">{{ t("管理员上架数字导游后会显示在这里") }}</text></view>
 
         </view>
 
         <view class="block">
-          <view class="bl-hd"><view class="bl-dot"></view><text>游览偏好</text></view>
+          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("游览偏好") }}</text></view>
           <view class="pref-wrap">
-            <view v-for="p in prefs" :key="p.value" class="pref-chip" :class="{on:pickedPrefs.indexOf(p.value)>=0}" @tap="togglePref(p.value)"><text class="iconfont" :class="p.cls"></text><text> {{ p.label }}</text></view>
+            <view v-for="p in prefs" :key="p.value" class="pref-chip" :class="{on:pickedPrefs.indexOf(p.value)>=0}" @tap="togglePref(p.value)"><text class="iconfont" :class="p.cls"></text><text> {{ t(p.label) }}</text></view>
           </view>
-          <view class="planner-note">兴趣多选，综合单选。</view>
-          <picker :range="budgetOptions" :value="budgetIndex" @change="changeBudget"><view class="planner-control">可用时长：{{ budgetOptions[budgetIndex] }} 分钟</view></picker>
-          <picker :range="['正常游览','轻松慢走 · 少台阶']" :value="paceIndex" @change="changePace"><view class="planner-control">步行节奏：{{ paceIndex ? '轻松慢走 · 少台阶' : '正常游览' }}</view></picker>
-          <view class="planner-generate" @tap="generatePersonalPlan">{{ recommending ? '正在规划…' : '生成个性化路线' }}</view>
+          <view class="planner-note">{{ t("兴趣多选，综合单选。") }}</view>
+          <picker :range="budgetOptions" :value="budgetIndex" @change="changeBudget"><view class="planner-control">{{ t('可用时长：') }}{{ budgetOptions[budgetIndex] }}{{ t('分钟') }}</view></picker>
+          <picker :range="[t('正常游览'), t('轻松慢走 · 少台阶')]" :value="paceIndex" @change="changePace"><view class="planner-control">{{ t('步行节奏：') }}{{ paceIndex ? t('轻松慢走 · 少台阶') : t('正常游览') }}</view></picker>
+          <view class="planner-generate" @tap="generatePersonalPlan">{{ recommending ? t('正在规划…') : t('生成个性化路线') }}</view>
           <view v-if="personalPlan" class="planner-result">
-            <view>{{ personalPlan.spot_count }} 个景点 · 合计 {{ personalPlan.estimated_time_minutes }} 分钟</view>
-            <view class="planner-note">停留 {{ personalPlan.visit_time_minutes }} · 步行 {{ personalPlan.walking_time_minutes }} · 休息 {{ personalPlan.rest_time_minutes }} 分钟</view>
-            <view v-for="(item,index) in personalPlan.score_details" :key="item.spot_id" class="planner-stop"><text>{{ index+1 }} {{ item.spot_name }}</text><text class="planner-note">{{ item.reason }}</text></view>
-            <view class="planner-note">{{ personalPlan.data_basis }} {{ personalPlan.planning_note }} 步行路网：OpenStreetMap contributors（ODbL）。</view>
+            <view>{{ personalPlan.spot_count }} {{ t('个景点') }} {{ t('· 合计') }} {{ personalPlan.estimated_time_minutes }} {{ t('分钟') }}</view>
+            <view class="planner-note">{{ t('停留') }} {{ personalPlan.visit_time_minutes }} {{ t('分钟') }}{{ t('· 步行') }} {{ personalPlan.walking_time_minutes }} {{ t('分钟') }}{{ t('· 休息') }} {{ personalPlan.rest_time_minutes }} {{ t('分钟') }}</view>
+            <view v-for="(item,index) in personalPlan.score_details" :key="item.spot_id" class="planner-stop"><text>{{ index+1 }} {{ t(item.spot_name) }}</text><text class="planner-note">{{ t(item.reason) }}</text></view>
+            <view class="planner-note">{{ personalPlan.data_basis }} {{ personalPlan.planning_note }} {{ t('步行路网：OpenStreetMap contributors（ODbL）。') }}</view>
           </view>
         </view>
       </view>
@@ -117,14 +123,14 @@
     <view v-if="previewingGuide" class="drawer-overlay" @tap="previewingGuide=null">
       <view class="drawer-mask"></view>
       <view class="drawer-panel guide-preview-panel" @tap.stop="">
-        <view class="dp-hd"><text class="dp-title">{{ previewingGuide.name }}</text><text class="dp-close" @tap="previewingGuide=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ guideName(previewingGuide) }}</text><text class="dp-close" @tap="previewingGuide=null">✕</text></view>
         <view v-if="previewPhoto(previewingGuide)" class="guide-preview-half"><image :key="previewingGuide.guide_id" :src="previewPhoto(previewingGuide)" class="guide-preview-photo" mode="widthFix" @load="previewModelReady" @error="previewImageError" /></view>
-        <text v-if="previewModelStatus" class="guide-description">{{ previewModelStatus }}</text>
-        <text class="guide-description">{{ previewingGuide.character || '暂无角色介绍' }}</text>
+        <text v-if="previewModelStatus" class="guide-description">{{ t(previewModelStatus) }}</text>
+        <text class="guide-description">{{ guideCharacter(previewingGuide) || t('暂无角色介绍') }}</text>
         <text class="guide-description">{{ previewingGuide.previewMessage }}</text>
       </view>
     </view>
-    <view v-if="guidePicker" class="drawer-overlay" @tap="guidePicker=false"><view class="drawer-mask"></view><view class="drawer-panel" @tap.stop=""><view class="dp-hd"><text class="dp-title">选择数字人</text><text @tap="guidePicker=false">关闭</text></view><view class="guide-grid"><view v-for="g in guides" :key="g.guide_id" class="guide-card" @tap="pickedGuide=g;guidePicker=false"><image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" /><view class="gc-name">{{ g.name }}</view></view></view></view></view>
+    <view v-if="guidePicker" class="drawer-overlay" @tap="guidePicker=false"><view class="drawer-mask"></view><view class="drawer-panel" @tap.stop=""><view class="dp-hd"><text class="dp-title">{{ t("选择数字人") }}</text><text @tap="guidePicker=false">{{ t("关闭") }}</text></view><view class="guide-grid"><view v-for="g in guides" :key="g.guide_id" class="guide-card" @tap="pickedGuide=g;guidePicker=false"><image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" /><view class="gc-name">{{ t(g.name) }}</view></view></view></view></view>
     <!-- 悬浮开始按钮 -->
     <view class="fab-btn" :class="{show:canStart}" @tap="startTour">
       <text class="fab-icon">▶</text>
@@ -137,14 +143,14 @@
       <view class="drawer-panel spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path}" @tap.stop="">
         <view v-if="detailSpot.image_path" class="scenic-fade"><image :src="fixImg(detailSpot.image_path)" class="scenic-clear" mode="aspectFill" /><image :src="fixImg(detailSpot.image_path)" class="scenic-blur" mode="aspectFill" /><view class="scenic-veil"></view></view>
         <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">景点详情</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ t("景点详情") }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
         <scroll-view scroll-y class="dp-body"><view class="dp-content">
-          <text class="dp-name">{{ detailSpot.spot_name }}</text>
-          <text class="dp-desc">{{ detailSpot.description||'暂无简介' }}</text>
-          <view class="dp-row"><text>位置</text><text>{{ detailSpot.city ? detailSpot.city+' · ' : '' }}{{ detailSpot.location||'暂无' }}</text></view>
+          <text class="dp-name">{{ t(detailSpot.spot_name) }}</text>
+          <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
+          <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.city) ? t(detailSpot.city)+' · ' : '' }}{{ t(detailSpot.location)||t('暂无') }}</text></view>
         </view></scroll-view>
         <view class="dp-btn" :class="{added:isPicked(detailSpot.spot_id)}" @tap="toggleSpot(detailSpot.spot_id);detailSpot=null">
-          <text>{{ isPicked(detailSpot.spot_id)?'✓ 取消选择':'加入选择' }}</text>
+          <text>{{ isPicked(detailSpot.spot_id)?t('✓ 取消选择'):t('加入选择') }}</text>
         </view>
       </view>
     </view>
@@ -155,10 +161,10 @@
       <view class="drawer-panel route-detail-panel" @tap.stop="">
         <view v-if="routeDetail.cover_image" class="route-detail-background"><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo" mode="aspectFill" /><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo route-detail-blur" mode="aspectFill" /><view class="route-detail-wash"></view></view>
         <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ routeDetail.city ? routeDetail.city+' · ' : '' }}{{ routeDetail.name }}</text><text class="dp-close" @tap="routeDetail=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.city) ? t(routeDetail.city)+' · ' : '' }}{{ t(routeDetail.name) }}</text><text class="dp-close" @tap="routeDetail=null">✕</text></view>
         <scroll-view scroll-y class="dp-body"><view class="dp-content">
-          <view class="rd-tag"><text class="iconfont" :class="themeIcon(routeDetail.theme)"></text> {{ themeMap[routeDetail.theme]||'综合' }} · {{ (routeDetail.spot_ids||[]).length }}个景点 · {{ routeTotalTime ? routeTotalTime+'分钟' : '时长待配置' }}</view>
-          <text class="rd-desc">{{ routeDetail.description||'' }}</text>
+          <view class="rd-tag"><text class="iconfont" :class="themeIcon(routeDetail.theme)"></text> {{ t(themeMap[routeDetail.theme])||t('综合') }} · {{ (routeDetail.spot_ids||[]).length }}{{ t('个景点 ·') }} {{ routeTotalTime ? routeTotalTime+t('分钟') : t('时长待配置') }}</view>
+          <text class="rd-desc">{{ t(routeDetail.description)||'' }}</text>
           <!-- 竖点时间轴 -->
           <view class="timeline">
             <view v-for="(s,i) in routeSpots" :key="s.spot_id" class="tl-item">
@@ -173,8 +179,8 @@
                 <image v-if="s.image_path" :src="fixImg(s.image_path)" class="tlc-img" mode="aspectFill"></image>
                 <view v-else class="tlc-img-df"></view>
                 <view class="tlc-info">
-                  <text class="tlc-name">{{ s.spot_name }}</text>
-                  <text class="tlc-cat">{{ s.city ? s.city+' · ' : '' }}{{ s.category||'景点' }} · {{ s.visit_duration ? '预计'+s.visit_duration+'分钟' : '时长待配置' }}</text>
+                  <text class="tlc-name">{{ t(s.spot_name) }}</text>
+                  <text class="tlc-cat">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ catLabel(s.category)||t('景点') }} · {{ s.visit_duration ? t('预计')+s.visit_duration+t('分钟') : t('时长待配置') }}</text>
                 </view>
               </view>
             </view>
@@ -182,17 +188,17 @@
         </view></scroll-view>
         <view class="dp-actions">
           <view class="dpa-btn pick" :class="{on:pickedRouteId===routeDetail.route_id}" @tap="pickRoute(routeDetail)">
-            <text>{{ pickedRouteId===routeDetail.route_id ? '✓ 已选此路线' : '选择此路线' }}</text>
+            <text>{{ pickedRouteId===routeDetail.route_id ? t('✓ 已选此路线') : t('选择此路线') }}</text>
           </view>
           <!-- #ifdef APP-PLUS -->
-          <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id"><text>去选数字人</text></view>
+          <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id"><text>{{ t("去选数字人") }}</text></view>
           <!-- #endif -->
           <!-- #ifndef APP-PLUS -->
           <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id&&!canStart">
-            <text>去选数字人形象</text>
+            <text>{{ t("去选数字人形象") }}</text>
           </view>
           <view class="dpa-btn start" @tap="startTour()" v-if="pickedRouteId===routeDetail.route_id&&canStart">
-            <text>开始导览</text>
+            <text>{{ t("开始导览") }}</text>
           </view>
           <!-- #endif -->
         </view>
@@ -204,9 +210,9 @@
         <view class="tb-ink-line"></view>
         <view class="tb-inner">
 
-          <view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">智能导览</text><view class="tb-dot"></view></view>
-          <view class="tb-item highlight" @tap="goTab('/pages/ai-chat/ai-chat')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">AI小导游</text></view>
-          <view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">我的</text></view>
+          <view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ t("智能导览") }}</text><view class="tb-dot"></view></view>
+          <view class="tb-item highlight" @tap="goTab('/pages/ai-chat/ai-chat')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ t("AI小导游") }}</text></view>
+          <view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ t("我的") }}</text></view>
         </view>
         <view class="tb-safe"></view>
       </view>
@@ -221,7 +227,7 @@ import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
 function req(o){return new Promise(function(rs,rj){var u=o.url;if(u.indexOf('http')!==0)u=BASE_URL+u;uni.request({url:u,method:o.method||'GET',data:o.data||{},header:Object.assign({'Content-Type':'application/json'},uni.getStorageSync('token')?{Authorization:'Bearer '+uni.getStorageSync('token')}:{}),success:function(r){if(r.statusCode===200)rs({data:r.data});else rj(new Error('HTTP '+r.statusCode))},fail:rj})})}
 var api={
   getSpots:function(){return req({url:'/tour-session/spots'})},
-  getGuides:function(){return req({url:'/tour-session/guides'})},
+  getGuides:function(language){return req({url:'/tour-session/guides?language='+(language==='en'?'en':'zh')})},
   getRoutes:function(){return req({url:'/tour-session/routes'})},
   createSession:function(n,g,p,s){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&visitor_preferences='+encodeURIComponent(p||'')+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[])),method:'POST'})},
 }
@@ -249,6 +255,9 @@ export default {
   },
   mounted:function(){var info=uni.getSystemInfoSync();this.statusH=info.statusBarHeight||20},
   methods:{
+    catLabel: function (c) { var m = { historical: '历史', natural: '自然', cultural: '文化' }; return this.t(m[c] || c) },
+    guideName: function (g) { if (!g) return ""; return (this.tourLanguage === "en" && g.name_en) ? g.name_en : g.name },
+    guideCharacter: function (g) { if (!g) return ""; return (this.tourLanguage === "en" && g.character_en) ? g.character_en : g.character },
 
     fixImg:function(u){if(!u)return'';return assetUrl(u)},
     guideImage:function(g){return this.fixImg(g.poster_image||g.avatar||g.previewUrl)},
@@ -259,7 +268,7 @@ export default {
     previewImageError:function(){this.previewModelStatus='形象图片加载失败，请关闭预览后重试'},
     previewModelError:function(e){this.previewModelStatus=e.detail&&e.detail.message||'3D模型加载失败，请重试';uni.showToast({title:e.detail&&e.detail.message||'3D模型加载失败，请重试',icon:'none'})},
     previewVideoError:function(){uni.showToast({title:'形象视频播放失败，请检查素材',icon:'none'})},
-    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.model3dUrl='';g.previewLoading=false;g.previewMessage='星云 · '+(g.voice_label||'默认音色');return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.model3dUrl=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?c.threeD.modelUrl:'';g.previewUrl=c.cartoon&&c.cartoon.previewUrl||'';g.previewMessage=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?'3D · '+c.threeD.name:c.realistic.ready?c.realistic.message:(c.cartoon.ready?c.cartoon.message:c.realistic.message+'；'+c.cartoon.message)}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
+    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.model3dUrl='';g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.model3dUrl=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?c.threeD.modelUrl:'';g.previewUrl=c.cartoon&&c.cartoon.previewUrl||'';g.previewMessage=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?'3D · '+c.threeD.name:c.realistic.ready?c.realistic.message:(c.cartoon.ready?c.cartoon.message:c.realistic.message+'；'+c.cartoon.message)}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
     goTab:function(p){uni.reLaunch({url:p})},
     isPicked:function(id){return!!this.pickedIds[id]},
     toggleSpot:function(id){var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
@@ -292,7 +301,7 @@ export default {
         if(sid&&r.data.data&&r.data.data.avatar_access_token)uni.setStorageSync('xingyun-tour-'+sid,r.data.data.avatar_access_token);if(sid)return req({url:'/tour-session/start/'+sid,method:'PUT'}).then(function(start){if(!start.data.success){uni.showToast({title:start.data.message||'开始导览失败',icon:'none'});return}uni.navigateTo({url:'/pages/tour/tour?sessionId='+sid})});else uni.showToast({title:r&&r.data&&r.data.message||'创建失败',icon:'none'})
       }).catch(function(){uni.showToast({title:'网络异常',icon:'none'})})},
     loadData:function(){var s=this;s.loading=true;s.error=''
-      Promise.all([api.getGuides().catch(function(){return null}),api.getSpots().catch(function(){return null}),api.getRoutes().catch(function(){return null})]).then(function(r){
+      Promise.all([api.getGuides(s.tourLanguage).catch(function(){return null}),api.getSpots().catch(function(){return null}),api.getRoutes().catch(function(){return null})]).then(function(r){
         var gr=r[0],sr=r[1],rr=r[2]
         if(gr&&gr.data){var g=gr.data;s.guides=(g.data&&g.data.guide_list)?g.data.guide_list:(g.guide_list||[])}
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
@@ -301,8 +310,8 @@ export default {
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}
         s.guides=s.guides.map(function(g){return Object.assign({},g,{model3dUrl:(g.model3d_url||'').replace('.gltf','.glb'),previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
         if(!gr||!sr||!rr)s.error='部分数据加载失败，请重试'
-        var stored=uni.getStorageSync('ai_spot_ids')
-        if(stored){try{var ids=JSON.parse(stored);var picked={};ids.forEach(function(id){picked[id]=true});s.pickedIds=picked;uni.removeStorageSync('ai_spot_ids')}catch(e){}}
+        // 进入导览页不自动选景点：上一次 AI 推荐留下的暂存直接丢弃。
+        uni.removeStorageSync('ai_spot_ids')
         s.loading=false
       }).catch(function(){s.error='网络连接失败';s.loading=false})},
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
@@ -368,7 +377,7 @@ export default {
 .dp-hero{width:100%;height:220rpx;border-radius:18rpx;margin-bottom:20rpx;box-shadow:0 4rpx 16rpx rgba(0,0,0,.06)}
 .dp-name{font-size:41.4rpx;font-weight:600;color:var(--ng-text);display:block;margin-bottom:12rpx}
 .dp-desc{font-size:27.6rpx;color:var(--ng-text);line-height:1.8;display:block;margin-bottom:20rpx}
-.dp-row{display:flex;padding:16rpx 0;border-top:1rpx solid var(--ng-border)}.dp-row text:first-child{font-size:27.6rpx;color:var(--ng-secondary);width:80rpx;flex-shrink:0}.dp-row text:last-child{font-size:27.6rpx;color:var(--ng-text);flex:1}
+.dp-row{display:flex;align-items:flex-start;gap:20rpx;padding:12rpx 0;border-top:1rpx solid var(--ng-border)}.dp-row text:first-child{font-size:27.6rpx;color:var(--ng-secondary);flex:0 0 auto;min-width:150rpx;white-space:nowrap}.dp-row text:last-child{font-size:27.6rpx;color:var(--ng-text);flex:1;min-width:0;line-height:1.6;text-align:left;overflow-wrap:anywhere}
 .dp-btn{padding:12rpx 28rpx 28rpx;padding-bottom:calc(28rpx + env(safe-area-inset-bottom))}.dp-btn text{display:block;padding:24rpx;text-align:center;border-radius:18rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:34.5rpx;font-weight:600;box-shadow:0 6rpx 20rpx rgba(99,102,241,0.15)}.dp-btn.added text{background:rgba(99,102,241,0.08);color:var(--ng-secondary);box-shadow:none}
 .rd-tag{display:inline-block;font-size:25.3rpx;color:var(--ng-secondary);background:rgba(99,102,241,0.06);padding:8rpx 18rpx;border-radius:22rpx;margin-bottom:16rpx}
 .rd-desc{font-size:29.9rpx;color:var(--ng-text);line-height:1.8;display:block;margin-bottom:24rpx}
@@ -410,7 +419,17 @@ export default {
 
 .selection-next{padding:24rpx;margin:20rpx 0;border-radius:16rpx;background:rgba(99,102,241,0.18);color:var(--ng-text);text-align:center;font-weight:600}
 
-.route-cover-photo{width:100%;height:220rpx;border-radius:14rpx;margin-bottom:14rpx}.route-cover-note{font-size:20.7rpx;color:var(--ng-secondary)}.scenic-fade{position:relative;height:360rpx;overflow:hidden}.scenic-clear,.scenic-blur{position:absolute;width:100%;height:100%;top:0;left:0}.scenic-blur{filter:blur(10px);mask-image:linear-gradient(to bottom,transparent 30%,black 70%,transparent 100%)}.scenic-veil{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 35%,var(--ng-surface) 60%,var(--ng-surface) 100%)}
+.route-cover-photo{width:100%;height:220rpx;border-radius:14rpx;margin-bottom:14rpx}
+.sk-wrap{padding:8rpx 0}
+.sk-block{padding:26rpx 24rpx;margin-bottom:18rpx;border-radius:24rpx;background:var(--ng-surface);border:1rpx solid var(--ng-border)}
+.sk-line{height:26rpx;border-radius:13rpx;background:linear-gradient(90deg,rgba(148,163,184,.18) 25%,rgba(148,163,184,.30) 37%,rgba(148,163,184,.18) 63%);background-size:400% 100%;animation:skShimmer 1.4s ease infinite;margin-bottom:16rpx}
+.sk-line:last-child{margin-bottom:0}
+.sk-w40{width:40%}.sk-w70{width:70%}.sk-w100{width:100%}
+@keyframes skShimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48rpx 24rpx;text-align:center}
+.empty-art{width:320rpx;margin-bottom:20rpx;opacity:.95}
+.empty-title{font-size:28rpx;font-weight:600;color:var(--ng-text);margin-bottom:8rpx}
+.empty-hint{font-size:24rpx;color:var(--ng-secondary);line-height:1.7}.route-cover-note{font-size:20.7rpx;color:var(--ng-secondary)}.scenic-fade{position:relative;height:360rpx;overflow:hidden}.scenic-clear,.scenic-blur{position:absolute;width:100%;height:100%;top:0;left:0}.scenic-blur{filter:blur(10px);mask-image:linear-gradient(to bottom,transparent 30%,black 70%,transparent 100%)}.scenic-veil{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 35%,var(--ng-surface) 60%,var(--ng-surface) 100%)}
 
 .route-detail-background{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .route-detail-photo{position:absolute;top:0;left:0;width:100%;height:520rpx;opacity:.52}

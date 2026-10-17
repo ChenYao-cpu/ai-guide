@@ -14,7 +14,7 @@
     <!-- 头像卡片 -->
     <view class="profile-card">
       <view class="pc-avatar-wrap">
-        <image v-if="avatarUrl" :src="avatarUrl" class="pc-avatar" mode="aspectFill"></image>
+        <image v-if="avatarUrl" :src="avatarUrl" class="pc-avatar" mode="aspectFill" @error="avatarUrl=''"></image>
         <view v-else class="pc-avatar-df">
           <text class="pca-txt">{{ avatarText }}</text>
         </view>
@@ -101,7 +101,7 @@ export default {
   data: function () {
     return {
       // 与 pages/tour/tour.vue 共用同一个 storage key，切换后全 App 一致。
-      tourLanguage: uni.getStorageSync(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'zh',
+
       username: '', userId: '', avatarUrl: '', statusH: 20,
       showPrefs: false, showAbout: false, showLogout: false,
       preferenceOptions: [
@@ -114,7 +114,7 @@ export default {
     }
   },
   computed: {
-    avatarText: function () { return this.username ? this.username[0] : '游' },
+    avatarText: function () { var name = (this.username || '').trim(); return name ? name.charAt(0).toUpperCase() : '游' },
   },
   methods: {
     // 与网页端 LanguageSwitch 行为一致：切换界面语言并持久化，用户自填内容保持原样。
