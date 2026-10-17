@@ -8,3 +8,5 @@ manifest.json
 *.apk
 *.keystore
 *.jks
+__pycache__/
+*.pyc

@@ -28,6 +28,25 @@ cd app
 
 输出在 `unpackage/dist/build/app-plus/`，这是编译资源，**不是已签名 APK**。在 HBuilderX 中运行到手机或另行制作、签名安装包。旧 APK 不会随源码提交自动更新。
 
+### 使用既有原生底包制作更新 APK
+
+`scripts/package-apk.py` 支持为已有原生 SDK 配置制作资源更新包，保留原生模块和签名。需要 Python 3.11+、原 APK、本机私密签名配置及与底包一致的地图 Key。先完成上面的原生资源编译，再运行：
+
+```powershell
+python scripts/package-apk.py --hbuilder 'D:\HBuilderX\HBuilderX' --base-apk 'D:\private\base.apk' --signing-config 'D:\private\pack.private.json' --source-commit '资源源码的完整40位提交号'
+```
+
+脚本核对版本、包名、与原 APK 一致的签名证书、原生模块、地图 Key 和全部编译资源。原生 SDK、权限或版本字符串长度变化时，应使用 HBuilderX 正式打包。签名配置及密钥始终放在本机私密目录，不提交到仓库。
+
+输出在 `unpackage/releases/<版本>/`。生成局域网下载页需要 Python 的 `qrcode` 库；下面的地址替换成电脑实际 Wi-Fi 地址：
+
+```powershell
+python scripts/prepare-download.py --directory unpackage/releases/1.2.0 --origin 'http://192.168.43.41:8088'
+python scripts/serve-apk.py --directory unpackage/releases/1.2.0 --port 8088
+```
+
+下载服务只公开下载页、二维码和已校验 APK，不依赖 Web/后端下载页面，不公开签名配置和构建记录。手机需与电脑网络互通，电脑保持下载进程运行；电脑自身的下载检查不代表手机已经安装成功。
+
 ## 邮箱服务依赖
 
 App 调用 LZX 现有的 `/user/email-code`、`/user/register`、`/user/login`、`/user/me`。`/user/auth-options` 是可选能力查询：旧服务返回 404 时仍允许尝试现有验证码接口，以实际响应为准。未配置 SMTP、发送失败或限流时显示原因，不显示虚假的发送成功。
