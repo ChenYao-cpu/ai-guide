@@ -35,3 +35,17 @@ export function recommendationText(data, language) {
   return translateTour('推荐路线：{spots}。预计{minutes}分钟。', language,
     { spots:names.join(' → '), minutes:minutes == null ? '—' : minutes })
 }
+
+export function questionLanguage(message, appLanguage) {
+  if (appLanguage === 'en') return 'en'
+  return /[a-z]{2}/i.test(message) && !/[\u3400-\u9fff]/.test(message) ? 'en' : 'zh'
+}
+
+export function findQuestionSpot(message, spots, selectedId) {
+  const text = String(message).normalize('NFKC').toLowerCase()
+  const matches = spots.flatMap(spot => [spot.spot_name, translateTour(spot.spot_name, 'en')]
+    .filter(Boolean).filter(name => text.includes(name.normalize('NFKC').toLowerCase()))
+    .map(name => ({spot,length:name.length})))
+  matches.sort((a,b) => b.length-a.length)
+  return matches[0]?.spot || spots.find(spot => spot.spot_id === selectedId) || null
+}

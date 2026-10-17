@@ -1,5 +1,4 @@
 {
-  "智游灵境": "Zhiyou",
   "登录": "Sign in",
   "开发测试登录": "Development sign-in",
   "微信授权登录": "Sign in with WeChat",
@@ -264,7 +263,6 @@
   "可能是：{name}": "Possible match: {name}",
   "识别依据：{evidence}": "Evidence: {evidence}",
   "{source}打开失败：{reason}": "Could not open {source}: {reason}",
-  "权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游灵境）→ 权限管理，允许{permission}权限": "Access is disabled. Open phone settings → Apps → HBuilder (or Zhiyou) → Permissions and allow {permission}.",
   "需要允许{permission}权限才能选择照片": "Allow {permission} access to choose a photo.",
   "拉流失败（{reason}），请检查播放权限和域名": "Video connection failed ({reason}). Check playback permission and the stream domain.",
   "关闭失败：{reason}；云端将于心跳超时后释放": "Could not close the connection: {reason}. The server will release it after the heartbeat times out.",
@@ -280,5 +278,23 @@
   "西安": "Xi'an",
   "上海": "Shanghai",
   "成都": "Chengdu",
-  "重庆": "Chongqing"
+  "重庆": "Chongqing",
+  "智游知境": "Zhiyou",
+  "权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游知境）→ 权限管理，允许{permission}权限": "Access is disabled. Open phone settings → Apps → HBuilder (or Zhiyou) → Permissions and allow {permission}.",
+  "景点问答": "Ask a guide",
+  "路线规划": "Plan a route",
+  "选择问答景点": "Choose a place to ask about",
+  "介绍这个景点": "Introduce this place",
+  "这里有什么历史故事？": "What is the history of this place?",
+  "这里有什么拍照建议？": "Do you have photo tips for this place?",
+  "想了解哪个景点？": "Which place would you like to learn about?",
+  "用中文或英文提问...": "Ask in Chinese or English…",
+  "请先选择问答景点": "Choose a place before asking your question.",
+  "暂无可用景点": "No places are available.",
+  "景点加载失败，请稍后重试": "Could not load places. Please try again.",
+  "暂无可用数字导游，请稍后重试": "No digital guides are available. Please try again.",
+  "问答会话创建失败": "Could not start a guide conversation.",
+  "问答服务暂不可用，请稍后重试": "Guide answers are temporarily unavailable. Please try again.",
+  "请输入2000字以内的问题": "Keep your question within 2,000 characters.",
+  "AI数字人景区导览": "AI tour guide"
 }

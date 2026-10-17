@@ -74,12 +74,29 @@ def sha256(file):
         return hashlib.file_digest(handle, 'sha256').hexdigest()
 
 
+def rename_native_label(data, old_name, new_name):
+    """Replace an equal-width string-pool value without changing resource IDs."""
+    if old_name == new_name:
+        return data
+    replacements = 0
+    for encoding in ('utf-8', 'utf-16-le'):
+        old, new = old_name.encode(encoding), new_name.encode(encoding)
+        if len(old) != len(new):
+            raise ValueError('Use native resource compilation when the label byte length changes')
+        replacements += data.count(old)
+        data = data.replace(old, new)
+    if not replacements:
+        raise ValueError('Original app label not found in native resources')
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--hbuilder', type=Path, required=True)
     parser.add_argument('--base-apk', type=Path, required=True)
     parser.add_argument('--signing-config', type=Path, required=True)
     parser.add_argument('--source-commit', required=True)
+    parser.add_argument('--previous-name', default='智游灵境')
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9a-f]{40}', args.source_commit):
         raise ValueError('Pass the full source commit SHA')
@@ -113,6 +130,8 @@ def main():
             content = source.read(item)
             if item.filename == 'AndroidManifest.xml':
                 content, _ = manifest_attributes(content, version, version_code)
+            if item.filename == 'resources.arsc':
+                content = rename_native_label(content, args.previous_name, manifest['name'])
             archive.writestr(item, content)
         for file in sorted(resources.rglob('*')):
             if file.is_file():
@@ -138,6 +157,8 @@ def main():
         _, attributes = manifest_attributes(binary)
         assert attributes['package'] == original_attributes['package']
         assert attributes['versionName'] == version and attributes['versionCode'] == version_code
+        resources_table = archive.read('resources.arsc')
+        assert resources_table == rename_native_label(original.read('resources.arsc'), args.previous_name, manifest['name'])
         key = manifest['app-plus']['distribute']['sdkConfigs']['maps']['amap']['appkey_android']
         assert key and (key.encode() in binary or key.encode('utf-16-le') in binary), 'Map key must match the native runtime'
         for file in resources.rglob('*'):
@@ -149,7 +170,7 @@ def main():
         properties = archive.read('assets/data/dcloud_properties.xml')
         for module in [b'JsMapPluginImpl', b'GeolocationFeatureImpl', b'AudioFeatureImpl', b'UploadFeature']:
             assert module in properties
-    record = dict(version=version, version_code=version_code, source_commit=args.source_commit,
+    record = dict(version=version, version_code=version_code, source_commit=args.source_commit, native_app_name=manifest['name'],
                   package=attributes['package'], appid=manifest['appid'], apk=str(output),
                   apk_bytes=output.stat().st_size, sha256=sha256(output),
                   signing_certificate_sha256=certificate_hash, signature_verified=True,

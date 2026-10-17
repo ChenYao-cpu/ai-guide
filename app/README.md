@@ -1,12 +1,13 @@
-# 智游灵境 App
+# 智游知境 App
 
-本目录是 uni-app Vue 3 客户端源码，版本 1.2.0。Web 和后端只读参考，以 LZX 提交 [`2052523`](https://github.com/ChenYao-cpu/ai-guide/commit/20525236a556f1b4a6bd70a8eaab65b65f378799) 的接口和操作流程为基准。本分支的产品修改全部位于 `app/`，不需要修改 Web 源码才能编译 App。
+本目录是 uni-app Vue 3 客户端源码，版本 1.2.1。Web 和后端只读参考，以 LZX 提交 [`2052523`](https://github.com/ChenYao-cpu/ai-guide/commit/20525236a556f1b4a6bd70a8eaab65b65f378799) 的接口和操作流程为基准。本分支的产品修改全部位于 `app/`，不需要修改 Web 源码才能编译 App。
 
 ## 功能
 
 - 登录页和“我的”可切换中文、English；统一语言状态立即应用于全部 10 个页面及组件，并保存到本机。覆盖导航、表单、校验、弹窗、选择面板、加载状态、日期和已知景点资料；英文布局适配较长文本。
 - 邮箱注册：昵称、邮箱、密码、确认密码、6 位验证码，发送倒计时、限流反馈、重复提交拦截，注册后自动登录。自动登录失败时可直接重试登录，不重复创建账号。
 - 英文景点搜索和规划意图适配；AI 路线预览使用服务器时长、步行数据，跳转保留景点顺序、时间预算和节奏。
+- AI 小导游提供“景点问答 / 路线规划”两个入口。景点问答使用现有 `/tour-session/chat` 接口，英文提问自动请求英文回复；支持选择景点、同一会话连续追问和会话过期恢复。本地对话按账号保存。
 
 用户昵称、用户输入、历史对话和第三方生成内容保留原文。已有接口支持英文的导览对话会传递语言；测验、总结分析、图片识别等服务如果仅返回中文，App 不伪造英文结果。完整的动态内容多语言支持需要后端另行提供语言能力。
 
@@ -41,8 +42,8 @@ python scripts/package-apk.py --hbuilder 'D:\HBuilderX\HBuilderX' --base-apk 'D:
 输出在 `unpackage/releases/<版本>/`。生成局域网下载页需要 Python 的 `qrcode` 库；下面的地址替换成电脑实际 Wi-Fi 地址：
 
 ```powershell
-python scripts/prepare-download.py --directory unpackage/releases/1.2.0 --origin 'http://192.168.43.41:8088'
-python scripts/serve-apk.py --directory unpackage/releases/1.2.0 --port 8088
+python scripts/prepare-download.py --directory unpackage/releases/1.2.1 --origin 'http://192.168.43.41:8088'
+python scripts/serve-apk.py --directory unpackage/releases/1.2.1 --port 8088
 ```
 
 下载服务只公开下载页、二维码和已校验 APK，不依赖 Web/后端下载页面，不公开签名配置和构建记录。手机需与电脑网络互通，电脑保持下载进程运行；电脑自身的下载检查不代表手机已经安装成功。
@@ -73,4 +74,4 @@ node tests/browser-preview.cjs
 
 浏览器脚本默认使用本机 Chrome，可通过 `APP_QA_CHROME` 指定浏览器可执行文件。结果及截图在 `unpackage/browser-qa/results/`。这些检查不发送真实邮件、不创建真实账号，也不代替 Android 真机测试。
 
-本轮汇报和演示步骤见 [XC 交付说明](docs/XC-2026-10-17.md)。
+当前汇报及验证见 [1.2.1 更新说明](docs/XC-1.2.1.md)；之前的交付记录见 [1.2.0 说明](docs/XC-2026-10-17.md)。

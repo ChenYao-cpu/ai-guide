@@ -143,6 +143,9 @@ export default {
       uni.removeStorageSync('wx_nickName')
       uni.removeStorageSync('wx_avatarUrl')
       uni.removeStorageSync('login_time')
+      uni.removeStorageSync('ai_spot_ids')
+      uni.removeStorageSync('ai_route_plan')
+      uni.removeStorageSync('ai_chat_msgs')
       uni.reLaunch({ url: '/pages/auth/auth' })
     },
   },

@@ -39,6 +39,12 @@ async function run(){
     else if(endpoint==='/tour-session/routes')body=ok({route_list:[{route_id:1,name:'历史文化路线',city:'北京',theme:'history',spot_ids:[7],estimated_time_minutes:60,description:'历史文化'}]})
     else if(endpoint.includes('avatar'))body=ok({preferredMode:'xingyun',threeD:{ready:false},realistic:{ready:false,message:'暂无预览'},cartoon:{ready:false,message:'暂无预览'}})
     else if(endpoint==='/tour-session/ai-chat-recommend')body=ok({spot_ids:[7],spot_names:['万寿山'],spot_count:1,estimated_time_minutes:60,visit_time_minutes:20,walking_time_minutes:30,rest_time_minutes:10,requested_time_minutes:120,preferences:['family','nature'],pace:'standard',ai_response:'中文模型说明',score_details:[]})
+    else if(endpoint==='/tour-session/visitor-create')body=ok({session_id:72})
+    else if(endpoint==='/tour-session/chat'){
+      const payload=request.postDataJSON()
+      requests.at(-1).chat={sessionId:payload.sessionId,currentSpotId:payload.currentSpotId,language:payload.language,message:payload.message,text_only:payload.text_only}
+      body=ok({language:'en',message:payload.message.includes('How long')?'Allow about 20 minutes for this place.':'Longevity Hill is part of the Summer Palace.'})
+    }
     else if(endpoint==='/xingyun/chat-voice'){status=503;body={detail:'Audio unavailable in browser QA'}}
     else if(endpoint==='/spot-favorites')body=ok({spot_list:[]})
     else if(endpoint==='/spot-favorites/counts')body=ok({})
@@ -61,6 +67,7 @@ async function run(){
   }
   try{
     await page.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'networkidle'})
+    await visible('智游知境');await screenshot('00-sign-in-zh')
     await text('English').click()
     await visible('New here? Register with email')
     await screenshot('01-sign-in-en')
@@ -91,7 +98,21 @@ async function run(){
     await page.locator('.tb-item').nth(0).click();await visible('景点选择')
     await page.locator('.tb-item').nth(2).click();await text('English').click()
     await page.reload({waitUntil:'networkidle'});await visible('Interface language');checks.push('Chinese/English switching persists through navigation and reload')
-    await page.locator('.tb-item').nth(1).click();await visible('Where would you like to go?')
+    await page.locator('.tb-item').nth(1).click();await visible('Which place would you like to learn about?')
+    await page.locator('.msg-input input').fill('Tell me about Longevity Hill.')
+    const sendPosition=await page.locator('.send-btn').boundingBox()
+    await text('Send').click()
+    assert.equal((await page.locator('.send-btn').boundingBox()).y,sendPosition.y,'Send must not move away during the first tap')
+    await visible('Longevity Hill is part of the Summer Palace.')
+    await page.locator('.msg-input input').fill('How long should I stay?');await text('Send').click()
+    await visible('Allow about 20 minutes for this place.')
+    await page.waitForFunction(()=>document.querySelector('.msg-input input')?.value==='')
+    const dialogues=requests.filter(item=>item.endpoint==='/tour-session/chat')
+    assert.equal(dialogues.length,2);assert.equal(requests.filter(item=>item.endpoint==='/tour-session/visitor-create').length,1)
+    for(const item of dialogues){assert.equal(item.chat.language,'en');assert.equal(item.chat.currentSpotId,7);assert.equal(item.chat.text_only,true)}
+    await screenshot('08-english-questions');checks.push('English questions and follow-up replies use the dialogue API and preserve scenic context')
+    await page.locator('.question-place').click();await visible('Choose a place to ask about');await checkOverlay();await text('Cancel').click()
+    await text('Clear').click();await text('Plan a route').click();await visible('Where would you like to go?')
     await text('2-hour family nature tour').click()
     await visible('Suggested route: Longevity Hill. Estimated time: 60 min.')
     assert.equal((await page.locator('.rp-total-value').innerText()).trim(),'60 min','preview must use the server duration')
@@ -103,6 +124,10 @@ async function run(){
     await screenshot('07-photo-options-en');await text('Cancel').click()
     await text('Use this route').click();await visible('Digital guides')
     await visible('1 place · Total 60 min');checks.push('AI route handoff retains server plan in the personal planner')
+    await page.locator('.tb-item').nth(1).click();await visible('Suggested route: Longevity Hill. Estimated time: 60 min.')
+    await page.reload({waitUntil:'networkidle'});await visible('Suggested route: Longevity Hill. Estimated time: 60 min.')
+    await page.locator('.rp-total-value').waitFor({state:'visible'});assert.equal((await page.locator('.rp-total-value').innerText()).trim(),'60 min')
+    checks.push('Chat mode, conversation and server route preview survive a page reload')
     assert.deepEqual(errors,[],'uncaught browser errors')
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,simulatedBackend:true,viewport:'390×844',checks,requests,errors},null,2))
     console.log('App browser preview passed '+checks.length+' end-to-end checks with mock APIs. Screenshots: '+out)

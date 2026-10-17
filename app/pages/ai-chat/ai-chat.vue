@@ -17,19 +17,34 @@
       <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">{{ $t("清空") }}</text>
     </view>
 
+    <view class="chat-tools">
+      <view class="chat-modes" role="tablist">
+        <button class="chat-mode" :class="{selected:chatMode==='guide'}" :aria-pressed="chatMode==='guide'" :disabled="loading" @tap="setChatMode('guide')">{{ $t('景点问答') }}</button>
+        <button class="chat-mode" :class="{selected:chatMode==='route'}" :aria-pressed="chatMode==='route'" :disabled="loading" @tap="setChatMode('route')">{{ $t('路线规划') }}</button>
+      </view>
+      <button v-if="chatMode==='guide'" class="question-place" :disabled="loading||qaCatalogLoading" @tap="chooseQuestionSpot">
+        <text>{{ qaSpot ? $t(qaSpot.spot_name) : $t('选择问答景点') }}</text><text aria-hidden="true">⌄</text>
+      </button>
+    </view>
+
     <!-- 快捷提示 -->
-    <view class="quick-hints" v-if="msgs.length === 0">
+    <view class="quick-hints" v-if="msgs.length === 0 && chatMode==='route'">
       <view class="qh-chip" @tap="quickSend('我想带孩子玩2小时，喜欢自然风光')">{{ $t("亲子2小时自然游") }}</view>
       <view class="qh-chip" @tap="quickSend('推荐颐和园的历史文化景点，半天时间')">{{ $t("颐和园历史文化半天") }}</view>
       <view class="qh-chip" @tap="quickSend('帮我规划一个适合拍照的一日游路线')">{{ $t("拍照打卡一日游") }}</view>
       <view class="qh-chip" @tap="quickSend('周末带朋友玩半天，喜欢美食和拍照')">{{ $t("周末美食拍照") }}</view>
+    </view>
+    <view class="quick-hints" v-if="msgs.length===0 && chatMode==='guide'">
+      <view class="qh-chip" @tap="quickSend('介绍这个景点')">{{ $t('介绍这个景点') }}</view>
+      <view class="qh-chip" @tap="quickSend('这里有什么历史故事？')">{{ $t('这里有什么历史故事？') }}</view>
+      <view class="qh-chip" @tap="quickSend('这里有什么拍照建议？')">{{ $t('这里有什么拍照建议？') }}</view>
     </view>
 
     <!-- 对话区 -->
     <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="true">
       <view v-if="msgs.length === 0 && !loading" class="chat-empty">
 
-        <text class="ce-title">{{ $t("想去哪里？") }}</text>
+        <text class="ce-title">{{ $t(chatMode==='guide'?'想了解哪个景点？':'想去哪里？') }}</text>
 
       </view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
@@ -50,7 +65,7 @@
     </scroll-view>
 
     <!-- 路线预览时间轴 -->
-    <view class="route-preview" v-if="lastSpotIds.length > 0 && !loading">
+    <view class="route-preview" v-if="chatMode==='route' && lastSpotIds.length > 0 && !loading">
       <view class="rp-head">
         <text class="rp-title"> {{ $t("路线预览") }}</text>
         <text class="rp-count">{{ $t('{count}个景点',{count:recommendSpots.length || lastSpotIds.length}) }}</text>
@@ -107,7 +122,7 @@
       <view class="voice-btn" :class="{ active: voiceMode }" @tap="toggleVoiceMode">
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
-      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(&quot;描述你的游览需求...&quot;)" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
+      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
       <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
         <text>{{ $t(transcribing ? $t("正在识别…") : voicePressing ? $t("正在录音，松开发送") : $t("按住说话")) }}</text>
       </view>
@@ -119,6 +134,7 @@
     <view v-show="!keyboardVisible" class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ $t("智能导览") }}</text></view><view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ $t("AI小导游") }}</text><view class="tb-dot"></view></view><view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ $t("我的") }}</text></view></view><view class="tb-safe"></view></view>
     </view>
     <NocturneSelect v-if="showPhotoChoices" :title="$t('拍照或相册识景')" :options="['拍照识景','从相册选择']" @change="selectScenicSource" @close="showPhotoChoices=false" />
+    <NocturneSelect v-if="showQASpots" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" @change="selectQuestionSpot" @close="showQASpots=false" />
   </view>
 </template>
 
@@ -128,7 +144,7 @@ import { uiToast } from "../../common/i18n.js"
 import { BASE_URL, assetUrl } from '../../common/config.js'
 import ChatVoice from '../../components/chat-voice.vue'
 import NocturneSelect from '../../components/NocturneSelect.vue'
-import { planningMessage, recommendationText } from '../../common/planning-language.js'
+import { planningMessage, recommendationText, questionLanguage, findQuestionSpot } from '../../common/planning-language.js'
 
 
 
@@ -136,11 +152,18 @@ function request(options) {
   return new Promise(function (resolve, reject) {
     var url = options.url
     if (url.indexOf('http') !== 0) url = BASE_URL + url
+    const token=uni.getStorageSync('token')
+    const header={'Content-Type':'application/json'}
+    if(token)header.Authorization='Bearer '+token
     uni.request({
       url: url, method: options.method || 'GET',
-      data: options.data || {}, header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + uni.getStorageSync('token') },
-      timeout: 20000,
-      success: function (res) { if (res.statusCode === 200) resolve({ data: res.data }); else reject(new Error(res.data && (res.data.detail || res.data.message) || '服务请求失败（HTTP ' + res.statusCode + '）')) },
+      data: options.data || {}, header,
+      timeout: options.timeout || 20000,
+      success: function (res) {
+        if(res.statusCode===401){uni.removeStorageSync('token');uni.reLaunch({url:'/pages/auth/auth'});reject(new Error('登录已过期，请重新输入账号密码'));return}
+        if(res.statusCode===200)resolve({data:res.data})
+        else reject(new Error(res.data&&(res.data.detail||res.data.message)||'服务请求失败（HTTP '+res.statusCode+'）'))
+      },
       fail: function (err) { reject(err) },
     })
   })
@@ -150,6 +173,7 @@ export default {
   components:{ChatVoice,NocturneSelect},
   data: function () {
     return {
+      chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,
       text: '', msgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
@@ -162,11 +186,14 @@ export default {
     if(uni.onKeyboardHeightChange)uni.onKeyboardHeightChange(this._keyboardListener)
   },
   onUnload:function(){
+    this.requestEpoch++
     if(uni.offKeyboardHeightChange&&this._keyboardListener)uni.offKeyboardHeightChange(this._keyboardListener)
     this.cancelRecord()
     this.stopTTS()
   },
   computed: {
+    qaSpot:function(){return this.qaSpots.find(spot=>spot.spot_id===this.qaSpotId)||null},
+    qaOptions:function(){return this.qaSpots.map(spot=>[this.$t(spot.city),this.$t(spot.spot_name)].filter(Boolean).join(' · '))},
     totalDuration: function () {
       if(!this.recommendedPlan)return null
       const minutes=this.recommendedPlan.estimated_time_minutes ?? this.recommendedPlan.total_duration
@@ -174,8 +201,59 @@ export default {
     },
   },
   methods: {
+    storageOwner:function(){return String(uni.getStorageSync('user_id')||uni.getStorageSync('username')||'guest')},
+    historyKey:function(){return 'ai_chat_state:'+encodeURIComponent(this.storageOwner())},
+    isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
+    setChatMode:function(mode){if(this.loading)return;this.chatMode=mode==='route'?'route':'guide';this.saveHistory()},
+    loadQACatalog:async function(){
+      if(this.qaSpots.length&&this.qaGuides.length)return
+      this.qaCatalogLoading=true
+      const epoch=this.requestEpoch,owner=this.storageOwner()
+      try{
+        const [spots,guides]=await Promise.all([request({url:'/tour-session/spots'}),request({url:'/tour-session/guides'})])
+        if(!this.isCurrentRequest(epoch,owner))return
+        this.qaSpots=spots.data?.data?.spot_list||[]
+        this.qaGuides=guides.data?.data?.guide_list||[]
+      }finally{if(this.isCurrentRequest(epoch,owner))this.qaCatalogLoading=false}
+    },
+    chooseQuestionSpot:async function(){
+      if(this.loading||this.qaCatalogLoading)return
+      try{await this.loadQACatalog();if(!this.qaSpots.length)throw new Error('暂无可用景点');this.showQASpots=true}
+      catch(error){uiToast({title:error.message||'景点加载失败，请稍后重试',icon:'none'})}
+    },
+    selectQuestionSpot:function(event){this.qaSpotId=this.qaSpots[Number(event.detail.value)]?.spot_id||null;this.showQASpots=false;this.saveHistory()},
+    sendGuideQuestion:async function(message,language,epoch,owner){
+      await this.loadQACatalog()
+      if(!this.isCurrentRequest(epoch,owner))return null
+      const spot=findQuestionSpot(message,this.qaSpots,this.qaSpotId)
+      if(!spot){
+        this.msgs.pop();this.text=message;this.showQASpots=!!this.qaSpots.length
+        uiToast({title:this.qaSpots.length?'请先选择问答景点':'暂无可用景点',icon:'none'});return null
+      }
+      this.qaSpotId=spot.spot_id
+      const guide=this.qaGuides.find(item=>item.guide_id>0&&item.is_enabled!==false)
+      if(!guide)throw new Error('暂无可用数字导游，请稍后重试')
+      const create=async()=>{
+        const res=await request({url:'/tour-session/visitor-create?name='+encodeURIComponent(this.$t('景点问答'))+'&guide_id='+guide.guide_id+'&spot_ids='+encodeURIComponent(JSON.stringify([spot.spot_id])),method:'POST'})
+        if(!res.data?.success||!res.data?.data?.session_id)throw new Error(res.data?.message||'问答会话创建失败')
+        if(!this.isCurrentRequest(epoch,owner))return null
+        this.qaSession={session_id:res.data.data.session_id,guide_id:guide.guide_id};this.saveHistory();return this.qaSession
+      }
+      let session=this.qaSession
+      if(!session||session.guide_id!==guide.guide_id)session=await create()
+      if(!session||!this.isCurrentRequest(epoch,owner))return null
+      const ask=()=>request({url:'/tour-session/chat',method:'PUT',timeout:120000,data:{sessionId:session.session_id,message,currentSpotId:spot.spot_id,nextSpotId:null,language,text_only:true}})
+      let result=await ask()
+      if(!this.isCurrentRequest(epoch,owner))return null
+      if(!result.data?.success&&/会话不存在|导览已结束/.test(result.data?.message||'')){
+        session=await create();if(!session)return null;result=await ask()
+      }
+      if(!this.isCurrentRequest(epoch,owner))return null
+      if(!result.data?.success||!result.data?.data?.message)throw new Error(result.data?.message||'问答服务暂不可用，请稍后重试')
+      return result.data.data.message
+    },
     updateKeyboardHeight:function(height){this.keyboardHeight=Math.max(0,Number(height)||0);this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()},
-    onInputFocus:function(){this.keyboardVisible=true},
+    onInputFocus:function(){this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()},
     onInputBlur:function(){if(!this.keyboardHeight)this.keyboardVisible=false},
     onInputKeyboardHeight:function(event){this.updateKeyboardHeight(event.detail.height)},
     chooseScenicPhoto:function(){
@@ -196,7 +274,7 @@ export default {
           const mediaPermission=Number(Version.SDK_INT)>=33&&Number(appInfo.targetSdkVersion)>=33?'android.permission.READ_MEDIA_IMAGES':'android.permission.READ_EXTERNAL_STORAGE'
           const permission=source==='camera'?'android.permission.CAMERA':mediaPermission
           plus.android.requestPermissions([permission],result=>{
-            if(result.deniedAlways&&result.deniedAlways.length){this.recognitionError='权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游灵境）→ 权限管理，允许'+(source==='camera'?'相机':'照片与视频／存储')+'权限';return}
+            if(result.deniedAlways&&result.deniedAlways.length){this.recognitionError='权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游知境）→ 权限管理，允许'+(source==='camera'?'相机':'照片与视频／存储')+'权限';return}
             if(result.deniedPresent&&result.deniedPresent.length){this.recognitionError='需要允许'+(source==='camera'?'相机':'相册读取')+'权限才能选择照片';return}
             this.pickScenicImage(source)
           },e=>{this.recognitionError='申请权限失败，请到手机应用权限设置中开启';console.error('Photo permission failed',e)})
@@ -217,11 +295,12 @@ export default {
       const path=this.pendingPhoto,caption=this.text.trim()
       this.pendingPhoto='';this.text='';this.recognitionError=''
       this.msgs.push({role:'user',image:path,content:caption})
+      const epoch=++this.requestEpoch,owner=this.storageOwner()
       this.recognizing=true;this.loading=true;this.scrollChat();this.saveHistory()
-      const showFailure=message=>{this.msgs.push({role:'ai',content:message});this.pendingPhoto=path}
+      const showFailure=message=>{if(!this.isCurrentRequest(epoch,owner))return;this.msgs.push({role:'ai',content:this.$t(message)});this.pendingPhoto=path}
       uni.uploadFile({url:BASE_URL+'/tour-session/recognize-spot',filePath:path,name:'file',timeout:90000,
         formData:{question:caption},header:{Authorization:'Bearer '+uni.getStorageSync('token')},
-        success:r=>{try{const d=JSON.parse(r.data)
+        success:r=>{if(!this.isCurrentRequest(epoch,owner))return;try{const d=JSON.parse(r.data)
           if(r.statusCode===200&&d.success&&d.data){
             const result=d.data
             const reply=result.status==='candidate'
@@ -231,12 +310,31 @@ export default {
           }else showFailure(typeof d.detail==='string'?d.detail:d.message||'识景失败，请稍后重试')
         }catch(e){showFailure('识景服务返回格式异常')}},
         fail:()=>showFailure('照片上传失败，请检查网络连接'),
-        complete:()=>{this.recognizing=false;this.loading=false;this.scrollChat();this.saveHistory()}})
+        complete:()=>{if(!this.isCurrentRequest(epoch,owner))return;this.recognizing=false;this.loading=false;this.scrollChat();this.saveHistory()}})
     },
     scrollChat:function(){this.$nextTick(()=>{this.chatScrollTop+=100000})},
-    saveHistory:function(){try{uni.setStorageSync('ai_chat_msgs',JSON.stringify(this.msgs))}catch(e){}},
-    loadHistory:function(){try{var r=uni.getStorageSync('ai_chat_msgs');if(r)this.msgs=JSON.parse(r)}catch(e){this.msgs=[]}},
-    clearHistory:function(){this.msgs=[];this.lastSpotIds=[];this.recommendSpots=[];this.recommendedPlan=null;uni.removeStorageSync('ai_chat_msgs');uni.removeStorageSync('ai_spot_ids');uni.removeStorageSync('ai_route_plan');uiToast({title:'已清除',icon:'none'})},
+    saveHistory:function(){
+      try{uni.setStorageSync(this.historyKey(),JSON.stringify({messages:this.msgs.slice(-200),mode:this.chatMode,session:this.qaSession,spotId:this.qaSpotId,plan:this.recommendedPlan}))}catch(e){}
+    },
+    loadHistory:function(){
+      this.requestEpoch++;this.historyOwner=this.storageOwner();this.loading=false;this.recognizing=false;this.qaCatalogLoading=false
+      this.msgs=[];this.qaSession=null;this.qaSpotId=null;this.recommendedPlan=null;this.lastSpotIds=[];this.recommendSpots=[]
+      uni.removeStorageSync('ai_chat_msgs') // Old shared history has no reliable account owner.
+      try{
+        const raw=uni.getStorageSync(this.historyKey()),state=raw?JSON.parse(raw):{}
+        this.msgs=Array.isArray(state.messages)?state.messages.filter(item=>item&&['ai','user'].includes(item.role)&&typeof item.content==='string').slice(-200):[]
+        this.chatMode=state.mode==='route'?'route':'guide'
+        if(Number.isInteger(state.session?.session_id)&&state.session.session_id>0)this.qaSession=state.session
+        this.qaSpotId=Number.isInteger(state.spotId)?state.spotId:null
+        if(state.plan&&Array.isArray(state.plan.spot_ids)){this.recommendedPlan=state.plan;this.lastSpotIds=state.plan.spot_ids;this.fetchRecommendSpots(this.lastSpotIds)}
+      }catch(e){this.msgs=[]}
+    },
+    clearRoutePreview:function(){this.lastSpotIds=[];this.recommendSpots=[];this.recommendedPlan=null;this.recommendLoading=false;uni.removeStorageSync('ai_spot_ids');uni.removeStorageSync('ai_route_plan')},
+    clearHistory:function(){
+      this.requestEpoch++;this.stopTTS();this.cancelRecord();this.loading=false;this.recognizing=false;this.transcribing=false;this.qaCatalogLoading=false
+      this.msgs=[];this.qaSession=null;this.pendingPhoto='';this.recognitionError='';this.applyingRoute=false;this.clearRoutePreview();this.saveHistory()
+      uni.removeStorageSync('ai_chat_msgs');uiToast({title:'已清除',icon:'none'})
+    },
     fixImg: function (u) { if (!u) return ''; return assetUrl(u) },
     walkText: function (a, b) {
       const details=this.recommendedPlan&&this.recommendedPlan.score_details||[]
@@ -249,30 +347,43 @@ export default {
     },
     fetchRecommendSpots: function (ids) {
       var self = this
+      const epoch=this.requestEpoch,owner=this.storageOwner()
       self.recommendSpots = []
       self.recommendLoading = true
       request({ url: '/tour-session/spots' }).then(function (res) {
+        if(!self.isCurrentRequest(epoch,owner))return
         var d = res.data
         var list = (d && d.data && d.data.spot_list) ? d.data.spot_list : (d && d.spot_list ? d.spot_list : [])
         var map = {}
         list.forEach(function (sp) { map[sp.spot_id] = sp })
         self.recommendSpots = ids.map(function (id) { return map[id] }).filter(Boolean)
-      }).catch(function () { self.recommendSpots = [] }).finally(function () { self.recommendLoading = false })
+      }).catch(function () { if(self.isCurrentRequest(epoch,owner))self.recommendSpots=[] }).finally(function () { if(self.isCurrentRequest(epoch,owner))self.recommendLoading=false })
     },
     goTab:function(p){uni.reLaunch({url:p})},
     quickSend: function (msg) { this.text = this.$t(msg); this.sendText() },
-    sendText: function () {
+    sendText: async function () {
       if(this.pendingPhoto){this.sendPhoto();return}
       var self = this
       var msg = (self.text || '').trim()
       if (!msg || self.loading) return
+      if(Array.from(msg).length>2000){uiToast({title:'请输入2000字以内的问题',icon:'none'});return}
+      const epoch=++this.requestEpoch,owner=this.storageOwner()
       self.msgs.push({ role: 'user', content: msg })
       self.text = ''; self.loading = true; self.scrollChat()
-      var requestLanguage = self.appLanguage
-      request({
+      self.saveHistory()
+      var requestLanguage = questionLanguage(msg,self.appLanguage)
+      try{
+      if(self.chatMode==='guide'){
+        const reply=await self.sendGuideQuestion(msg,requestLanguage,epoch,owner)
+        if(reply&&self.isCurrentRequest(epoch,owner)){self.msgs.push({role:'ai',content:reply});self.playTTS(reply,self.msgs.length-1)}
+        return
+      }
+      self.clearRoutePreview()
+      const res=await request({
         url: '/tour-session/ai-chat-recommend?message=' + encodeURIComponent(planningMessage(msg)),
         method: 'POST', data: {},
-      }).then(function (res) {
+      })
+        if(!self.isCurrentRequest(epoch,owner))return
         var d = res.data
         if (d && d.success && d.data) {
           var dd = d.data
@@ -287,16 +398,18 @@ export default {
           }
           self.playTTS(reply,self.msgs.length-1)
         } else { self.msgs.push({ role: 'ai', content: self.$t(d && d.message || '没有找到匹配路线，请调整需求。') }) }
-      }).catch(function (error) {
-        self.msgs.push({ role: 'ai', content: self.$t(error.message || '无法连接推荐服务，请检查网络。') })
-      })
-      .finally(function () { self.loading = false; self.scrollChat(); self.saveHistory() })
+      }catch(error){
+        if(self.isCurrentRequest(epoch,owner))self.msgs.push({role:'ai',content:self.$t(error.message||error.errMsg||'无法连接推荐服务，请检查网络。')})
+      }finally{if(self.isCurrentRequest(epoch,owner)){self.loading=false;self.scrollChat();self.saveHistory()}}
     },
     applyRecommend: function () {
+      if(!this.lastSpotIds.length||this.loading||this.applyingRoute)return
+      this.applyingRoute=true
+      const epoch=this.requestEpoch,owner=this.storageOwner(),self=this
       uni.setStorageSync('ai_spot_ids', JSON.stringify(this.lastSpotIds))
       if(this.recommendedPlan)uni.setStorageSync('ai_route_plan',JSON.stringify(this.recommendedPlan))
       uiToast({ title: '已选中' + this.lastSpotIds.length + '个景点', icon: 'success' })
-      setTimeout(function () { uni.reLaunch({ url: '/pages/tour-guide/tour-guide' }) }, 500)
+      setTimeout(function () { if(self.isCurrentRequest(epoch,owner))uni.reLaunch({ url: '/pages/tour-guide/tour-guide' }) }, 500)
     },
     toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;if(this.voiceMode)uni.hideKeyboard() },
     stopTTS:function(){this._ttsRequestId=(this._ttsRequestId||0)+1;this.voicePayload={id:this._ttsRequestId};if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}this.speaking=false;this.ttsLoading=false;this.speakingIndex=-1},
@@ -342,18 +455,21 @@ export default {
         self.voicePressing=false;self.recording=false
         if(self._recordCancelled)return
         var duration=Number(res.duration)||((self._recordStartedAt||self._recordRequestedAt)?Date.now()-(self._recordStartedAt||self._recordRequestedAt):0)
+        self._recordStartedAt=0;self._recordRequestedAt=0
         if(!res.tempFilePath||duration<500){uiToast({title:'请按住说话至少半秒',icon:'none'});return}
         self.transcribing=true
+        const epoch=self.requestEpoch,owner=self.storageOwner()
         uni.uploadFile({url:BASE_URL+'/tour-session/asr-upload',filePath:res.tempFilePath,name:'file',timeout:120000,
           header:{Authorization:'Bearer '+uni.getStorageSync('token')},
           success:function(r){
+            if(!self.isCurrentRequest(epoch,owner))return
             try{var d=JSON.parse(r.data)
-              if(r.statusCode===200&&d.success&&d.data){self.text=d.data;self.sendText();return}
+              if(r.statusCode===200&&d.success&&d.data){self.transcribing=false;self.text=d.data;self.sendText();return}
               self.voiceError=d.message||d.detail||'语音识别服务返回错误'
             }catch(e){self.voiceError='语音识别返回格式异常'}
           },
-          fail:function(){self.voiceError='语音上传失败，请检查网络连接'},
-          complete:function(){self.transcribing=false}
+          fail:function(){if(self.isCurrentRequest(epoch,owner))self.voiceError='语音上传失败，请检查网络连接'},
+          complete:function(){if(self.isCurrentRequest(epoch,owner))self.transcribing=false}
         })
       })
       rm.onError(function(e){self.voicePressing=false;self.recording=false;self.voiceError='录音失败，请检查手机麦克风权限';uiToast({title:self.voiceError,icon:'none'});console.error('Recorder failed',e)})
@@ -373,13 +489,15 @@ export default {
     stopRecord:function(){this.voicePressing=false;if(this._voiceManager&&(this._recordStartedAt||this._recordRequestedAt))this._voiceManager.stop()},
     cancelRecord:function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&(this._recordStartedAt||this._recordRequestedAt))this._voiceManager.stop()},
   },
-  onBackPress:function(){if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
-  onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false},
-  onShow:function(){this.loadHistory();this.scrollChat()},
+  onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
+  onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
+  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();this.scrollChat()},
 }
 </script>
 
 <style scoped>
+.chat-tools{position:relative;z-index:1;padding:0 24rpx 12rpx;display:flex;gap:12rpx;flex-wrap:wrap;align-items:center;flex-shrink:0}
+.chat-modes{display:flex;gap:4px;padding:4px;background:#eeeafa;border-radius:12px}.chat-mode{margin:0;padding:8px 12px;border-radius:9px;background:transparent;font-size:14px;line-height:1.5;color:#625a75}.chat-mode::after,.question-place::after{border:0}.chat-mode.selected{background:white;color:#5145cd;font-weight:700;box-shadow:0 2px 6px #30285e10}.question-place{display:flex;align-items:center;gap:10px;max-width:100%;margin:0;padding:9px 12px;border-radius:12px;background:white;border:1px solid #e8e2f5;color:#5145cd;font-size:14px;line-height:1.5}.question-place text:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .photo-draft{display:flex;align-items:center;gap:20rpx;padding:16rpx 24rpx;flex-wrap:wrap;border-top:1rpx solid var(--ng-border)}
 .draft-thumbnail{position:relative;width:112rpx;height:112rpx}.draft-thumbnail image{width:100%;height:100%;border-radius:12rpx}
 .draft-remove{position:absolute;top:-10rpx;right:-10rpx;display:flex;align-items:center;justify-content:center;width:36rpx;height:36rpx;margin:0;padding:0;border-radius:50%;background:#625a75;color:#fff;font-size:28rpx;line-height:1}.draft-remove::after{border:0}

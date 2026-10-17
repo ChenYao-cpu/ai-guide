@@ -1,9 +1,9 @@
 {
-  "name": "智游灵境",
+  "name": "智游知境",
   "appid": "__UNI__80C86A1",
-  "description": "AI数字人景区导览小程序",
-  "versionName": "1.2.0",
-  "versionCode": "120",
+  "description": "AI数字人景区导览App",
+  "versionName": "1.2.1",
+  "versionCode": "121",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true,

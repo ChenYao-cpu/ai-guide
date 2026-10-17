@@ -13,6 +13,7 @@ const uni = {
   getSystemInfoSync:() => ({statusBarHeight:20}), setNavigationBarTitle:options => feedback.push(options),
   hideKeyboard:()=>{},
   removeStorageSync:key=>storage.delete(key),request:options=>pending.push(options),navigateTo:options=>navigations.push(options),
+  reLaunch:options=>navigations.push(options),
 }
 const context = { ref:Vue.ref, uni, translateTour, LANGUAGE_STORAGE_KEY:'zhiyou.app-language' }
 vm.createContext(context)
@@ -20,13 +21,13 @@ vm.runInContext(fs.readFileSync(path.join(root,'common/i18n.js'),'utf8').replace
 const localization = vm.runInContext('({appLanguage,setAppLanguage,t,installAppI18n,uiToast,uiModal,uiActionSheet,uiLoading,formatAppDate})', context)
 const planningSource = fs.readFileSync(path.join(root,'common/planning-language.js'),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
 vm.runInContext(planningSource,context)
-const { planningMessage, recommendationText } = vm.runInContext('({planningMessage,recommendationText})',context)
+const { planningMessage, recommendationText,questionLanguage,findQuestionSpot } = vm.runInContext('({planningMessage,recommendationText,questionLanguage,findQuestionSpot})',context)
 
 const components = {}
 function definition(relative) {
   const source = fs.readFileSync(path.join(root,relative),'utf8').replace(/<script\b[^>]*\blang="renderjs"[^>]*>[\s\S]*?<\/script>/g,'')
   const { descriptor } = parse(source)
-  const deps = { ...localization, translateTour, planningMessage, recommendationText, uni,
+  const deps = { ...localization, translateTour, planningMessage, recommendationText, questionLanguage,findQuestionSpot,uni,
     LANGUAGE_STORAGE_KEY:'zhiyou.app-language',BASE_URL:'https://backend.invalid/api/v1',
     APP_LOGIN:true,DEVELOPMENT_LOGIN:false,LOGIN_PROVIDER:'password',assetUrl:value=>value,
     wgs84ToGcj02:(a,b)=>[a,b],gcj02ToWgs84:(a,b)=>[a,b],prioritizeSummerPalace:items=>items,
@@ -65,7 +66,7 @@ test('one language switch updates all 10 mounted App pages, tabs, dialogs and pl
   const cases = [
     ['pages/auth/auth.vue',{registering:true,emailConfigured:true,authChecking:false},'Register and sign in'],
     ['pages/tour-guide/tour-guide.vue',{loading:false,spots:[spot]},'Choose places'],
-    ['pages/ai-chat/ai-chat.vue',{},'Where would you like to go?'],
+    ['pages/ai-chat/ai-chat.vue',{},'Which place would you like to learn about?'],
     ['pages/mine/mine.vue',{showPrefs:true,showLogout:true},'Interface language'],
     ['pages/mine/history.vue',{list:[]},'No tours yet.'],
     ['pages/favorites/favorites.vue',{loading:false,list:[],detailSpot:spot},'My favorites'],
@@ -232,4 +233,140 @@ test('translation resolves dynamic errors, progress, distances and public catalo
   assert.equal(translateTour('约 230 米（直线距离）','en'),'About 230 m (straight line)')
   assert.equal(translateTour('万寿山 → 昆明湖','en'),'Longevity Hill → Kunming Lake')
   assert.equal(translateTour('用户自己写的内容','en'),'用户自己写的内容')
+})
+
+test('guide questions use the existing English dialogue API and reuse the question session',async()=>{
+  localization.setAppLanguage('en');pending.length=0;storage.set('user_id',17)
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{chatMode:'guide',qaSpots:[spot],qaGuides:[{guide_id:1}],qaSpotId:7,text:'Tell me about Longevity Hill.'})
+    state.playTTS=()=>{};state.sendText()
+    await new Promise(resolve=>setImmediate(resolve))
+    const create=pending.shift();assert.match(create.url,/visitor-create/)
+    create.success({statusCode:200,data:{success:true,data:{session_id:72}}})
+    await new Promise(resolve=>setImmediate(resolve))
+    const chat=pending.shift();assert.match(chat.url,/\/tour-session\/chat$/);assert.equal(chat.method,'PUT')
+    assert.equal(chat.data.language,'en');assert.equal(chat.data.currentSpotId,7);assert.equal(chat.data.text_only,true)
+    assert.equal(chat.data.message,'Tell me about Longevity Hill.')
+    chat.success({statusCode:200,data:{success:true,data:{message:'Longevity Hill is part of the Summer Palace.',language:'en'}}})
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(state.msgs.at(-1).content,'Longevity Hill is part of the Summer Palace.')
+    state.text='Tell me more about its history.';state.sendText()
+    await new Promise(resolve=>setImmediate(resolve))
+    const followup=pending.shift();assert.match(followup.url,/\/chat$/);assert.equal(followup.data.sessionId,72)
+    followup.success({statusCode:200,data:{success:true,data:{message:'Here is the history.',language:'en'}}})
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(state.loading,false)
+  }finally{pending.length=0;storage.clear();cleanup()}
+})
+
+test('clearing chat ignores a late recommendation and its route cache',async()=>{
+  localization.setAppLanguage('en');pending.length=0
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{chatMode:'route',text:'Plan a 2-hour nature tour'})
+    state.playTTS=()=>{};state.sendText();const old=pending.shift();state.clearHistory()
+    old.success({statusCode:200,data:{success:true,data:{spot_ids:[7],spot_names:['万寿山'],estimated_time_minutes:60}}})
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(state.msgs.length,0);assert.equal(state.lastSpotIds.length,0);assert.equal(storage.has('ai_route_plan'),false)
+  }finally{pending.length=0;storage.clear();cleanup()}
+})
+
+test('a new recommendation without stops removes the previous actionable route',async()=>{
+  localization.setAppLanguage('en');pending.length=0
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{chatMode:'route',text:'Try another route',lastSpotIds:[7],recommendedPlan:{spot_ids:[7]},recommendSpots:[spot]})
+    state.playTTS=()=>{};state.sendText()
+    pending.shift().success({statusCode:200,data:{success:true,data:{spot_ids:[],spot_names:[],ai_response:'No matching route'}}})
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(state.lastSpotIds.length,0);assert.equal(state.recommendedPlan,null)
+  }finally{pending.length=0;storage.clear();cleanup()}
+})
+
+test('local AI conversations are isolated by account and the composer accepts long questions',()=>{
+  localization.setAppLanguage('en');storage.clear()
+  try{
+    storage.set('user_id',17)
+    const {state,host}=mount('pages/ai-chat/ai-chat.vue',{msgs:[{role:'user',content:'Private account A question'}]})
+    state.saveHistory();storage.set('user_id',18);state.loadHistory()
+    assert.equal(state.msgs.length,0)
+    storage.set('user_id',17);state.loadHistory();assert.equal(state.msgs[0].content,'Private account A question')
+    assert.equal(host.querySelector('.msg-input').getAttribute('maxlength'),'2000')
+  }finally{storage.clear();cleanup()}
+})
+
+test('English question intent and named places work even when the interface is Chinese',()=>{
+  assert.equal(questionLanguage('Tell me about Kunming Lake.','zh'),'en')
+  assert.equal(questionLanguage('介绍昆明湖','zh'),'zh')
+  assert.equal(questionLanguage('介绍昆明湖','en'),'en')
+  const lake={...spot,spot_id:8,spot_name:'昆明湖'}
+  assert.equal(findQuestionSpot('Tell me about KUNMING LAKE.',[spot,lake],7).spot_id,8)
+  assert.equal(findQuestionSpot('Tell me more.',[spot,lake],7).spot_id,7)
+  assert.equal(findQuestionSpot('Tell me more.',[spot,lake],null),null)
+})
+
+test('questions without a selected or named place ask for context and preserve the draft',async()=>{
+  localization.setAppLanguage('en');pending.length=0
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{qaSpots:[spot],qaGuides:[{guide_id:1}],text:'Tell me more.'})
+    await state.sendText()
+    assert.equal(pending.length,0);assert.equal(state.msgs.length,0);assert.equal(state.text,'Tell me more.')
+    assert.equal(state.showQASpots,true);assert.equal(state.loading,false)
+  }finally{storage.clear();cleanup()}
+})
+
+test('ASR responses arriving after clear do not send another question',async()=>{
+  localization.setAppLanguage('en');pending.length=0
+  const handlers={};let upload
+  uni.getRecorderManager=()=>({onStart:fn=>handlers.start=fn,onStop:fn=>handlers.stop=fn,onError:fn=>handlers.error=fn,stop:()=>{}})
+  uni.uploadFile=options=>{upload=options}
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue');state.initRecorder()
+    handlers.stop({tempFilePath:'/recording.mp3',duration:1000})
+    assert.equal(state.transcribing,true);state.clearHistory()
+    upload.success({statusCode:200,data:JSON.stringify({success:true,data:'Tell me about Kunming Lake.'})});upload.complete()
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(pending.length,0);assert.equal(state.msgs.length,0);assert.equal(state.transcribing,false)
+  }finally{delete uni.uploadFile;delete uni.getRecorderManager;pending.length=0;storage.clear();cleanup()}
+})
+
+test('an expired guide conversation creates one replacement session before retrying',async()=>{
+  localization.setAppLanguage('en');pending.length=0
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{qaSpots:[spot],qaGuides:[{guide_id:1}],qaSpotId:7,qaSession:{session_id:71,guide_id:1},text:'Tell me about Longevity Hill.'})
+    state.playTTS=()=>{};state.sendText();await new Promise(resolve=>setImmediate(resolve))
+    pending.shift().success({statusCode:200,data:{success:false,message:'本次导览已结束，请返回重新规划'}})
+    await new Promise(resolve=>setImmediate(resolve));const create=pending.shift();assert.match(create.url,/visitor-create/)
+    create.success({statusCode:200,data:{success:true,data:{session_id:72}}})
+    await new Promise(resolve=>setImmediate(resolve));const retry=pending.shift();assert.equal(retry.data.sessionId,72)
+    retry.success({statusCode:200,data:{success:true,data:{message:'Here is your English answer.'}}})
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(state.msgs.at(-1).content,'Here is your English answer.');assert.equal(pending.length,0)
+  }finally{pending.length=0;storage.clear();cleanup()}
+})
+
+test('clearing a route cancels its delayed navigation',async()=>{
+  localization.setAppLanguage('en');navigations.length=0
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{chatMode:'route',lastSpotIds:[7]})
+    state.applyRecommend();state.clearHistory()
+    await new Promise(resolve=>setTimeout(resolve,550))
+    assert.equal(navigations.length,0)
+  }finally{storage.clear();cleanup()}
+})
+
+test('composer layout follows measured keyboard height and does not jump on focus or blur',()=>{
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue')
+    state.onInputFocus();assert.equal(state.keyboardVisible,false)
+    state.updateKeyboardHeight(280);assert.equal(state.keyboardVisible,true)
+    state.onInputBlur();assert.equal(state.keyboardVisible,true)
+    state.updateKeyboardHeight(0);assert.equal(state.keyboardVisible,false)
+  }finally{cleanup()}
+})
+
+test('expired authentication returns to login instead of keeping an unusable chat token',async()=>{
+  localization.setAppLanguage('en');pending.length=0;navigations.length=0;storage.set('token','expired')
+  try{
+    const {state}=mount('pages/ai-chat/ai-chat.vue',{chatMode:'route',text:'Plan a route'})
+    state.sendText();pending.shift().success({statusCode:401,data:{detail:'Token expired'}})
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(storage.has('token'),false);assert.equal(navigations[0].url,'/pages/auth/auth')
+  }finally{pending.length=0;storage.clear();cleanup()}
 })
