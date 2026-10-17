@@ -1,0 +1,10 @@
+node_modules/
+unpackage/
+.hbuilderx/
+.env
+.env.*
+project.private.config.json
+manifest.json
+*.apk
+*.keystore
+*.jks

@@ -1,0 +1,13 @@
+/* English needs room for words; Chinese layout remains the same. */
+.app-english{--app-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-family:var(--app-font-family)}
+.app-english .nav-title,.app-english .dp-title,.app-english .welcome-title{letter-spacing:0}
+.app-english .qh-chip{white-space:normal;line-height:1.5}
+.app-english .gc-name{white-space:normal;line-height:1.5}
+.app-english .dp-row{gap:16rpx}
+.app-english .dp-row text:first-child{width:140rpx;flex-shrink:0}
+.app-english .dp-row text:last-child{min-width:0;overflow-wrap:anywhere}
+.app-english .menu-item{gap:16rpx;flex-wrap:wrap}
+.app-english .stat-label{display:block;line-height:1.5;text-align:center}
+.app-english .welcome-tags{gap:12rpx;justify-content:flex-start}
+.planner-control{width:100%;margin-left:0;margin-right:0;box-sizing:border-box;text-align:left;line-height:1.5}
+.planner-control::after{border:0}

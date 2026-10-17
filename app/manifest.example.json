@@ -1,0 +1,89 @@
+{
+  "name": "智游灵境",
+  "appid": "__UNI__80C86A1",
+  "description": "AI数字人景区导览小程序",
+  "versionName": "1.2.0",
+  "versionCode": "120",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "splashscreen": {
+      "alwaysShowBeforeRender": true,
+      "waiting": true,
+      "autoclose": true,
+      "delay": 0
+    },
+    "modules": {
+      "Camera": {},
+      "Geolocation": {},
+      "Speech": {},
+      "Recorder": {},
+      "Maps": {}
+    },
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\"/>",
+          "<uses-permission android:name=\"android.permission.ACCESS_BACKGROUND_LOCATION\"/>",
+          "<uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>",
+          "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+          "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>",
+          "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>",
+          "<uses-permission android:name=\"android.permission.INTERNET\"/>"
+        ],
+        "abiFilters": [
+          "arm64-v8a"
+        ]
+      },
+      "ios": {
+        "dSYMs": false,
+        "privacyDescription": {
+          "NSCameraUsageDescription": "拍照识景需要使用相机拍摄景点照片",
+          "NSPhotoLibraryUsageDescription": "图片识景需要从相册选择景点照片",
+          "NSLocationWhenInUseUsageDescription": "景区导览需要获取您的位置，在接近景点时自动触发讲解",
+          "NSMicrophoneUsageDescription": "需要使用麦克风进行语音交互"
+        }
+      },
+      "sdkConfigs": {
+        "maps": {
+          "amap": {
+            "__platform__": [
+              "android"
+            ],
+            "appkey_android": "",
+            "appkey_ios": "",
+            "name": "amapUPijK6y4"
+          }
+        }
+      }
+    }
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": {
+        "desc": "景区导览需要获取您的位置，在接近景点时自动触发语音讲解"
+      },
+      "scope.record": {
+        "desc": "需要使用麦克风进行语音输入，与AI导游对话"
+      }
+    },
+    "requiredPrivateInfos": [
+      "getLocation",
+      "startLocationUpdateBackground",
+      "chooseLocation"
+    ],
+    "__usePrivacyCheck__": true,
+    "lazyCodeLoading": "requiredComponents"
+  },
+  "vueVersion": "3"
+}
