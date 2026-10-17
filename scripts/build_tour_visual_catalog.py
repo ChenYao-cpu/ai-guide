@@ -11,11 +11,8 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 OFFICIAL = 'https://www.summerpalace.net.cn'
-PAGES = {'长廊': '/gallery_detail/369.html', '昆明湖': '/laka_spot/detail/355.html',
-         '十七孔桥': '/laka_spot/detail/362.html', '南湖岛': '/laka_spot/detail/360.html',
-         '铜牛': '/laka_spot/detail/361.html', '石舫': '/laka_spot/detail/413.html'}
-NAMES = {'长廊': 'Long Corridor', '昆明湖': 'Kunming Lake', '十七孔桥': 'Seventeen-Arch Bridge',
-         '南湖岛': 'South Lake Island', '铜牛': 'Bronze Ox', '石舫': 'Marble Boat'}
+PAGES = {'长廊': '/gallery_detail/369.html', '昆明湖': '/laka_spot/detail/355.html', '十七孔桥': '/laka_spot/detail/362.html', '南湖岛': '/laka_spot/detail/360.html', '铜牛': '/laka_spot/detail/361.html', '石舫': '/laka_spot/detail/413.html', '仁寿殿': '/court_life/detail/346.html', '德和园': '/court_life/detail/344.html', '玉澜堂': '/court_life/detail/347.html', '乐寿堂': '/court_life/detail/350.html', '排云殿': '/longevity/detailqianshan/381.html', '佛香阁': '/longevity/detailqianshan/382.html', '谐趣园': '/longevity/detailhouhu/372.html', '苏州街': '/longevity/detailhouhu/373.html'}
+NAMES = {'长廊': 'Long Corridor', '昆明湖': 'Kunming Lake', '十七孔桥': 'Seventeen-Arch Bridge', '南湖岛': 'South Lake Island', '铜牛': 'Bronze Ox', '石舫': 'Marble Boat', '仁寿殿': 'Hall of Benevolence and Longevity', '德和园': 'Garden of Virtue and Harmony', '玉澜堂': 'Hall of Jade Ripples', '乐寿堂': 'Hall of Joyful Longevity', '排云殿': 'Hall of Dispelling Clouds', '佛香阁': 'Tower of Buddhist Incense', '谐趣园': 'Garden of Harmonious Interests', '苏州街': 'Suzhou Street'}
 
 
 def build():

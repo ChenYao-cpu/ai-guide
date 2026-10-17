@@ -9,6 +9,8 @@ import { roadPaths } from '@/utils/routeGeometry'
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  Clock,
   ArrowRight,
   Camera,
   Check,
@@ -19,6 +21,7 @@ import {
   Location,
   OfficeBuilding,
   Promotion,
+  Plus,
   Search,
   User,
 } from '@element-plus/icons-vue'
@@ -31,6 +34,12 @@ import QrFloating from '@/components/QrFloating.vue'
 import ScenicVisitContext from '@/components/ScenicVisitContext.vue'
 import VisitorAtmosphere from '@/components/VisitorAtmosphere.vue'
 import RouteOverview from '@/components/RouteOverview.vue'
+import RouteCarousel from '@/components/RouteCarousel.vue'
+import ScenicSpotCover from '@/components/ScenicSpotCover.vue'
+import ScenicSpotDetailDrawer from '@/components/ScenicSpotDetailDrawer.vue'
+import RecommendedRouteDrawer from '@/components/RecommendedRouteDrawer.vue'
+import SelectedItineraryDrawer from '@/components/SelectedItineraryDrawer.vue'
+import type { RecommendedRoute } from '@/types/recommendedRoute'
 import { getRouteOverview, type RouteOverviewData } from '@/api/tourExperience'
 import { loadScenicMap } from '@/utils/leaflet'
 
@@ -45,6 +54,7 @@ let mapIsOverview = true
 let routeLineLayer:any = null
 const mapLoadError=ref(false), routePreview=ref<RouteOverviewData|null>(null)
 const routePreviewLoading=ref(false),routePreviewError=ref(false)
+const selectedItineraryVisible=ref(false)
 let previewVersion=0,previewController:AbortController|undefined
 
 // 高德瓦片（无需 API Key，国内可用）
@@ -194,10 +204,9 @@ const drafts = reactive<Record<PlanningMode, {
   guide: DigitalGuide | null
   spotIds: Set<number>
   routeId: number | null
-  visitorName: string
 }>>({
-  route: { guide: null, spotIds: new Set(), routeId: null, visitorName: '' },
-  personal: { guide: null, spotIds: new Set(), routeId: null, visitorName: '' },
+  route: { guide: null, spotIds: new Set(), routeId: null },
+  personal: { guide: null, spotIds: new Set(), routeId: null },
 })
 const activeDraft = computed(() => drafts[activeMenuTab.value])
 const guidePickerVisible = ref(false)
@@ -231,7 +240,6 @@ const modelCategories = computed(() => {
   }
   return Object.values(cats)
 })
-const visitorName = computed({ get: () => activeDraft.value.visitorName, set: value => { activeDraft.value.visitorName = value } })
 const selectedGuide = computed(() => activeDraft.value.guide)
 const selectedSpotIds = computed({ get: () => activeDraft.value.spotIds, set: value => { activeDraft.value.spotIds = value } })
 const loading = ref(false)
@@ -246,6 +254,12 @@ const guideChoicePoster = computed(() => {
 const guideChoicePosterFailed = ref(false)
 watch(guideChoicePoster, () => { guideChoicePosterFailed.value = false })
 const routeList = ref<any[]>([])
+const routeDetailVisible = ref(false)
+const activeRouteDetail = ref<RecommendedRoute | null>(null)
+function routeCopy(route: RecommendedRoute) { return route.editorial?.[locale.value === 'en' ? 'en' : 'zh'] }
+function routeCoverSpot(route: RecommendedRoute) { return spotList.value.find(spot => spot.spot_name === (route.hero_spot_name || route.spot_names?.[0])) }
+function openRouteDetail(route: RecommendedRoute) { activeRouteDetail.value = route; routeDetailVisible.value = true }
+function applyDetailedRoute(route: RecommendedRoute) { selectRoute(route); routeDetailVisible.value = false }
 const selectedRouteId = computed({ get: () => activeDraft.value.routeId, set: value => { activeDraft.value.routeId = value } })
 const spotList = ref<any[]>([])
 const weatherCoordinates = computed(() => {
@@ -320,6 +334,8 @@ const filteredSpotList = computed(() => {
   })
 })
 const spotCount = computed(() => selectedSpotIds.value.size)
+const launchPanel=ref<HTMLElement|null>(null)
+const selectedSpotOrder=computed(()=>new Map([...selectedSpotIds.value].map((id,index)=>[id,index+1])))
 const selectedSpots = computed(() => [...selectedSpotIds.value].map(id => spotList.value.find(spot => spot.spot_id === id)).filter(Boolean))
 const selectedSpotNames = computed(() => selectedSpots.value.map(spot => spot.spot_name))
 const selectedDuration = computed(() => {
@@ -350,6 +366,17 @@ const toggleSpots = (spots: any[]) => {
   selectedRouteId.value = null
 }
 
+function moveSelectedSpot(id:number,direction:number) {
+  const ids=[...drafts.route.spotIds],index=ids.indexOf(id),target=index+direction
+  if(index<0||target<0||target>=ids.length)return
+  ;[ids[index],ids[target]]=[ids[target],ids[index]]
+  drafts.route.spotIds=new Set(ids);drafts.route.routeId=null
+}
+function continueToGuide(){launchPanel.value?.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'})}
+const plannedDistance=computed(()=>{
+  const meters=routePreview.value?.walking_meters
+  return meters==null?'—':meters>=1000?(meters/1000).toFixed(2)+' km':meters+' m'
+})
 const getCategoryCount = (cat: string) => spotList.value.filter(spot => (spot.category || '其他') === cat).length
 const clearSelection = async () => {
   if (!selectedSpotIds.value.size) return
@@ -474,6 +501,7 @@ const fetchData = async () => {
 }
 
 const selectRoute = (route: any) => {
+  if (route.complete === false) { ElMessage.warning(t('路线步行信息暂不可用，请选择其他路线')); return }
   drafts.route.routeId = route.route_id
   drafts.route.spotIds = new Set(route.spot_ids || [])
   ElMessage.success(t("已选择路线「{p0}」", {p0: route.name}))
@@ -500,11 +528,10 @@ const startTour = async () => {
     return
   }
   if (!selectedGuide.value) { ElMessage.warning(t("请选择数字人形象")); return }
-  const name = visitorName.value.trim() || t("游客")
   starting.value = true
   const guideId = selectedGuide.value.guide_id
   const params = new URLSearchParams({
-    name: `${name}的导览`,
+    name: t('游客的导览'),
     guide_id: String(guideId),
     route_id: String(selectedRouteId.value || 0),
     visitor_preferences: activeMenuTab.value === 'personal' ? selectedPreferences.value.join(',') : '',
@@ -568,7 +595,136 @@ watch(activeMenuTab, (tab) => {
 </script>
 
 <style scoped>
-.tour-recovery-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 20px;margin:0 0 18px;border-radius:16px;background:#f0edf9;color:#514275;font-size:15px}.tour-recovery-bar>div{display:flex;gap:8px}.tour-recovery-bar strong{font-weight:400}.route-order-note{font-size:13px;line-height:1.6;color:var(--text-secondary);margin:10px 0 0}.selected-route-overview{border-top:1px solid #ece8f5;margin-top:12px;padding-top:4px}
+.tour-recovery-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 20px;margin:0 0 18px;border-radius:16px;background:#f0edf9;color:#514275;font-size:15px}.tour-recovery-bar>div{display:flex;gap:8px}.tour-recovery-bar strong{font-weight:400}
+
+/* A focused route and a glimpse of the next one replace the static grid. */
+.recommended-routes .route-card { min-height:250px; padding:28px 30px; }
+.recommended-routes .route-name { font-size:24px; margin-top:18px; padding-right:64px; }
+.recommended-routes .route-desc,.recommended-routes .route-spots { font-size:17px; padding-right:70px; }
+.recommended-routes .route-theme-tag,.recommended-routes .route-time { font-size:16px; }
+.recommended-routes .route-card-bottom { margin-top:22px; }
+.recommended-routes .route-card>*:not(.route-slide-number) { position:relative; z-index:1; }
+.route-slide-number { position:absolute; right:26px; bottom:42px; color:var(--route-ink); opacity:.06; font:500 clamp(80px,9vw,145px)/1 Arial; letter-spacing:-.08em; pointer-events:none; }
+.visitor-home .route-card.route-tone-1 { --route-tint:#edf3fa; --route-ink:#4c6f94; }
+.visitor-home .route-card.route-tone-2 { --route-tint:#edf5f0; --route-ink:#466e5e; }
+.recommended-routes .route-card:focus-visible { outline:2px solid #8a74cc; outline-offset:-3px; }
+@media(max-width:700px) {
+ .recommended-routes .route-card { min-height:260px; padding:20px; }
+ .recommended-routes .route-name { font-size:21px; padding-right:0; }
+ .recommended-routes .route-desc,.recommended-routes .route-spots { font-size:16px; padding-right:0; }
+ .recommended-routes .route-theme-tag,.recommended-routes .route-time { font-size:15px; }
+ .route-slide-number { right:18px; bottom:30px; }
+}
+
+/* Photographic attraction cards with a persistent, editable route beside them. */
+.spot-picker-layout { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:26px; align-items:start; margin-top:22px; }
+.spot-picker-main { min-width:0; }
+.spot-picker-main .spot-options-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:0; }
+.spot-picker-layout .spot-option { position:relative; display:flex; flex-direction:column; gap:0; padding:0; border:1px solid #e5e8ef; border-radius:17px; overflow:hidden; background:#fff; transition:transform .22s,box-shadow .22s,border-color .22s; }
+.spot-picker-layout .spot-option:hover { transform:translateY(-4px); border-color:#cdc4e4; box-shadow:0 12px 28px -17px #67718b50; }
+.spot-picker-layout .spot-option.selected { border-color:#9e8bcd; background:#fcfbff; box-shadow:inset 0 0 0 1px #b4a4da; }
+.spot-picker-layout .spot-choice { position:relative; display:flex; flex-direction:column; align-items:stretch; width:100%; gap:0; flex:1; }
+.spot-picker-layout .spot-choice:focus-visible { outline:3px solid #9b84cd; outline-offset:-3px; }
+.spot-picker-layout .spot-choice-check { position:absolute; top:12px; right:12px; display:grid; place-items:center; width:30px; height:30px; border-radius:50%; border:1px solid #ffffffdd; background:#ffffffec; color:#6b56ad; box-shadow:0 2px 10px #3c456422; font:600 16px Arial; }
+.spot-picker-layout .selected .spot-choice-check { color:#fff; border-color:#8d78bf; background:#8266bb; }
+.spot-picker-layout .spot-choice-copy { padding:16px 18px 8px; gap:7px; min-height:86px; }
+.spot-picker-layout .spot-choice-title strong { font-size:21px; line-height:1.5; }
+.spot-visit-duration { display:flex; align-items:center; gap:6px; color:#758094; font-size:15px; line-height:1.6; }
+.spot-card-footer { display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 10px 10px 18px; gap:8px; }
+.spot-kind-tag { font-size:15px; color:#77629e; background:#f1edf9; padding:3px 9px; border-radius:7px; line-height:1.5; }
+.spot-kind-historical .spot-kind-tag { color:#97713f; background:#f8f1e7; }
+.spot-kind-natural .spot-kind-tag { color:#4c806f; background:#eaf4ee; }
+.spot-picker-layout .spot-option-detail { min-height:36px; padding:0 8px; font-size:16px; }
+.spot-photo-credit { display:inline-block; color:#8590a1; font-size:14px; margin-top:16px; line-height:1.7; }
+.itinerary-sidebar.spot-selection-summary { display:block; position:sticky; top:22px; margin:0; padding:20px 18px; border:1px solid #e9e3f2; border-radius:18px; background:linear-gradient(160deg,#f5f1fb,#f4f8f7); }
+.itinerary-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+.itinerary-heading h4 { font-size:21px; font-weight:600; margin:0; color:#3d3855; }
+.itinerary-heading>span { font-size:15px; color:#7e7397; }
+.itinerary-empty { display:grid; justify-items:center; text-align:center; gap:12px; padding:32px 0 24px; }
+.itinerary-empty-icon { width:54px; height:54px; display:grid; place-items:center; color:#9a87be; border-radius:17px; background:#ede7f6; font-size:27px; }
+.itinerary-empty strong { font-size:17px; font-weight:400; line-height:1.6; color:#645874; }
+.itinerary-empty>span:last-child { color:#8a8395; font-size:15px; line-height:1.7; }
+.itinerary-selected-list { position:relative; list-style:none; margin:0; padding:0 2px 0 0; max-height:440px; overflow:auto; scrollbar-width:thin; scrollbar-color:#d6cce5 transparent; }
+.itinerary-selected-list li { display:grid; grid-template-columns:26px minmax(0,1fr) auto; align-items:center; gap:7px; position:relative; padding:8px 0; min-height:54px; }
+.itinerary-selected-list li:not(:last-child)::after { content:''; position:absolute; top:40px; bottom:-12px; left:12px; width:1px; background:#d6cce4; }
+.itinerary-step { position:relative; z-index:1; display:grid; place-items:center; height:26px; width:26px; color:#8467b8; background:#fff; border-radius:50%; border:1px solid #e0d7ed; font:500 14px Arial; }
+.itinerary-stop-name { border:0; background:none; padding:0; color:#4c475c; font:inherit; font-size:17px; line-height:1.45; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
+.itinerary-stop-actions { display:flex; gap:1px; }
+.itinerary-stop-actions button { display:grid; place-items:center; width:25px; height:30px; padding:0; border:0; border-radius:7px; background:transparent; color:#8c7d9e; font-size:15px; cursor:pointer; }
+.itinerary-stop-actions button:hover:not(:disabled) { background:#e9e1f3; color:#6c4c9f; }
+.itinerary-stop-actions button:disabled { opacity:.23; cursor:default; }
+.itinerary-totals { display:grid; grid-template-columns:1fr 1fr; gap:12px; border-top:1px solid #e4dfeb; padding:18px 0 10px; margin-top:16px; }
+.itinerary-totals>div { display:grid; gap:7px; }
+.itinerary-totals span { font-size:15px; color:#8a8099; }
+.itinerary-totals strong { font:500 22px Arial; color:#6b5991; }
+.itinerary-totals small { font:400 14px var(--app-font-family); }
+.itinerary-continue { width:100%; display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px; padding:13px 10px; border:0; border-radius:12px; background:#8064b5; color:white; font:inherit; font-size:17px; cursor:pointer; box-shadow:0 6px 16px -9px #70569e90; }
+.itinerary-load-error { color:#956776; font-size:15px; padding-top:8px; }
+.itinerary-load-error button { border:0; background:none; color:#7861a5; font:inherit; cursor:pointer; }
+.itinerary-list-move,.itinerary-list-enter-active,.itinerary-list-leave-active { transition:transform .25s ease,opacity .25s ease; }
+.itinerary-list-enter-from,.itinerary-list-leave-to { opacity:0; transform:translateX(12px); }
+@container(min-width:1400px) { .spot-picker-main .spot-options-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@container(max-width:850px) { .spot-picker-layout { grid-template-columns:minmax(0,1fr); }.itinerary-sidebar.spot-selection-summary { position:static; order:-1; }.itinerary-empty { padding:6px 0; gap:5px; }.itinerary-empty-icon { display:none; }.itinerary-selected-list { max-height:230px; }.itinerary-totals { margin-top:10px; } }
+@container(max-width:480px) { .spot-picker-main .spot-options-grid { grid-template-columns:minmax(0,1fr); }.spot-picker-layout { gap:16px; } }
+@media(prefers-reduced-motion:reduce) { .spot-picker-layout .spot-option,.itinerary-list-move,.itinerary-list-enter-active,.itinerary-list-leave-active { transition:none; }.spot-picker-layout .spot-option:hover { transform:none; } }
+
+/* A single launch row: itinerary, guide, then the primary action. */
+.visitor-start { container: tour-launch / inline-size; }
+.visitor-home .start-panel.tour-launch {
+  display: grid;
+  grid-template-columns: minmax(210px,.85fr) minmax(420px,1.8fr) minmax(180px,.7fr);
+  gap: 24px;
+  align-items: center;
+  padding: 24px 26px;
+  border: 1px solid #e7e2ee;
+  border-radius: 22px;
+  background: linear-gradient(105deg,#f5f2fb,#f4f8f7);
+  box-shadow: 0 10px 30px -20px #65598040;
+}
+.tour-launch .start-heading { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.launch-route-icon { display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border: 1px solid #e6ddef; border-radius: 15px; color: #8969b6; background: #ffffffbd; font-size: 27px; }
+.launch-trip-copy { min-width: 0; }
+.tour-launch .start-heading h2 { margin: 0 0 9px; font-size: 23px; line-height: 1.4; color: #393347; }
+.tour-launch .start-summary { display: flex; align-items: center; justify-content: flex-start; gap: 8px 13px; flex-wrap: wrap; margin: 0; font-size: 17px; line-height: 1.5; color: #82758e; }
+.tour-launch .start-summary>span { display: inline-flex; align-items: center; gap: 5px; }
+.tour-launch .start-summary .el-icon { font-size: 16px; }
+.tour-launch .start-heading .start-hint { margin: 7px 0 0; color: #978b9f; font-size: 16px; line-height: 1.55; }
+.visitor-home .tour-launch .start-guide-choice { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 16px; width: 100%; margin: 0; min-height: 116px; padding: 13px 16px; border: 1px solid #ded3ed; border-radius: 17px; background: #ffffffbd; box-shadow: 0 5px 16px -12px #72549540; }
+.tour-launch .guide-choice-portrait { flex: 0 0 68px; width: 68px; height: 86px; border-radius: 13px; background: #f9f7fc; }
+.tour-launch .guide-choice-aura { inset: -4px; opacity: .2; }
+.tour-launch .guide-choice-main { flex: 1; min-width: 0; }
+.tour-launch .guide-choice-heading { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; }
+.tour-launch .guide-choice-label { color: #5b4976; font-size: 18px; line-height: 1.4; }
+.tour-launch .guide-choice-state { padding: 2px 8px; border-radius: 6px; color: #9985af; background: #f1ecf8; font-size: 15px; line-height: 1.5; }
+.tour-launch .has-guide .guide-choice-state { color: #56806c; background: #edf5ef; }
+.tour-launch .has-guide .guide-choice-heading { flex-direction: row; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 5px 8px; }
+.tour-launch .chosen-guide { margin: 9px 0 0; min-height: 0; }
+.tour-launch .chosen-guide strong { color: #4e3b65; font-size: 20px; line-height: 1.4; }
+.visitor-home .tour-launch .start-guide-choice .guide-select-button.el-button { flex-shrink: 0; width: auto; min-width: 142px; max-width: 180px; min-height: 48px; padding: 10px 14px; border: 1px solid #d8c9ea; border-radius: 11px; color: #7c5ba6 !important; background: #f8f4fd !important; box-shadow: none !important; font-size: 17px; line-height: 1.5; }
+.visitor-home .tour-launch .start-guide-choice .guide-select-button.el-button:hover { border-color: #b99dd9; background: #efe6f8 !important; }
+.tour-launch-actions { display: flex; align-items: center; min-width: 0; }
+.visitor-home .tour-launch .start-btn.el-button { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 56px; height: auto; gap: 10px; margin: 0; padding: 14px 20px; border: 1px solid #8766b7; border-radius: 13px; color: #fff !important; background: linear-gradient(110deg,#9876c7,#7d5bb1) !important; box-shadow: 0 7px 18px -8px #7954ac66; font-size: 20px; line-height: 1.4; font-weight: 500; }
+.tour-launch .start-btn :deep(>span) { display: inline-flex; align-items: center; justify-content: center; gap: 10px; white-space: normal; }
+.visitor-home .tour-launch .start-btn.el-button:hover:not(.is-disabled) { border-color: #7653a8; background: linear-gradient(110deg,#8d6abe,#704ca4) !important; }
+.visitor-home .tour-launch .start-btn.el-button.is-disabled { border-color: #e4dfeb; color: #aaa0b8 !important; background: #eae5f0 !important; box-shadow: none; }
+.tour-launch .start-error { grid-column: 1 / -1; margin: 0; }
+@container tour-launch (max-width: 960px) {
+  .visitor-home .start-panel.tour-launch { grid-template-columns: minmax(0,1fr) 190px; gap: 18px; }
+  .tour-launch .start-heading { grid-column: 1 / -1; padding-bottom: 17px; border-bottom: 1px solid #e6dfed; }
+  .launch-trip-copy { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 20px; }
+  .tour-launch .start-heading h2 { margin: 0; }
+  .tour-launch .start-heading .start-hint { margin: 0; }
+}
+@container tour-launch (max-width: 650px) {
+  .visitor-home .start-panel.tour-launch { grid-template-columns: minmax(0,1fr); padding: 20px; gap: 16px; }
+  .launch-trip-copy { display: block; }
+  .tour-launch .start-heading h2 { margin-bottom: 7px; font-size: 22px; }
+  .tour-launch .start-btn.el-button { min-height: 52px; }
+}
+@container tour-launch (max-width: 440px) {
+  .visitor-home .tour-launch .start-guide-choice { display: grid; grid-template-columns: 68px minmax(0,1fr); gap: 13px; }
+  .visitor-home .tour-launch .start-guide-choice .guide-select-button.el-button { grid-column: 1 / -1; width: 100%; max-width: none; }
+}
 </style>
 
 <template>
@@ -627,12 +783,6 @@ watch(activeMenuTab, (tab) => {
             <div class="map-card-heading"><h3>{{ $t("景区地图") }}</h3><div class="map-heading-actions"><span>{{ $t("点击标记选择景点") }}</span><button type="button" class="map-overview-button" @click="showMapOverview">{{ $t("景区全景") }}</button></div></div>
             <div class="map-container" ref="mapDiv"></div>
             <p v-if="mapLoadError" role="alert">{{ $t('地图暂时无法加载') }} <button type="button" @click="initLeafletMap">{{ $t('重试') }}</button></p>
-            <div v-if="spotCount" class="selected-route-overview">
-              <p v-if="routePreviewLoading" role="status">{{ $t('正在计算路线详情…') }}</p>
-              <p v-else-if="routePreviewError" role="alert">{{ $t('路线详情暂时无法加载') }} <button type="button" @click="refreshRoutePreview">{{ $t('重试') }}</button></p>
-              <RouteOverview v-else :overview="routePreview" :show-map="false" compact />
-              <p class="route-order-note">{{ $t('紫色线沿园内步道连接，数字表示游览顺序。') }}</p>
-            </div>
             <div class="map-spots" v-if="spotList.length">
               <button v-for="(spot, index) in spotList.slice(0, 6)" :key="spot.spot_id" type="button" class="map-spot-tag" @click="focusMapSpot(spot.spot_id)">{{ $t(index + 1) }} {{ $t(spot.spot_name) }}</button>
               <select v-if="spotList.length > 6" class="map-locate-select" :aria-label='$t("定位更多景点")' @change="focusMapSpot(Number(($event.target as HTMLSelectElement).value))">
@@ -646,17 +796,22 @@ watch(activeMenuTab, (tab) => {
 
           <!-- 推荐路线 -->
           <div class="content-card recommended-routes" v-if="routeList.length > 0">
-            <div class="card-title">{{ $t("推荐路线") }}</div>
-            <div class="routes-grid">
-              <div v-for="route in routeList" :key="route.route_id" class="route-card" :class="{ selected: selectedRouteId === route.route_id }" @click="selectRoute(route)">
-                <div v-if="route.cover_image" class="route-cover"><img :src="route.cover_image" :alt="$t(route.name)" loading="lazy" /><small v-if="route.cover_generated">{{ $t("AI路线示意图") }}</small></div>
-                <div class="route-card-top"><span class="route-theme-tag">{{ $t(preferenceOptions.find(pref => pref.value === route.theme)?.label || '综合游览') }}</span><span class="route-time">{{ $t(route.estimated_time_minutes || '--') }} {{ $t("分钟") }}</span></div>
-                <h3 class="route-name">{{ $t(route.name) }}</h3>
-                <p class="route-desc">{{ $t(route.description || '综合游览路线') }}</p>
-                <div class="route-spots"><el-icon :size="14"><Location /></el-icon><span>{{ $t((route.spot_names || []).map((name: string) => $t(name)).join(' → ') || `${route.spot_count || 0} 个景点`) }}</span></div>
-                <div class="route-card-bottom"><el-tag size="small" round>{{ $t(route.spot_count || 0) }} {{ $t("个景点") }}</el-tag><span class="route-check" v-if="selectedRouteId === route.route_id"><el-icon><Check /></el-icon>{{ $t("已选择") }}</span></div>
+            <RouteCarousel :routes="routeList" :suspended="routeDetailVisible || selectedItineraryVisible" v-slot="{route,index,active}">
+              <div class="route-card" :class="[{selected:selectedRouteId===route.route_id},'route-tone-'+index%3]" role="button" :tabindex="active?0:-1" :aria-pressed="selectedRouteId===route.route_id" :aria-label="$t('选择路线：{p0}',{p0:route.name})" @click="selectRoute(route)" @keydown.enter.prevent="selectRoute(route)" @keydown.space.prevent="selectRoute(route)">
+                <span class="route-slide-number" aria-hidden="true">{{ String(index+1).padStart(2,'0') }}</span>
+                <div class="route-rich-main">
+                  <div class="route-summary-copy">
+                    <div class="route-card-top"><span class="route-theme-tag">{{ $t(preferenceOptions.find(pref => pref.value === route.theme)?.label || '综合游览') }}</span><span class="route-time"><el-icon><Clock /></el-icon>{{ route.estimated_time_minutes ?? '—' }} {{ $t('分钟') }}</span></div>
+                    <h3 class="route-name">{{ $t(route.name) }}</h3>
+                    <p class="route-desc">{{ routeCopy(route)?.summary || $t(route.description || '综合游览路线') }}</p>
+                    <div v-if="routeCopy(route)?.highlights.length" class="route-highlight-chips"><span v-for="highlight in routeCopy(route)?.highlights" :key="highlight">{{ highlight }}</span></div>
+                    <div class="route-spots"><el-icon><Location /></el-icon><span>{{ (route.spot_names || []).slice(0,3).map((name: string) => $t(name)).join(' → ') }}<template v-if="(route.spot_names?.length || 0)>3"> · {{ $t('共 {p0} 站',{p0:route.spot_count}) }}</template></span></div>
+                  </div>
+                  <div v-if="route.cover_image || routeCoverSpot(route)" class="route-feature-visual"><img v-if="route.cover_image" :src="route.cover_image" alt="" loading="lazy" /><ScenicSpotCover v-else-if="routeCoverSpot(route)" :spot="routeCoverSpot(route)!" /><span v-if="route.cover_generated" class="route-generated-caption">{{ $t('AI路线示意图') }}</span></div>
+                </div>
+                <div class="route-card-bottom"><div class="route-card-facts"><span><el-icon><Guide /></el-icon>{{ route.spot_count || 0 }} {{ $t('个景点') }}</span><span v-if="route.walking_distance_meters!=null">{{ (route.walking_distance_meters/1000).toFixed(2) }} km</span><span class="route-check" v-if="selectedRouteId===route.route_id"><el-icon><Check /></el-icon>{{ $t('已选择') }}</span></div><button type="button" class="route-detail-button" :tabindex="active?0:-1" :aria-label="$t('查看完整行程：{p0}',{p0:$t(route.name)})" @click.stop="openRouteDetail(route)" @keydown.stop>{{ $t('查看完整行程') }}<el-icon><ArrowRight /></el-icon></button></div>
               </div>
-            </div>
+            </RouteCarousel>
           </div>
 
           <!-- 选择景点 -->
@@ -675,20 +830,37 @@ watch(activeMenuTab, (tab) => {
               <button type="button" :class="{ active: categoryFilter === 'all' }" :aria-pressed="categoryFilter === 'all'" @click="categoryFilter = 'all'">{{ $t("全部") }}<span>{{ $t(spotList.length) }}</span></button>
               <button v-for="cat in categoryOptions" :key="cat" type="button" :class="{ active: categoryFilter === cat }" :aria-pressed="categoryFilter === cat" @click="categoryFilter = cat">{{ $t(getCategoryLabel(cat)) }}<span>{{ $t(getCategoryCount(cat)) }}</span></button>
             </div>
-            <div v-if="spotCount" class="spot-selection-summary"><span>{{ $t("已选") }}</span><p>{{ $t(selectedSummary) }}</p></div>
-            <div v-if="spotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Location /></el-icon><strong>{{ $t("暂无景点数据") }}</strong></div>
-            <div v-else-if="filteredSpotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Search /></el-icon><strong>{{ $t(showSelectedOnly && !spotCount ? '尚未选择景点' : '未找到相关景点') }}</strong></div>
-            <div v-else class="spot-options-grid">
-              <article v-for="spot in filteredSpotList" :key="spot.spot_id" :data-spot-id="spot.spot_id" class="spot-option" :class="{ selected: selectedSpotIds.has(spot.spot_id) }">
+            <div class="spot-picker-layout">
+             <div class="spot-picker-main">
+              <div v-if="spotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Location /></el-icon><strong>{{ $t("暂无景点数据") }}</strong></div>
+              <div v-else-if="filteredSpotList.length === 0 && !loading" class="empty-hint compact"><el-icon><Search /></el-icon><strong>{{ $t(showSelectedOnly && !spotCount ? '尚未选择景点' : '未找到相关景点') }}</strong></div>
+              <div v-else class="spot-options-grid">
+               <article v-for="spot in filteredSpotList" :key="spot.spot_id" :data-spot-id="spot.spot_id" class="spot-option" :class="[{selected:selectedSpotIds.has(spot.spot_id)},'spot-kind-'+spot.category]">
                 <button class="spot-choice" type="button" :aria-label="$t(selectedSpotIds.has(spot.spot_id) ? '取消选择 {p0}' : '选择景点 {p0}', {p0: spot.spot_name})" :aria-pressed="selectedSpotIds.has(spot.spot_id)" @click="toggleSpot(spot.spot_id)">
-                  <span class="spot-choice-check" aria-hidden="true"><el-icon v-if="selectedSpotIds.has(spot.spot_id)"><Check /></el-icon></span>
-                  <img v-if="spot.image_path" :src="spot.image_path" alt="" class="spot-option-photo" loading="lazy" />
-                  <span class="spot-choice-copy">
-                    <span class="spot-choice-title"><strong>{{ $t(spot.spot_name) }}</strong></span>
-                  </span>
+                 <ScenicSpotCover :spot="spot" />
+                 <span class="spot-choice-check" aria-hidden="true"><template v-if="selectedSpotIds.has(spot.spot_id)">{{ selectedSpotOrder.get(spot.spot_id) }}</template><el-icon v-else><Plus /></el-icon></span>
+                 <span class="spot-choice-copy"><span class="spot-choice-title"><strong>{{ $t(spot.spot_name) }}</strong></span><span class="spot-visit-duration"><el-icon><Clock /></el-icon>{{ $t('建议停留') }} {{ spot.visit_duration||20 }} {{ $t('分钟') }}</span></span>
                 </button>
-                <button class="spot-option-detail" type="button" :aria-label="$t('{p0}详情', {p0: spot.spot_name})" @click="openSpotDetail(spot)">{{ $t("详情") }}<el-icon><ArrowRight /></el-icon></button>
-              </article>
+                <div class="spot-card-footer"><span class="spot-kind-tag">{{ $t(getCategoryLabel(spot.category)) }}</span><button class="spot-option-detail" type="button" :aria-label="$t('{p0}详情', {p0: spot.spot_name})" @click="openSpotDetail(spot)">{{ $t("详情") }}<el-icon><ArrowRight /></el-icon></button></div>
+               </article>
+              </div>
+             </div>
+             <aside class="spot-selection-summary itinerary-sidebar" :aria-label="$t('已选行程')">
+              <div class="itinerary-heading"><h4>{{ $t('我的行程') }}</h4><span>{{ spotCount }} {{ $t('站') }}</span></div>
+              <div v-if="!spotCount" class="itinerary-empty"><span class="itinerary-empty-icon"><el-icon><Location /></el-icon></span><strong>{{ $t('把喜欢的风景加入行程') }}</strong><span>{{ $t('点击景点卡片，安排你的游览顺序') }}</span></div>
+              <template v-else>
+               <div class="itinerary-totals itinerary-live-totals" :aria-busy="routePreviewLoading" aria-live="polite"><div><span>{{ $t('预计步行') }}</span><strong>{{ routePreviewLoading?'…':plannedDistance }}</strong></div><div><span>{{ $t('预计用时') }}</span><strong>{{ routePreviewLoading?'…':routePreview?.total_minutes??'—' }}<small v-if="!routePreviewLoading&&routePreview?.total_minutes"> {{ $t('分钟') }}</small></strong></div></div>
+               <p v-if="routePreviewLoading" class="itinerary-time-breakdown" role="status">{{ $t('正在计算路线详情…') }}</p>
+               <p v-else-if="routePreviewError" class="itinerary-load-error" role="alert">{{ $t('路线详情暂时无法加载') }} <button type="button" @click="refreshRoutePreview">{{ $t('重试') }}</button></p>
+               <p v-else-if="routePreview" class="itinerary-time-breakdown"><span>{{ $t('停留') }} <b>{{ routePreview.visit_minutes }}</b></span><span>{{ $t('步行') }} <b>{{ routePreview.walking_minutes??'—' }}</b></span><span>{{ $t('休息') }} <b>{{ routePreview.rest_minutes }}</b> {{ $t('分钟') }}</span></p>
+               <button type="button" class="itinerary-details-button" aria-haspopup="dialog" @click="selectedItineraryVisible=true"><el-icon><Guide /></el-icon>{{ $t('路线与用时') }}<el-icon><ArrowRight /></el-icon></button>
+               <TransitionGroup tag="ol" name="itinerary-list" class="itinerary-selected-list">
+                <li v-for="(spot,index) in selectedSpots" :key="spot.spot_id"><span class="itinerary-step">{{ index+1 }}</span><button type="button" class="itinerary-stop-name" @click="openSpotDetail(spot)">{{ $t(spot.spot_name) }}</button><div class="itinerary-stop-actions"><button type="button" :disabled="index===0" :aria-label="$t('上移 {p0}',{p0:spot.spot_name})" @click="moveSelectedSpot(spot.spot_id,-1)"><el-icon><ArrowUp /></el-icon></button><button type="button" :disabled="index===selectedSpots.length-1" :aria-label="$t('下移 {p0}',{p0:spot.spot_name})" @click="moveSelectedSpot(spot.spot_id,1)"><el-icon><ArrowDown /></el-icon></button><button type="button" :aria-label="$t('移除 {p0}',{p0:spot.spot_name})" @click="toggleSpot(spot.spot_id)"><el-icon><Close /></el-icon></button></div></li>
+               </TransitionGroup>
+               <p v-if="routePreview&&!routePreview.complete" class="itinerary-load-error" role="status">{{ $t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</p>
+               <button type="button" class="itinerary-continue" @click="continueToGuide">{{ $t('继续设置导览') }}<el-icon><ArrowRight /></el-icon></button>
+              </template>
+             </aside>
             </div>
           </section>
         </div>
@@ -786,11 +958,15 @@ watch(activeMenuTab, (tab) => {
       <!-- 当前模块的数字人选择与导览入口 -->
       <aside class="visitor-start">
         <!-- 开始导览 -->
-        <div class="start-panel">
+        <div ref="launchPanel" class="start-panel tour-launch">
           <div class="start-heading">
-          <h2>{{ $t(activeMenuTab === 'route' ? '路线导览' : '个性化导览') }}</h2>
-          <div class="start-summary"><span>{{ $t(spotCount) }} {{ $t("个景点") }}</span><span v-if="spotCount">{{ $t("约") }} {{ $t(selectedDuration) }} {{ $t("分钟") }}</span></div>
-          <p v-if="!spotCount" class="start-hint">{{ $t(activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程') }}</p>
+            <span class="launch-route-icon" aria-hidden="true"><el-icon><Guide /></el-icon></span>
+            <div class="launch-trip-copy">
+              <h2>{{ $t(activeMenuTab === 'route' ? '路线导览' : '个性化导览') }}</h2>
+              <div class="start-summary"><span>{{ $t(spotCount) }} {{ $t("个景点") }}</span><span v-if="spotCount"><el-icon aria-hidden="true"><Clock /></el-icon>{{ $t("约") }} {{ $t(selectedDuration) }} {{ $t("分钟") }}</span></div>
+              <button v-if="spotCount" type="button" class="launch-itinerary-details" aria-haspopup="dialog" @click="selectedItineraryVisible=true">{{ $t('路线与用时') }}<el-icon><ArrowRight /></el-icon></button>
+              <p v-if="!spotCount" class="start-hint">{{ $t(activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程') }}</p>
+            </div>
           </div>
           <section class="start-guide-choice" :class="{ 'has-guide': selectedGuide }" :aria-label='$t("当前数字人")'>
             <div class="guide-choice-portrait" aria-hidden="true">
@@ -804,12 +980,10 @@ watch(activeMenuTab, (tab) => {
                 <span class="guide-choice-state"><el-icon v-if="selectedGuide" aria-hidden="true"><Check /></el-icon>{{ $t(selectedGuide ? '已选择' : '待选择') }}</span>
               </div>
               <div v-if="selectedGuide" class="chosen-guide"><strong>{{ $t(selectedGuide.name) }}</strong></div>
-              <p v-else class="guide-choice-caption">{{ $t("形象与声音") }}</p>
-              <el-button plain class="guide-select-button" @click="openGuidePicker">{{ $t(selectedGuide ? '更换数字人' : '选择数字人') }}<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button>
             </div>
+            <el-button plain class="guide-select-button" @click="openGuidePicker">{{ $t(selectedGuide ? '更换数字人' : '选择数字人') }}<el-icon aria-hidden="true"><ArrowRight /></el-icon></el-button>
           </section>
-          <el-input v-model="visitorName" :placeholder='$t("输入昵称（选填）")' :aria-label='$t("导览昵称")' maxlength="12" />
-          <el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">{{ $t("开始导览") }}</el-button>
+          <div class="tour-launch-actions"><el-button type="primary" size="large" class="start-btn" @click="startTour" :loading="starting" :disabled="spotCount === 0 || !selectedGuide || (activeMenuTab === 'personal' && planNeedsRefresh)">{{ $t("开始导览") }}<el-icon v-if="!starting" aria-hidden="true"><ArrowRight /></el-icon></el-button></div>
         </div>
         <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
       </aside>
@@ -832,64 +1006,18 @@ watch(activeMenuTab, (tab) => {
       <p v-if="!guideList.length" class="planning-empty">{{ $t("暂无可用数字人") }}</p>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" size="min(640px, 100vw)" :with-header="false" class="spot-detail-drawer">
-      <div v-if="activeSpot" class="spot-detail">
-        <header class="spot-detail-hero">
-          <button class="spot-detail-close" type="button" :aria-label='$t("关闭景点详情")' @click="detailVisible = false">
-            <el-icon><Close /></el-icon>
-          </button>
-          <span class="spot-category">{{ $t(getCategoryLabel(activeSpot.category || '其他')) }}</span>
-          <h2>{{ $t(activeSpot.spot_name) }}</h2>
-          <p>{{ $t(activeSpot.description || '暂无景点简介。') }}</p>
-        </header>
+    <ScenicSpotDetailDrawer
+      v-model="detailVisible"
+      :spot="activeSpot"
+      :category-label="getCategoryLabel(activeSpot?.category || '其他')"
+      :selected="!!activeSpot && selectedSpotIds.has(activeSpot.spot_id)"
+      @toggle="toggleSpot"
+    />
 
-        <section class="spot-detail-metrics">
-          <div><small>{{ $t("建议游览") }}</small><strong>{{ $t(activeSpot.visit_duration || 20) }} {{ $t("分钟") }}</strong></div>
-          <div><small>{{ $t("自动播报") }}</small><strong>{{ $t(Math.round(activeSpot.trigger_radius || 50)) }} {{ $t("米内") }}</strong></div>
-        </section>
-
-        <section class="spot-location-card">
-          <el-icon><Location /></el-icon>
-          <div>
-            <small>{{ $t("景点位置") }}</small>
-            <strong>{{ $t(activeSpot.location || '颐和园景区内') }}</strong>
-          </div>
-        </section>
-
-        <section v-if="activeSpot.history_detail" class="spot-story-card">
-          <div class="spot-section-title"><el-icon><OfficeBuilding /></el-icon><strong>{{ $t("历史与文化") }}</strong></div>
-          <p>{{ $t(activeSpot.history_detail) }}</p>
-        </section>
-
-        <div class="spot-guide-grid">
-          <article v-if="activeSpot.best_season">
-            <div class="spot-section-title"><el-icon><Compass /></el-icon><strong>{{ $t("最佳季节") }}</strong></div>
-            <p>{{ $t(activeSpot.best_season) }}</p>
-          </article>
-          <article v-if="activeSpot.photo_tips">
-            <div class="spot-section-title"><el-icon><Camera /></el-icon><strong>{{ $t("推荐取景") }}</strong></div>
-            <p>{{ $t(activeSpot.photo_tips) }}</p>
-          </article>
-          <article v-if="activeSpot.tour_tips">
-            <div class="spot-section-title"><el-icon><Compass /></el-icon><strong>{{ $t("游览提示") }}</strong></div>
-            <p>{{ $t(activeSpot.tour_tips) }}</p>
-          </article>
-          <article v-if="activeSpot.service_facilities" class="wide">
-            <div class="spot-section-title"><el-icon><Guide /></el-icon><strong>{{ $t("周边服务") }}</strong></div>
-            <p>{{ $t(activeSpot.service_facilities) }}</p>
-          </article>
-        </div>
-
-        <footer class="spot-detail-footer">
-          <el-button type="primary" size="large" @click="toggleSpot(activeSpot.spot_id)">
-            {{ $t(selectedSpotIds.has(activeSpot.spot_id) ? '移出路线' : '加入路线') }}
-          </el-button>
-        </footer>
-      </div>
-    </el-drawer>
-
+    <RecommendedRouteDrawer v-model="routeDetailVisible" :route="activeRouteDetail" :spots="spotList" :selected="activeRouteDetail?.route_id===selectedRouteId" @apply="applyDetailedRoute" />
+    <SelectedItineraryDrawer v-model="selectedItineraryVisible" :overview="routePreview" :busy="routePreviewLoading" :error="routePreviewError" @retry="refreshRoutePreview" />
     <PwaInstallPrompt />
-    <QrFloating />
+    <QrFloating v-if="!detailVisible && !routeDetailVisible && !selectedItineraryVisible" />
   </main>
 </template>
 
@@ -1225,119 +1353,6 @@ watch(activeMenuTab, (tab) => {
   h2 { margin: 0 0 14px; color: var(--text); font-size: 17px; font-weight: 850; }
   :deep(.el-input__wrapper) { background: var(--glass); }
   .start-btn { width: 100%; margin-top: 10px; color: var(--text); border-color: var(--brand-600); background: var(--brand-600); font-size: 16px; font-weight: 700; height: 48px; &:hover { color: var(--text); background: var(--brand-700); } }
-}
-
-/* 景点详情抽屉 */
-:global(.spot-detail-drawer .el-drawer__body) { padding: 0; overflow: auto; background: var(--glass); }
-.spot-detail {
-  min-height: 100%;
-  color: var(--text);
-}
-.spot-detail-hero {
-  position: relative;
-  padding: 32px 30px 38px;
-  color: var(--text);
-  background: var(--glass);
-  h2 { margin: 12px 0 10px; font-size: 30px; font-weight: 800; letter-spacing: -.04em; }
-  > p { margin: 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; overflow-wrap: anywhere; }
-}
-.spot-detail-close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid var(--glass-line);
-  border-radius: 10px;
-  color: var(--text);
-  cursor: pointer;
-  background: rgba(99,102,241,0.08);
-  transition: background .15s;
-  &:hover { background: var(--glass); }
-}
-.spot-category {
-  display: inline-flex;
-  padding: 5px 10px;
-  border: 1px solid var(--glass-line);
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: rgba(99,102,241,0.09);
-  font-size: 15px;
-  font-weight: 800;
-}
-.spot-detail-metrics {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  margin: -18px 24px 18px;
-  overflow: hidden;
-  border: 1px solid var(--glass-line);
-  border-radius: 14px;
-  background: var(--glass);
-  box-shadow: var(--glass-shadow);
-  div { min-width: 0; padding: 15px 12px; background: var(--glass); text-align: center; }
-  small { display: block; margin-bottom: 7px; color: var(--text-secondary); font-size: 15px; }
-  strong { display: block; color: var(--text); font-size: 18px; line-height: 1.6; font-weight: 500; overflow-wrap: anywhere; }
-}
-.spot-location-card,
-.spot-story-card,
-.spot-guide-grid,
-.spot-detail-footer { margin-right: 24px; margin-left: 24px; }
-.spot-location-card {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 15px 16px;
-  border: 1px solid var(--glass-line);
-  border-radius: 12px;
-  background: var(--glass);
-  .el-icon { display: grid; width: 38px; height: 38px; flex-shrink: 0; place-items: center; border-radius: 10px; color: var(--champagne-text); background: var(--glass); font-size: 18px; }
-  div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-  small { color: var(--text-secondary); font-size: 15px; }
-  strong { color: var(--text); font-size: 17px; line-height: 1.7; font-weight: 500; overflow-wrap: anywhere; }
-}
-.spot-story-card {
-  margin-top: 14px;
-  padding: 18px;
-  border: 1px solid var(--glass-line);
-  border-radius: 12px;
-  background: var(--glass);
-  > p { margin: 14px 0 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; white-space: pre-line; overflow-wrap: anywhere; }
-}
-.spot-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-  .el-icon { color: var(--champagne-text); font-size: 20px; }
-  strong { font-size: 20px; font-weight: 600; }
-}
-.spot-guide-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 12px;
-  article { padding: 17px; border: 1px solid var(--glass-line); border-radius: 12px; background: var(--glass); }
-  article.wide { grid-column: 1 / -1; }
-  p { margin: 14px 0 0; color: var(--text-secondary); font-size: 18px; line-height: 1.9; white-space: pre-line; overflow-wrap: anywhere; }
-}
-.spot-detail-footer {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-top: 18px;
-  padding: 16px 0 20px;
-  border-top: 1px solid var(--glass-line);
-  background: var(--glass);
-  backdrop-filter: none;
-  .el-button { flex-shrink: 0; min-width: 132px; min-height: 46px; font-size: 17px; border-color: var(--glass-line); border-radius: 10px; background: var(--glass); box-shadow: var(--glass-shadow); }
 }
 
 @media (max-width: 1100px) {
@@ -1796,15 +1811,6 @@ watch(activeMenuTab, (tab) => {
   .start-panel { min-height: auto; padding: 20px; }
   .ai-chat-panel { min-height: 0; }
   .ai-chat-messages { min-height: 80px; max-height: 320px; }
-  :global(.spot-detail-drawer) { width: 100% !important; }
-  .spot-detail-hero { padding: 28px 22px 36px; }
-  .spot-detail-metrics { margin-right: 14px; margin-left: 14px; }
-  .spot-location-card,
-  .spot-story-card,
-  .spot-guide-grid,
-  .spot-detail-footer { margin-right: 14px; margin-left: 14px; }
-  .spot-guide-grid { grid-template-columns: 1fr; }
-  .spot-guide-grid article.wide { grid-column: auto; }
 }
 
 .route-cover{position:relative;margin:-16px -16px 14px;height:155px;overflow:hidden;border-radius:12px 12px 0 0}.route-cover img{width:100%;height:100%;object-fit:cover}.route-cover small{position:absolute;right:8px;bottom:8px;padding:3px 6px;background: var(--glass);border-radius:5px;font-size:10px}.spot-list-photo{width:70px;height:64px;object-fit:cover;border-radius:10px;flex-shrink:0}
@@ -2208,4 +2214,104 @@ watch(activeMenuTab, (tab) => {
   .guide-choice-aura { animation: none; }
   .visitor-home .start-guide-choice, .guide-select-button .el-icon { transition: none; }
 }
+
+/* A focused route and a glimpse of the next one replace the static grid. */
+.recommended-routes .route-card { min-height:250px; padding:28px 30px; }
+.recommended-routes .route-name { font-size:24px; margin-top:18px; padding-right:64px; }
+.recommended-routes .route-desc,.recommended-routes .route-spots { font-size:17px; padding-right:70px; }
+.recommended-routes .route-theme-tag,.recommended-routes .route-time { font-size:16px; }
+.recommended-routes .route-card-bottom { margin-top:22px; }
+.recommended-routes .route-card>*:not(.route-slide-number) { position:relative; z-index:1; }
+.route-slide-number { position:absolute; right:26px; bottom:42px; color:var(--route-ink); opacity:.06; font:500 clamp(80px,9vw,145px)/1 Arial; letter-spacing:-.08em; pointer-events:none; }
+.visitor-home .route-card.route-tone-1 { --route-tint:#edf3fa; --route-ink:#4c6f94; }
+.visitor-home .route-card.route-tone-2 { --route-tint:#edf5f0; --route-ink:#466e5e; }
+.recommended-routes .route-card:focus-visible { outline:2px solid #8a74cc; outline-offset:-3px; }
+@media(max-width:700px) {
+ .recommended-routes .route-card { min-height:260px; padding:20px; }
+ .recommended-routes .route-name { font-size:21px; padding-right:0; }
+ .recommended-routes .route-desc,.recommended-routes .route-spots { font-size:16px; padding-right:0; }
+ .recommended-routes .route-theme-tag,.recommended-routes .route-time { font-size:15px; }
+ .route-slide-number { right:18px; bottom:30px; }
+}
+
+/* Photographic attraction cards with a persistent, editable route beside them. */
+.spot-picker-layout { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:26px; align-items:start; margin-top:22px; }
+.spot-picker-main { min-width:0; }
+.spot-picker-main .spot-options-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:0; }
+.spot-picker-layout .spot-option { position:relative; display:flex; flex-direction:column; gap:0; padding:0; border:1px solid #e5e8ef; border-radius:17px; overflow:hidden; background:#fff; transition:transform .22s,box-shadow .22s,border-color .22s; }
+.spot-picker-layout .spot-option:hover { transform:translateY(-4px); border-color:#cdc4e4; box-shadow:0 12px 28px -17px #67718b50; }
+.spot-picker-layout .spot-option.selected { border-color:#9e8bcd; background:#fcfbff; box-shadow:inset 0 0 0 1px #b4a4da; }
+.spot-picker-layout .spot-choice { position:relative; display:flex; flex-direction:column; align-items:stretch; width:100%; gap:0; flex:1; }
+.spot-picker-layout .spot-choice:focus-visible { outline:3px solid #9b84cd; outline-offset:-3px; }
+.spot-picker-layout .spot-choice-check { position:absolute; top:12px; right:12px; display:grid; place-items:center; width:30px; height:30px; border-radius:50%; border:1px solid #ffffffdd; background:#ffffffec; color:#6b56ad; box-shadow:0 2px 10px #3c456422; font:600 16px Arial; }
+.spot-picker-layout .selected .spot-choice-check { color:#fff; border-color:#8d78bf; background:#8266bb; }
+.spot-picker-layout .spot-choice-copy { padding:16px 18px 8px; gap:7px; min-height:86px; }
+.spot-picker-layout .spot-choice-title strong { font-size:21px; line-height:1.5; }
+.spot-visit-duration { display:flex; align-items:center; gap:6px; color:#758094; font-size:15px; line-height:1.6; }
+.spot-card-footer { display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 10px 10px 18px; gap:8px; }
+.spot-kind-tag { font-size:15px; color:#77629e; background:#f1edf9; padding:3px 9px; border-radius:7px; line-height:1.5; }
+.spot-kind-historical .spot-kind-tag { color:#97713f; background:#f8f1e7; }
+.spot-kind-natural .spot-kind-tag { color:#4c806f; background:#eaf4ee; }
+.spot-picker-layout .spot-option-detail { min-height:36px; padding:0 8px; font-size:16px; }
+.spot-photo-credit { display:inline-block; color:#8590a1; font-size:14px; margin-top:16px; line-height:1.7; }
+.itinerary-sidebar.spot-selection-summary { display:block; position:sticky; top:22px; margin:0; padding:20px 18px; border:1px solid #e9e3f2; border-radius:18px; background:linear-gradient(160deg,#f5f1fb,#f4f8f7); }
+.itinerary-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+.itinerary-heading h4 { font-size:21px; font-weight:600; margin:0; color:#3d3855; }
+.itinerary-heading>span { font-size:15px; color:#7e7397; }
+.itinerary-empty { display:grid; justify-items:center; text-align:center; gap:12px; padding:32px 0 24px; }
+.itinerary-empty-icon { width:54px; height:54px; display:grid; place-items:center; color:#9a87be; border-radius:17px; background:#ede7f6; font-size:27px; }
+.itinerary-empty strong { font-size:17px; font-weight:400; line-height:1.6; color:#645874; }
+.itinerary-empty>span:last-child { color:#8a8395; font-size:15px; line-height:1.7; }
+.itinerary-selected-list { position:relative; list-style:none; margin:0; padding:0 2px 0 0; max-height:440px; overflow:auto; scrollbar-width:thin; scrollbar-color:#d6cce5 transparent; }
+.itinerary-selected-list li { display:grid; grid-template-columns:26px minmax(0,1fr) auto; align-items:center; gap:7px; position:relative; padding:8px 0; min-height:54px; }
+.itinerary-selected-list li:not(:last-child)::after { content:''; position:absolute; top:40px; bottom:-12px; left:12px; width:1px; background:#d6cce4; }
+.itinerary-step { position:relative; z-index:1; display:grid; place-items:center; height:26px; width:26px; color:#8467b8; background:#fff; border-radius:50%; border:1px solid #e0d7ed; font:500 14px Arial; }
+.itinerary-stop-name { border:0; background:none; padding:0; color:#4c475c; font:inherit; font-size:17px; line-height:1.45; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
+.itinerary-stop-actions { display:flex; gap:1px; }
+.itinerary-stop-actions button { display:grid; place-items:center; width:25px; height:30px; padding:0; border:0; border-radius:7px; background:transparent; color:#8c7d9e; font-size:15px; cursor:pointer; }
+.itinerary-stop-actions button:hover:not(:disabled) { background:#e9e1f3; color:#6c4c9f; }
+.itinerary-stop-actions button:disabled { opacity:.23; cursor:default; }
+.itinerary-totals { display:grid; grid-template-columns:1fr 1fr; gap:12px; border-top:1px solid #e4dfeb; padding:18px 0 10px; margin-top:16px; }
+.itinerary-totals>div { display:grid; gap:7px; }
+.itinerary-totals span { font-size:15px; color:#8a8099; }
+.itinerary-totals strong { font:500 22px Arial; color:#6b5991; }
+.itinerary-totals small { font:400 14px var(--app-font-family); }
+.itinerary-continue { width:100%; display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px; padding:13px 10px; border:0; border-radius:12px; background:#8064b5; color:white; font:inherit; font-size:17px; cursor:pointer; box-shadow:0 6px 16px -9px #70569e90; }
+.itinerary-load-error { color:#956776; font-size:15px; padding-top:8px; }
+.itinerary-load-error button { border:0; background:none; color:#7861a5; font:inherit; cursor:pointer; }
+.itinerary-list-move,.itinerary-list-enter-active,.itinerary-list-leave-active { transition:transform .25s ease,opacity .25s ease; }
+.itinerary-list-enter-from,.itinerary-list-leave-to { opacity:0; transform:translateX(12px); }
+@container(min-width:1400px) { .spot-picker-main .spot-options-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@container(max-width:850px) { .spot-picker-layout { grid-template-columns:minmax(0,1fr); }.itinerary-sidebar.spot-selection-summary { position:static; order:-1; }.itinerary-empty { padding:6px 0; gap:5px; }.itinerary-empty-icon { display:none; }.itinerary-selected-list { max-height:230px; }.itinerary-totals { margin-top:10px; } }
+@container(max-width:480px) { .spot-picker-main .spot-options-grid { grid-template-columns:minmax(0,1fr); }.spot-picker-layout { gap:16px; } }
+@media(prefers-reduced-motion:reduce) { .spot-picker-layout .spot-option,.itinerary-list-move,.itinerary-list-enter-active,.itinerary-list-leave-active { transition:none; }.spot-picker-layout .spot-option:hover { transform:none; } }
+.recommended-routes .route-rich-main { display:grid; grid-template-columns:minmax(0,1fr) 176px; gap:24px; align-items:stretch; }
+.route-summary-copy { min-width:0; }
+.recommended-routes .route-card { min-height:320px; }
+.recommended-routes .route-card .route-name { padding-right:0; margin:16px 0 10px; }
+.recommended-routes .route-card .route-desc { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; padding-right:0; min-height:3.4em; margin-bottom:14px; }
+.recommended-routes .route-card .route-spots { padding-right:0; margin-top:16px; font-size:16px; color:#8a8098; }
+.recommended-routes .route-card .route-spots>.el-icon { flex-shrink:0; font-size:17px; }
+.route-highlight-chips { display:flex; flex-wrap:wrap; gap:7px; }
+.route-highlight-chips>span { font-size:15px; line-height:1.6; color:#7f6a9a; padding:3px 9px; border-radius:7px; background:#ffffffa6; }
+.route-feature-visual { position:relative; min-height:198px; border-radius:14px; overflow:hidden; background:#e8e9ed; }
+.route-feature-visual>.scenic-cover,.route-feature-visual>img { position:absolute; inset:0; width:100%; height:100%; aspect-ratio:auto; object-fit:cover; }
+.route-feature-visual>.route-generated-caption { position:absolute; right:8px; bottom:8px; padding:3px 6px; background:#fff9; font-size:14px; border-radius:5px; }
+.route-card-facts { display:flex; align-items:center; flex-wrap:wrap; gap:8px 18px; font-size:16px; color:#8a79a1; }
+.route-card-facts>span { display:flex; align-items:center; gap:6px; }
+.route-card-facts .route-check { font-size:15px; color:#6c917b; }
+.recommended-routes .route-time { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.route-detail-button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; gap:8px; border:1px solid #e0d7ec; border-radius:10px; padding:10px 14px; background:#ffffffe0; color:#8666b1; font:inherit; font-size:16px; cursor:pointer; }
+.route-detail-button:hover { background:#fff; border-color:#cbb6e3; }
+.route-detail-button:focus-visible { outline:2px solid #9d82c2; outline-offset:2px; }
+@media(max-width:850px) { .recommended-routes .route-rich-main { grid-template-columns:minmax(0,1fr); }.route-feature-visual { display:none; }.recommended-routes .route-card-bottom { flex-wrap:wrap; gap:12px; }.route-detail-button { margin-left:auto; }.route-highlight-chips>span { font-size:14px; } }
+.itinerary-sidebar .itinerary-live-totals { margin:0; padding:14px; border:1px solid #e5ddec; border-radius:12px; background:#ffffffc2; gap:10px; }
+.itinerary-time-breakdown { display:flex; flex-wrap:wrap; gap:5px 12px; margin:12px 0; color:#84758f; font-size:15px; line-height:1.6; }
+.itinerary-time-breakdown b { font:500 16px Arial; color:#70607e; }
+.itinerary-details-button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin:0 0 13px; padding:10px; border:1px solid #ddd0ec; border-radius:10px; background:#ffffffb3; color:#8060a8; font:inherit; font-size:17px; cursor:pointer; }
+.itinerary-details-button>.el-icon:last-child { margin-left:auto; }.itinerary-details-button>.el-icon:first-child { margin-right:auto; }
+.itinerary-sidebar .itinerary-selected-list { max-height:clamp(110px,calc(100dvh - 470px),280px); }
+.launch-itinerary-details { display:inline-flex; align-items:center; gap:6px; border:0; border-bottom:1px solid #d9cae8; padding:5px 0; margin-top:6px; background:transparent; color:#8a67b2; font:inherit; font-size:16px; cursor:pointer; }
+.itinerary-details-button:hover { border-color:#bba2d4; background:#fff; }.itinerary-details-button:focus-visible,.launch-itinerary-details:focus-visible { outline:2px solid #a385c7; outline-offset:3px; }
+@container(max-width:850px) { .itinerary-sidebar .itinerary-selected-list { max-height:180px; }.itinerary-sidebar .itinerary-live-totals { grid-template-columns:1fr 1fr; }.itinerary-time-breakdown { justify-content:center; } }
 </style>
