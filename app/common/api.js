@@ -44,14 +44,13 @@ module.exports = {
   getRouteList: function() {
     return request({ url: '/tour-session/routes' })
   },
-  createSession: function(name, guideId, preferences, spotIds) {
+  createSession: function(name, guideId, spotIds) {
     return request({
       url: '/tour-session/visitor-create',
       method: 'POST',
       params: {
         name: name,
         guide_id: guideId,
-        visitor_preferences: preferences,
         spot_ids: JSON.stringify(spotIds)
       }
     })

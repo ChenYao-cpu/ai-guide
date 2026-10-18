@@ -1,5 +1,5 @@
 <template>
-  <view class="page aurora-page">
+  <view class="page aurora-page" :class="tabEnterClass">
     <!-- #ifdef APP-PLUS || H5 -->
     <chat-voice :payload="voicePayload" @state="onDigitalVoiceState" style="position:fixed;left:-2000px;top:0;width:240px;height:320px;pointer-events:none" aria-hidden="true" />
     <!-- #endif -->
@@ -67,7 +67,7 @@
             <view v-else class="rp-img rp-img-df"></view>
             <view class="rp-info">
               <text class="rp-name">{{ t(s.spot_name) }}</text>
-              <text class="rp-cat">{{ t(s.category) || t('景点') }} · {{ t('预计') }} {{ s.visit_duration || 20 }}{{ t('分钟') }}</text>
+              <text class="rp-cat">{{ t('预计') }} {{ s.visit_duration || 20 }}{{ t('分钟') }}</text>
               <text v-if="i < recommendSpots.length - 1" class="rp-walk">{{ t('↓ 步行约') }} {{ walkText(s, recommendSpots[i + 1]) }}</text>
             </view>
           </view>
@@ -116,13 +116,14 @@
       </view>
     </view>
 
-    <view v-show="!keyboardVisible" class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ t("智能导览") }}</text></view><view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ t("AI小导游") }}</text><view class="tb-dot"></view></view><view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ t("我的") }}</text></view></view><view class="tb-safe"></view></view>
+    <TabBarNav current="ai" v-show="!keyboardVisible" />
     </view>
   </view>
 </template>
 
 <script>
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import TabBarNav from '../../components/TabBarNav.vue'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import ChatVoice from '../../components/chat-voice.vue'
 
 
@@ -134,7 +135,7 @@ function request(options) {
     uni.request({
       url: url, method: options.method || 'GET',
       data: options.data || {}, header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + uni.getStorageSync('token') },
-      timeout: 20000,
+      timeout: options.timeout || 20000,
       success: function (res) { if (res.statusCode === 200) resolve({ data: res.data }); else reject(new Error(res.data && (res.data.detail || res.data.message) || '服务请求失败（HTTP ' + res.statusCode + '）')) },
       fail: function (err) { reject(err) },
     })
@@ -142,11 +143,11 @@ function request(options) {
 }
 
 export default {
-  components:{ChatVoice},
+  components:{TabBarNav,ChatVoice},
   data: function () {
     return {
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',
-      text: '', msgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false,
+      text: '', msgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false, translatingHistory:false,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
@@ -195,7 +196,7 @@ export default {
           const mediaPermission=Number(Version.SDK_INT)>=33&&Number(appInfo.targetSdkVersion)>=33?'android.permission.READ_MEDIA_IMAGES':'android.permission.READ_EXTERNAL_STORAGE'
           const permission=source==='camera'?'android.permission.CAMERA':mediaPermission
           plus.android.requestPermissions([permission],result=>{
-            if(result.deniedAlways&&result.deniedAlways.length){this.recognitionError='权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游灵境）→ 权限管理，允许'+(source==='camera'?'相机':'照片与视频／存储')+'权限';return}
+            if(result.deniedAlways&&result.deniedAlways.length){this.recognitionError='权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游知境）→ 权限管理，允许'+(source==='camera'?'相机':'照片与视频／存储')+'权限';return}
             if(result.deniedPresent&&result.deniedPresent.length){this.recognitionError='需要允许'+(source==='camera'?'相机':'相册读取')+'权限才能选择照片';return}
             this.pickScenicImage(source)
           },e=>{this.recognitionError='申请权限失败，请到手机应用权限设置中开启';console.error('Photo permission failed',e)})
@@ -215,9 +216,9 @@ export default {
       if(this.loading||this.recognizing||!this.pendingPhoto)return
       const path=this.pendingPhoto,caption=this.text.trim()
       this.pendingPhoto='';this.text='';this.recognitionError=''
-      this.msgs.push({role:'user',image:path,content:caption})
+      this.msgs.push({role:'user',image:path,content:caption,lang:this.tourLanguage||'zh'})
       this.recognizing=true;this.loading=true;this.scrollChat();this.saveHistory()
-      const showFailure=message=>{this.msgs.push({role:'ai',content:message});this.pendingPhoto=path}
+      const showFailure=message=>{this.msgs.push({role:'ai',content:message,lang:this.tourLanguage||'zh'});this.pendingPhoto=path}
       uni.uploadFile({url:BASE_URL+'/tour-session/recognize-spot',filePath:path,name:'file',timeout:90000,
         formData:{question:caption,language:this.tourLanguage||'zh'},header:{Authorization:'Bearer '+uni.getStorageSync('token')},
         success:r=>{try{const d=JSON.parse(r.data)
@@ -226,7 +227,8 @@ export default {
             const reply=result.status==='candidate'
               ? [this.t('可能是：')+result.spot_name,result.city,this.t('识别依据：')+result.evidence,result.description,result.message].filter(Boolean).join('\n')
               : result.message
-            this.msgs.push({role:'ai',content:reply,recognition_id:result.recognition_id})
+            var finalReply = (this.tourLanguage==='en') ? this.cleanEnglish(reply) : reply
+            this.msgs.push({role:'ai',content:finalReply,recognition_id:result.recognition_id,lang:this.tourLanguage||'zh'})
           }else showFailure(typeof d.detail==='string'?d.detail:d.message||this.t('识景失败，请稍后重试'))
         }catch(e){showFailure(this.t('识景服务返回格式异常'))}},
         fail:()=>showFailure(this.t('照片上传失败，请检查网络连接')),
@@ -234,7 +236,46 @@ export default {
     },
     scrollChat:function(){this.$nextTick(()=>{this.chatScrollTop+=100000})},
     saveHistory:function(){try{uni.setStorageSync('ai_chat_msgs',JSON.stringify(this.msgs))}catch(e){}},
-    loadHistory:function(){try{var r=uni.getStorageSync('ai_chat_msgs');if(r)this.msgs=JSON.parse(r)}catch(e){this.msgs=[]}},
+    loadHistory:function(){try{var r=uni.getStorageSync('ai_chat_msgs');var list=r?JSON.parse(r):[];var cur=(uni.getStorageSync('zhiyou.app-language')==='en'?'en':'zh');var guess=function(text){var value=String(text||'');var cjk=(value.match(/[\u4e00-\u9fff]/g)||[]).length;var latin=(value.match(/[A-Za-z]/g)||[]).length;if(latin>=5&&latin>=cjk*2)return 'en';if(cjk>0)return 'zh';if(latin>0)return 'en';return cur};list.forEach(function(m){if(m&&typeof m==='object')m.lang=guess(m.content)});this.msgs=list}catch(e){this.msgs=[]}},
+    cleanEnglish:function(text){return String(text||'').replace(/[\u4e00-\u9fff]+/g,' ').replace(/[ \t]+/g,' ').replace(/ ?\n ?/g,'\n').replace(/\n{3,}/g,'\n\n').trim()},
+    translateHistoryToLanguage:function(){
+      var s=this,target=(uni.getStorageSync('zhiyou.app-language')==='en'?'en':'zh')
+      if(s.translatingHistory)return
+      var pending=[]
+      s.msgs.forEach(function(m,i){
+        if(!m||typeof m.content!=='string'||!m.content.trim())return
+        if(!m.lang)m.lang=target
+        var body=String(m.content||'')
+        var mixedForEnglish=(target==='en'&&/[\u4e00-\u9fff]/.test(body))
+        var englishForChinese=(target==='zh'&&!/[\u4e00-\u9fff]/.test(body)&&/[A-Za-z]/.test(body))
+        if(m.lang===target&&!mixedForEnglish&&!englishForChinese)return
+        if(m.translations&&typeof m.translations[target]==='string'&&m.translations[target].trim()){m.content=m.translations[target];m.lang=target;return}
+        pending.push({index:i,text:m.content,from:m.lang})
+      })
+      if(!pending.length){s.saveHistory();return}
+      s.translatingHistory=true
+      request({url:'/tour-session/translate-texts',method:'POST',timeout:90000,data:{texts:pending.map(function(x){return x.text}),target:target}}).then(function(res){
+        var list=res.data&&res.data.data&&res.data.data.translations
+        if(!Array.isArray(list))return
+        pending.forEach(function(p,k){
+          var m=s.msgs[p.index];if(!m)return
+          var translated=list[k]
+          if(typeof translated==='string'&&translated.trim()){
+            var nextText=translated.trim()
+            var hasCJK=/[\u4e00-\u9fff]/.test(nextText)
+            if(nextText!==String(m.content||'').trim()){
+              if(!m.translations)m.translations={}
+              m.translations[m.lang||p.from]=m.content
+              m.content=nextText
+              m.lang=target
+            } else if((target==='zh'&&hasCJK)||(target==='en'&&!hasCJK)){
+              m.lang=target
+            }
+          }
+        })
+        s.saveHistory()
+      }).catch(function(){}).finally(function(){s.translatingHistory=false;s.scrollChat()})
+    },
     clearHistory:function(){this.msgs=[];this.lastSpotIds=[];this.recommendSpots=[];uni.removeStorageSync('ai_chat_msgs');uni.showToast({title:this.t('已清除'),icon:'none'})},
     fixImg: function (u) { if (!u) return ''; return assetUrl(u) },
     walkKm: function (a, b) {
@@ -261,6 +302,7 @@ export default {
       request({ url: '/tour-session/spots' }).then(function (res) {
         var d = res.data
         var list = (d && d.data && d.data.spot_list) ? d.data.spot_list : (d && d.spot_list ? d.spot_list : [])
+        list = list.filter(function(sp){ return isBeijingCity(sp.city) })
         var map = {}
         list.forEach(function (sp) { map[sp.spot_id] = sp })
         self.recommendSpots = ids.map(function (id) { return map[id] }).filter(Boolean)
@@ -273,7 +315,7 @@ export default {
       var self = this
       var msg = (self.text || '').trim()
       if (!msg || self.loading) return
-      self.msgs.push({ role: 'user', content: msg })
+      self.msgs.push({ role: 'user', content: msg, lang: self.tourLanguage || 'zh' })
       self.text = ''; self.loading = true; self.scrollChat()
       request({
         url: '/tour-session/ai-chat-recommend?message=' + encodeURIComponent(msg) + '&language=' + (self.tourLanguage || 'zh'),
@@ -282,16 +324,16 @@ export default {
         var d = res.data
         if (d && d.success && d.data) {
           var dd = d.data
-          self.msgs.push({ role: 'ai', content: dd.ai_response || self.t('已为您推荐景点') })
+          self.msgs.push({ role: 'ai', content: dd.ai_response || self.t('已为您推荐景点'), lang: self.tourLanguage || 'zh' })
           if (dd.spot_ids && dd.spot_ids.length) {
             self.lastSpotIds = dd.spot_ids
             uni.setStorageSync('ai_spot_ids', JSON.stringify(dd.spot_ids))
             self.fetchRecommendSpots(dd.spot_ids)
           }
           self.playTTS(dd.ai_response,self.msgs.length-1)
-        } else { self.msgs.push({ role: 'ai', content: d && d.message || self.t('没有找到匹配路线，请调整需求。') }) }
+        } else { self.msgs.push({ role: 'ai', content: d && d.message || self.t('没有找到匹配路线，请调整需求。'), lang: self.tourLanguage || 'zh' }) }
       }).catch(function (error) {
-        self.msgs.push({ role: 'ai', content: error.message || self.t('无法连接推荐服务，请检查网络。') })
+        self.msgs.push({ role: 'ai', content: error.message || self.t('无法连接推荐服务，请检查网络。'), lang: self.tourLanguage || 'zh' })
       })
       .finally(function () { self.loading = false; self.scrollChat(); self.saveHistory() })
     },
@@ -376,7 +418,7 @@ export default {
     cancelRecord:function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&(this._recordStartedAt||this._recordRequestedAt))this._voiceManager.stop()},
   },
   onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0},
-  onShow:function(){this.loadHistory();this.scrollChat()},
+  onShow:function(){this.loadHistory();this.translateHistoryToLanguage();this.scrollChat()},
 }
 </script>
 

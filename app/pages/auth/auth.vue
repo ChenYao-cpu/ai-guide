@@ -6,9 +6,7 @@
     </view>
     <view class="auth-brand"><BrandLogo stacked animated /></view>
     <view class="welcome-card">
-      <text class="welcome-label">{{ t('山水之间 · 智游相伴') }}</text>
       <text class="welcome-title">{{ t('让每一程，都有故事') }}</text>
-      <text class="welcome-copy">{{ t('登录后开启导览，跟随数字人探索园中山水。') }}</text>
       <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
       <view class="welcome-tags"><text>{{ t('行程规划') }}</text><text>{{ t('景点讲解') }}</text><text>{{ t('沿途问答') }}</text></view>
     <view class="login-area">

@@ -1,6 +1,7 @@
 <template>
-  <view class="page aurora-page">
-    <page-meta :page-style="showMapPreview ? 'overflow:hidden' : 'overflow:auto'" />
+  <view class="page aurora-page" :class="tabEnterClass">
+    <page-meta :page-style="(showMapPreview || detailSpot || routeDetail) ? 'overflow:hidden' : 'overflow:auto'" />
+    <view class="scenic-page-stage">
     <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
 
     <view class="ink-bg"><view class="ink-mountain ink-mt-1"></view><view class="ink-mountain ink-mt-2"></view></view>
@@ -8,7 +9,7 @@
     <!-- 毛体标题 -->
     <view class="nav header-spacer" aria-hidden="true" :style="{height:statusH+'px'}"></view>
     <!-- 双按钮切换 -->
-    <view class="top-tabs">
+    <view class="top-tabs" :class="{'planning-ink-ready':planningInkReady}">
       <view class="tt-item" :class="{on:tab==='route'}" @tap="switchPlanningTab('route')">
         <text class="iconfont icon-zuobiao tt-icon"></text>
         <view class="tt-text"><text class="tt-label">{{ t("游览路线") }}</text><view class="tt-underline"></view></view>
@@ -17,6 +18,7 @@
         <text class="iconfont icon-xueshengdenglu tt-icon"></text>
         <view class="tt-text"><text class="tt-label">{{ t("个性化") }}</text><view class="tt-underline"></view></view>
       </view>
+      <view v-if="planningInkReady" class="planning-liquid-ink" :class="{'planning-ink-moving':planningInkMotion!==0}" :style="planningInkStyle"></view>
     </view>
 
     <view class="main">
@@ -31,13 +33,6 @@
 
       <!-- ===== 游览路线 ===== -->
       <view v-if="tab==='route'">
-        <view class="block">
-          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("景区地图") }}</text></view>
-          <view class="map-wrap">
-            <map v-if="pageReady && pageVisible && mapMarkers.length && !showMapPreview && !detailSpot && !routeDetail && !guidePicker && !previewingGuide" class="mini-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :markers="mapMarkers" :scale="12" :enable-scroll="false" :enable-zoom="false" :enable-rotate="false" @markertap="onMarkerTap"></map>
-            <view v-else class="map-empty">{{ mapMarkers.length ? '' : loading ? t('地图加载中…') : t('暂无可定位的景点') }}</view>
-          </view>
-        </view>
 
         <view class="block" v-if="pageReady && pageVisible && routes.length">
           <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("导览路线") }}</text></view>
@@ -45,10 +40,10 @@
             <swiper class="route-carousel" :current="routeIndex" @change="routeIndex=$event.detail.current" :autoplay="routes.length > 1 && !routeDetail && !showMapPreview && !detailSpot && !guidePicker && !previewingGuide" :interval="4500" :indicator-dots="routes.length > 1" :circular="routes.length > 1" indicator-color="#64748b" indicator-active-color="#ffffff" :duration="350">
               <swiper-item v-for="r in routes" :key="r.route_id" class="route-slide">
                 <view class="route-card" :class="{on:pickedRouteId===r.route_id}" @tap="openRoute(r)">
-                  <image v-if="r.cover_image" :src="fixImg(r.cover_image)" class="route-cover-photo" mode="aspectFill" />
+                  <image v-if="r.cover_image&&!failedImages[r.cover_image]" @error="failedImages[r.cover_image]=true" :src="fixImg(r.cover_image)" class="route-cover-photo" mode="aspectFill" />
                   <view v-else class="route-cover-empty">{{ t("暂无路线图片") }}</view>
                   <view class="route-cover-shade"></view>
-                  <view class="rc-top"><text class="rc-tag"><text class="iconfont" :class="themeIcon(r.theme)"></text> {{ t(themeMap[r.theme])||t('综合') }}</text><text class="rc-time">{{ r.estimated_time_minutes ? r.estimated_time_minutes+t('分钟') : t('时长待配置') }}</text></view>
+                  <view class="rc-top"><text class="rc-time">{{ r.estimated_time_minutes ? r.estimated_time_minutes+t('分钟') : t('时长待配置') }}</text></view>
                   <view class="rc-bottom">
                     <text class="rc-name">{{ t(r.city) ? t(r.city)+' · ' : '' }}{{ t(r.name) }}</text>
                     <text class="rc-meta">{{ (r.spot_ids||[]).length }}{{ t("个景点") }}</text>
@@ -63,21 +58,18 @@
 
         <view class="block">
           <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("景点选择") }}</text><text class="sub">{{ pickedCount }}/{{ filteredSpots.length }}</text></view>
-          <view class="search-row"><input class="search-input" v-model="keyword" :placeholder="t('搜索景点或城市')"/></view>
-          <scroll-view scroll-x class="cat-tabs">
-            <text v-for="c in spotCats" :key="c.value" class="cat-tab" :class="{on:spotCat===c.value}" @tap="spotCat=c.value">{{ t(c.label) }}</text>
-          </scroll-view>
+          <view class="search-row"><input class="search-input" v-model="keyword" :placeholder="t('搜索景点')"/></view>
           <view class="spot-list" v-if="filteredSpots.length">
             <view v-for="s in filteredSpots" :key="s.spot_id" class="spot-card" :class="{on:isPicked(s.spot_id)}">
-              <image v-if="s.image_path" :src="fixImg(s.image_path)" class="sc-img" mode="aspectFill"></image>
-              <view v-else class="sc-img-df"></view>
+              <image v-if="s.image_path&&!failedImages[s.image_path]" @error="failedImages[s.image_path]=true" :src="fixImg(s.image_path)" class="sc-img" mode="aspectFill"></image>
+              <view v-else class="sc-img-df"><text class="photo-unavailable">{{ t("暂无图片") }}</text></view>
               <view class="sc-body" @tap="toggleSpot(s.spot_id)">
-                <view class="sc-info"><text class="sc-name">{{ t(s.spot_name) }}</text><text class="sc-cat">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ catLabel(s.category)||t('景点') }}</text></view>
+                <view class="sc-info"><text class="sc-name">{{ t(s.spot_name) }}</text><text class="sc-cat">{{ t(s.city) }}</text></view>
               </view>
               <view class="sc-btn" @tap="openDetail(s)">{{ t("详情") }}</view>
             </view>
           </view>
-          <view class="empty" v-else-if="!loading"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text class="empty-title">{{ t("暂无景点") }}</text><text class="empty-hint">{{ t("换个分类或关键词再试试") }}</text></view>
+          <view class="empty" v-else-if="!loading"><image class="empty-art" src="/static/empty-state.png" mode="widthFix"></image><text class="empty-title">{{ t("暂无景点") }}</text><text class="empty-hint">{{ t("换个关键词再试试") }}</text></view>
         </view>
       </view>
 
@@ -100,18 +92,17 @@
         </view>
 
         <view class="block">
-          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("游览偏好") }}</text></view>
-          <view class="pref-wrap">
-            <view v-for="p in prefs" :key="p.value" class="pref-chip" :class="{on:pickedPrefs.indexOf(p.value)>=0}" @tap="togglePref(p.value)"><text class="iconfont" :class="p.cls"></text><text> {{ t(p.label) }}</text></view>
-          </view>
-          <view class="planner-note">{{ t("兴趣多选，综合单选。") }}</view>
+          <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("行程规划") }}</text><text class="sub">{{ pickedCount }}{{ t('个景点') }}</text></view>
+          <view v-if="!pickedCount" class="planner-note">{{ t('先在游览路线里选择景点，再生成个性化路线') }}</view>
           <picker :range="budgetOptions" :value="budgetIndex" @change="changeBudget"><view class="planner-control">{{ t('可用时长：') }}{{ budgetOptions[budgetIndex] }}{{ t('分钟') }}</view></picker>
           <picker :range="[t('正常游览'), t('轻松慢走 · 少台阶')]" :value="paceIndex" @change="changePace"><view class="planner-control">{{ t('步行节奏：') }}{{ paceIndex ? t('轻松慢走 · 少台阶') : t('正常游览') }}</view></picker>
           <view class="planner-generate" @tap="generatePersonalPlan">{{ recommending ? t('正在规划…') : t('生成个性化路线') }}</view>
           <view v-if="personalPlan" class="planner-result">
             <view>{{ personalPlan.spot_count }} {{ t('个景点') }} {{ t('· 合计') }} {{ personalPlan.estimated_time_minutes }} {{ t('分钟') }}</view>
+            <view class="planner-note">{{ t('已按你选择的景点规划') }}</view>
             <view class="planner-note">{{ t('停留') }} {{ personalPlan.visit_time_minutes }} {{ t('分钟') }}{{ t('· 步行') }} {{ personalPlan.walking_time_minutes }} {{ t('分钟') }}{{ t('· 休息') }} {{ personalPlan.rest_time_minutes }} {{ t('分钟') }}</view>
             <view v-for="(item,index) in personalPlan.score_details" :key="item.spot_id" class="planner-stop"><text>{{ index+1 }} {{ t(item.spot_name) }}</text><text class="planner-note">{{ t(item.reason) }}</text></view>
+            <view v-if="personalOmitted.length" class="planner-note">{{ t('以下已选景点未纳入本次规划：') }}{{ personalOmitted.join('、') }}</view>
             <view class="planner-note">{{ personalPlan.data_basis }} {{ personalPlan.planning_note }} {{ t('步行路网：OpenStreetMap contributors（ODbL）。') }}</view>
           </view>
         </view>
@@ -120,10 +111,12 @@
       <view style="height:120rpx"></view>
     </view>
 
+    </view>
+    <TabBarNav current="tour" />
     <view v-if="previewingGuide" class="drawer-overlay" @tap="previewingGuide=null">
       <view class="drawer-mask"></view>
       <view class="drawer-panel guide-preview-panel" @tap.stop="">
-        <view class="dp-hd"><text class="dp-title">{{ guideName(previewingGuide) }}</text><text class="dp-close" @tap="previewingGuide=null">✕</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ guideName(previewingGuide) }}</text></view>
         <view v-if="previewPhoto(previewingGuide)" class="guide-preview-half"><image :key="previewingGuide.guide_id" :src="previewPhoto(previewingGuide)" class="guide-preview-photo" mode="widthFix" @load="previewModelReady" @error="previewImageError" /></view>
         <text v-if="previewModelStatus" class="guide-description">{{ t(previewModelStatus) }}</text>
         <text class="guide-description">{{ guideCharacter(previewingGuide) || t('暂无角色介绍') }}</text>
@@ -138,32 +131,32 @@
     </view>
 
     <!-- 景点详情 -->
-    <view class="drawer-overlay" v-if="detailSpot" @tap="detailSpot=null">
-      <view class="drawer-mask"></view>
-      <view class="drawer-panel spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path}" @tap.stop="">
-        <view v-if="detailSpot.image_path" class="scenic-fade"><image :src="fixImg(detailSpot.image_path)" class="scenic-clear" mode="aspectFill" /><image :src="fixImg(detailSpot.image_path)" class="scenic-blur" mode="aspectFill" /><view class="scenic-veil"></view></view>
-        <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ t("景点详情") }}</text><text class="dp-close" @tap="detailSpot=null">✕</text></view>
-        <scroll-view scroll-y class="dp-body"><view class="dp-content">
+    <ScenicSheet v-if="detailSpot" ref="spotSheet" fit-content @closed="detailSpot=null">
+      <view class="sheet-content spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path&&!failedImages[detailSpot.image_path]}" @tap.stop="">
+        <view class="dp-hd"><text class="dp-title">{{ t("景点详情") }}</text></view>
+        <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="$refs.spotSheet.setScroll($event)">
+          <view v-if="detailSpot.image_path&&!failedImages[detailSpot.image_path]" class="spot-hero"><image :src="fixImg(detailSpot.image_path)" mode="aspectFill" @error="failedImages[detailSpot.image_path]=true" /><view class="spot-hero-wash"></view></view>
+          <view v-else class="spot-hero-empty"></view>
+          <view class="dp-content">
           <text class="dp-name">{{ t(detailSpot.spot_name) }}</text>
           <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
           <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.city) ? t(detailSpot.city)+' · ' : '' }}{{ t(detailSpot.location)||t('暂无') }}</text></view>
-        </view></scroll-view>
-        <view class="dp-btn" :class="{added:isPicked(detailSpot.spot_id)}" @tap="toggleSpot(detailSpot.spot_id);detailSpot=null">
+        </view>
+        <view class="dp-btn" :class="{added:isPicked(detailSpot.spot_id)}" @tap="toggleSpot(detailSpot.spot_id);closeSpotSheet()">
           <text>{{ isPicked(detailSpot.spot_id)?t('✓ 取消选择'):t('加入选择') }}</text>
         </view>
+        </scroll-view>
       </view>
-    </view>
+    </ScenicSheet>
 
     <!-- 路线时间轴抽屉 -->
-    <view class="drawer-overlay" v-if="routeDetail" @tap="routeDetail=null">
-      <view class="drawer-mask"></view>
-      <view class="drawer-panel route-detail-panel" @tap.stop="">
+    <ScenicSheet v-if="routeDetail" ref="routeSheet" @closed="routeDetail=null">
+      <view class="sheet-content route-detail-panel" @tap.stop="">
         <view v-if="routeDetail.cover_image" class="route-detail-background"><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo" mode="aspectFill" /><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo route-detail-blur" mode="aspectFill" /><view class="route-detail-wash"></view></view>
-        <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.city) ? t(routeDetail.city)+' · ' : '' }}{{ t(routeDetail.name) }}</text><text class="dp-close" @tap="routeDetail=null">✕</text></view>
-        <scroll-view scroll-y class="dp-body"><view class="dp-content">
-          <view class="rd-tag"><text class="iconfont" :class="themeIcon(routeDetail.theme)"></text> {{ t(themeMap[routeDetail.theme])||t('综合') }} · {{ (routeDetail.spot_ids||[]).length }}{{ t('个景点 ·') }} {{ routeTotalTime ? routeTotalTime+t('分钟') : t('时长待配置') }}</view>
+        
+        <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.city) ? t(routeDetail.city)+' · ' : '' }}{{ t(routeDetail.name) }}</text></view>
+        <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="$refs.routeSheet.setScroll($event)"><view class="dp-content">
+          <view class="rd-tag">{{ (routeDetail.spot_ids||[]).length }}{{ t('个景点 ·') }} {{ routeTotalTime ? routeTotalTime+t('分钟') : t('时长待配置') }}</view>
           <text class="rd-desc">{{ t(routeDetail.description)||'' }}</text>
           <!-- 竖点时间轴 -->
           <view class="timeline">
@@ -176,11 +169,11 @@
                 </view>
               </view>
               <view class="tl-card">
-                <image v-if="s.image_path" :src="fixImg(s.image_path)" class="tlc-img" mode="aspectFill"></image>
-                <view v-else class="tlc-img-df"></view>
+                <image v-if="s.image_path&&!failedImages[s.image_path]" @error="failedImages[s.image_path]=true" :src="fixImg(s.image_path)" class="tlc-img" mode="aspectFill"></image>
+                <view v-else class="tlc-img-df"><text class="photo-unavailable">{{ t("暂无图片") }}</text></view>
                 <view class="tlc-info">
                   <text class="tlc-name">{{ t(s.spot_name) }}</text>
-                  <text class="tlc-cat">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ catLabel(s.category)||t('景点') }} · {{ s.visit_duration ? t('预计')+s.visit_duration+t('分钟') : t('时长待配置') }}</text>
+                  <text class="tlc-cat">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ s.visit_duration ? t('预计')+s.visit_duration+t('分钟') : t('时长待配置') }}</text>
                 </view>
               </view>
             </view>
@@ -203,25 +196,19 @@
           <!-- #endif -->
         </view>
       </view>
-    </view>
+    </ScenicSheet>
 
     <!-- TabBar -->
-      <view class="tb-root">
-        <view class="tb-ink-line"></view>
-        <view class="tb-inner">
-
-          <view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ t("智能导览") }}</text><view class="tb-dot"></view></view>
-          <view class="tb-item highlight" @tap="goTab('/pages/ai-chat/ai-chat')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ t("AI小导游") }}</text></view>
-          <view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ t("我的") }}</text></view>
-        </view>
-        <view class="tb-safe"></view>
-      </view>
+      
   </view>
 </template>
 
 <script>
+import TabBarNav from '../../components/TabBarNav.vue'
+import ScenicSheet from '../../components/ScenicSheet.vue'
+import { planningUnderlineMixin } from '../../common/planning-underline.js'
 import { prioritizeSummerPalace } from '../../common/scenic-order.js'
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
 
 function req(o){return new Promise(function(rs,rj){var u=o.url;if(u.indexOf('http')!==0)u=BASE_URL+u;uni.request({url:u,method:o.method||'GET',data:o.data||{},header:Object.assign({'Content-Type':'application/json'},uni.getStorageSync('token')?{Authorization:'Bearer '+uni.getStorageSync('token')}:{}),success:function(r){if(r.statusCode===200)rs({data:r.data});else rj(new Error('HTTP '+r.statusCode))},fail:rj})})}
@@ -229,25 +216,25 @@ var api={
   getSpots:function(){return req({url:'/tour-session/spots'})},
   getGuides:function(language){return req({url:'/tour-session/guides?language='+(language==='en'?'en':'zh')})},
   getRoutes:function(){return req({url:'/tour-session/routes'})},
-  createSession:function(n,g,p,s){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&visitor_preferences='+encodeURIComponent(p||'')+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[])),method:'POST'})},
+  createSession:function(n,g,s){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[])),method:'POST'})},
 }
 export default {
+  components:{TabBarNav,ScenicSheet},
+  mixins:[planningUnderlineMixin],
   onReady:function(){
     this.pageReady=true
     // #ifdef MP-WEIXIN
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{statusH:20,showMapPreview:false,pageReady:false,pageVisible:false,
-    previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,pickedPrefs:[],loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
-    mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
-    spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
-    prefs:[{value:'history',cls:'icon-lishiwenhua',label:'历史文化'},{value:'nature',cls:'icon-ziranfengguang',label:'自然风光'},{value:'photography',cls:'icon-cam-3',label:'拍照打卡'},{value:'family',cls:'icon-qinzi',label:'亲子'},{value:'comprehensive',cls:'icon-youlan',label:'综合'}],
+  data:function(){return{statusH:20,showMapPreview:false,failedImages:{},pageReady:false,pageVisible:false,
+    previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
+    mapCenter:{latitude:0,longitude:0},guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,personalOmitted:[],recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
   }},
   computed:{
     canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending},
     pickedCount:function(){return Object.keys(this.pickedIds).length},
-    filteredSpots:function(){var s=this;var kw=(s.keyword||'').toLowerCase();var list=s.spots;if(s.spotCat!=='all')list=list.filter(function(x){return x.category===s.spotCat});if(kw)list=list.filter(function(x){return(x.spot_name||'').indexOf(kw)>=0||(x.location||'').indexOf(kw)>=0||(x.tags||'').indexOf(kw)>=0});return list},
+    filteredSpots:function(){var s=this;var kw=(s.keyword||'').toLowerCase();if(!kw)return s.spots;return s.spots.filter(function(x){return(x.spot_name||'').toLowerCase().indexOf(kw)>=0||(x.city||'').toLowerCase().indexOf(kw)>=0||(x.location||'').toLowerCase().indexOf(kw)>=0||(x.tags||'').toLowerCase().indexOf(kw)>=0})},
     mapMarkers:function(){var s=this;return s.spots.filter(function(x){return x.latitude&&x.longitude}).map(function(x,i){var picked=s.isPicked(x.spot_id);var point=wgs84ToGcj02(Number(x.latitude),Number(x.longitude));return{id:x.spot_id||i,latitude:point[0],longitude:point[1],width:28,height:28,iconPath:picked?'/static/pin-blue.png':'/static/pin-red.png',title:x.spot_name,callout:{content:x.spot_name,display:'BYCLICK',fontSize:11,borderRadius:5,padding:5}}})},
     routeSpots:function(){var s=this;if(!s.routeDetail)return[];var ids=s.routeDetail.spot_ids||[];return ids.map(function(id){return s.spots.find(function(x){return x.spot_id===id})}).filter(Boolean)},
     routeTotalTime:function(){return this.routeDetail&&this.routeDetail.estimated_time_minutes||null},
@@ -271,17 +258,16 @@ export default {
     loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.model3dUrl='';g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.model3dUrl=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?c.threeD.modelUrl:'';g.previewUrl=c.cartoon&&c.cartoon.previewUrl||'';g.previewMessage=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?'3D · '+c.threeD.name:c.realistic.ready?c.realistic.message:(c.cartoon.ready?c.cartoon.message:c.realistic.message+'；'+c.cartoon.message)}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
     goTab:function(p){uni.reLaunch({url:p})},
     isPicked:function(id){return!!this.pickedIds[id]},
-    toggleSpot:function(id){var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
-    pickRoute:function(r){this.pickedRouteId=r.route_id;var i={};(r.spot_ids||[]).forEach(function(id){i[id]=true});this.pickedIds=i},
-    switchPlanningTab:function(next){if(next===this.tab)return;this.planningDrafts[this.tab]={ids:this.pickedIds,routeId:this.pickedRouteId,guide:this.pickedGuide};var draft=this.planningDrafts[next]||{ids:{},routeId:null,guide:null};this.pickedIds=draft.ids;this.pickedRouteId=draft.routeId;this.pickedGuide=draft.guide;this.tab=next},
-    invalidatePlan:function(){this.personalPlan=null;if(this.tab==='personal')this.pickedIds={};else if(this.planningDrafts.personal)this.planningDrafts.personal.ids={}},
-    togglePref:function(v){if(this.recommending)return;if(v==='comprehensive'){this.pickedPrefs=this.pickedPrefs.indexOf(v)>=0?[]:[v]}else{var list=this.pickedPrefs.filter(function(x){return x!=='comprehensive'});this.pickedPrefs=list.indexOf(v)>=0?list.filter(function(x){return x!==v}):list.concat(v)}this.invalidatePlan()},
-    preferenceCount:function(v){return this.spots.filter(function(s){var p=s.preference_profile;return v==='comprehensive'||p&&p.affinities[v]>=3&&(v!=='family'||!p.stairs)}).length},
+    toggleSpot:function(id){var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;this.personalPlan=null;this.personalOmitted=[];var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
+    pickRoute:function(r){if(this.pickedRouteId===r.route_id){this.pickedRouteId=null;this.pickedIds={};return}this.pickedRouteId=r.route_id;var i={};(r.spot_ids||[]).forEach(function(id){i[id]=true});this.pickedIds=i},
+    switchPlanningTab:function(next){if(next===this.tab)return;this.planningDrafts[this.tab]={ids:this.pickedIds,routeId:this.pickedRouteId,guide:this.pickedGuide};var draft=this.planningDrafts[next]||{ids:{},routeId:null,guide:null};if(next==='personal'){draft={ids:this.pickedIds,routeId:this.pickedRouteId,guide:draft.guide||this.pickedGuide}}this.pickedIds=draft.ids;this.pickedRouteId=draft.routeId;this.pickedGuide=draft.guide;this.personalOmitted=[];this.animatePlanningUnderline(next);this.tab=next},
+    invalidatePlan:function(){this.personalPlan=null;this.personalOmitted=[]},
     changeBudget:function(e){if(this.recommending)return;this.budgetIndex=Number(e.detail.value);this.invalidatePlan()},
     changePace:function(e){if(this.recommending)return;this.paceIndex=Number(e.detail.value);this.invalidatePlan()},
-    generatePersonalPlan:function(){var s=this;if(s.recommending)return;if(!s.pickedPrefs.length){uni.showToast({title:'请选择游览偏好',icon:'none'});return}s.recommending=true;req({url:'/tour-routes/recommend',method:'POST',data:{preferences:s.pickedPrefs.slice(),time_budget_minutes:s.budgetOptions[s.budgetIndex],pace:s.paceIndex?'relaxed':'standard',start_area:'auto'}}).then(function(r){var b=r.data;if(b.code!==0||!b.data||!b.data.spot_ids.length){uni.showToast({title:b.message||'暂无匹配路线',icon:'none'});return}s.personalPlan=b.data;var ids={};b.data.spot_ids.forEach(function(id){ids[id]=true});if(s.tab==='personal'){s.pickedIds=ids;s.pickedRouteId=null}else{var draft=s.planningDrafts.personal||{guide:null};s.planningDrafts.personal={ids:ids,routeId:null,guide:draft.guide}}}).catch(function(){uni.showToast({title:'规划失败，请检查服务',icon:'none'})}).finally(function(){s.recommending=false})},
+    generatePersonalPlan:function(){var s=this;if(s.recommending)return;var ids=Object.keys(s.pickedIds).map(Number);if(!ids.length){uni.showToast({title:'请先在游览路线里选择景点',icon:'none'});return}var pickedSpots=s.spots.filter(function(x){return ids.indexOf(x.spot_id)>=0}),city=(pickedSpots[0]&&pickedSpots[0].city)||'',excluded=s.spots.filter(function(x){return ids.indexOf(x.spot_id)<0}).map(function(x){return x.spot_id}).slice(0,100);s.recommending=true;req({url:'/tour-routes/recommend',method:'POST',data:{preferences:[],time_budget_minutes:s.budgetOptions[s.budgetIndex],pace:s.paceIndex?'relaxed':'standard',start_area:'auto',city:city,excluded_spot_ids:excluded}}).then(function(r){var b=r.data;if(b.code!==0||!b.data||!b.data.spot_ids.length){uni.showToast({title:b.message||'暂无匹配路线',icon:'none'});return}s.personalPlan=b.data;var omitted=ids.filter(function(id){return b.data.spot_ids.indexOf(id)<0});s.personalOmitted=omitted.map(function(id){var sp=s.spots.find(function(x){return x.spot_id===id});return sp?s.t(sp.spot_name):''}).filter(Boolean)}).catch(function(){uni.showToast({title:'规划失败，请检查服务',icon:'none'})}).finally(function(){s.recommending=false})},
+    closeSpotSheet:function(){if(this.$refs.spotSheet)this.$refs.spotSheet.close()},
     openDetail:function(s){this.detailSpot=s;this.saveHistory(s)},
-    saveHistory:function(s){try{var raw=uni.getStorageSync('view_history')||'[]';var list=JSON.parse(raw);list=list.filter(function(x){return x.spot_id!==s.spot_id});list.unshift({spot_id:s.spot_id,spot_name:s.spot_name,image_path:s.image_path||'',location:s.location||'',viewTime:new Date().toLocaleString()});if(list.length>50)list=list.slice(0,50);uni.setStorageSync('view_history',JSON.stringify(list))}catch(e){}},
+    saveHistory:function(s){req({url:'/spot-favorites/history/'+s.spot_id,method:'PUT'}).then(function(r){if(!r.data.success)throw new Error('Save failed')}).catch(function(){uni.showToast({title:'浏览记录保存失败，请检查网络',icon:'none'})})},
     themeIcon:function(t){var m={comprehensive:'icon-youlan',history:'icon-lishiwenhua',nature:'icon-ziranfengguang',family:'icon-qinzi',photography:'icon-cam-3'};return m[t]||'icon-youlan'},
     switchRoute:function(direction){if(this.routes.length>1)this.routeIndex=(this.routeIndex+direction+this.routes.length)%this.routes.length},
     openRoute:function(r){this.routeDetail=r},
@@ -296,7 +282,7 @@ export default {
       if(s.recommending)return
       var ids=s.tab==='personal'&&s.personalPlan?s.personalPlan.spot_ids:Object.keys(s.pickedIds).map(Number),gid=s.pickedGuide?s.pickedGuide.guide_id:0
       if(!gid){uni.showToast({title:'请选择数字人形象',icon:'none'});return}
-      api.createSession('游客导览',gid,s.tab==='personal'?s.pickedPrefs.join(','):'',ids).then(function(r){
+      api.createSession('游客导览',gid,ids).then(function(r){
         var sid=null;if(r&&r.data&&r.data.data&&r.data.data.session_id)sid=r.data.data.session_id;else if(r&&r.data&&r.data.session_id)sid=r.data.session_id
         if(sid&&r.data.data&&r.data.data.avatar_access_token)uni.setStorageSync('xingyun-tour-'+sid,r.data.data.avatar_access_token);if(sid)return req({url:'/tour-session/start/'+sid,method:'PUT'}).then(function(start){if(!start.data.success){uni.showToast({title:start.data.message||'开始导览失败',icon:'none'});return}uni.navigateTo({url:'/pages/tour/tour?sessionId='+sid})});else uni.showToast({title:r&&r.data&&r.data.message||'创建失败',icon:'none'})
       }).catch(function(){uni.showToast({title:'网络异常',icon:'none'})})},
@@ -306,6 +292,8 @@ export default {
         if(gr&&gr.data){var g=gr.data;s.guides=(g.data&&g.data.guide_list)?g.data.guide_list:(g.guide_list||[])}
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
         if(rr&&rr.data){var rd=rr.data;s.routes=(rd.data&&rd.data.route_list)?rd.data.route_list:(rd.route_list||[])}
+        s.spots=s.spots.filter(function(x){return isBeijingCity(x.city)})
+        s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)})
         var ordered=prioritizeSummerPalace(s.spots,s.routes);s.spots=ordered.spots;s.routes=ordered.routes
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}
         s.guides=s.guides.map(function(g){return Object.assign({},g,{model3dUrl:(g.model3d_url||'').replace('.gltf','.glb'),previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
@@ -317,7 +305,7 @@ export default {
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },
-  onBackPress:function(){if(this.showMapPreview){this.showMapPreview=false;return true}},
+  onBackPress:function(){if(this.detailSpot){this.closeSpotSheet();return true}if(this.routeDetail&&this.$refs.routeSheet){this.$refs.routeSheet.close();return true}if(this.showMapPreview){this.showMapPreview=false;return true}},
   onHide:function(){this.pageVisible=false;this.showMapPreview=false},
   onUnload:function(){this.pageVisible=false;this.pageReady=false},
   onShow:function(){this.pageVisible=true;this.showMapPreview=false;if(this.checkAuth())this.loadData()},
@@ -335,7 +323,7 @@ export default {
 .map-preview-close::after{border:0}
 .large-scenic-map{display:block;width:100%;height:60vh}
 .guide-preview-half{height:600rpx;margin:0 24rpx;overflow:hidden;background:var(--ng-surface)}.guide-preview-photo{display:block;width:100%}
-.guide-preview-panel{overflow-y:auto}.guide-preview-panel .dp-hd{position:relative;justify-content:center;padding:20rpx 80rpx}.guide-preview-panel .dp-title{font-size:46rpx;font-weight:700;line-height:1.4;text-align:center}.guide-preview-panel .dp-close{position:absolute;right:24rpx;top:24rpx}.guide-preview-panel .guide-description{font-size:34.5rpx;line-height:1.65;padding:16rpx 24rpx;color:var(--ng-secondary)}
+.guide-preview-panel{overflow-y:auto}.guide-preview-panel .dp-hd{position:relative;justify-content:center;padding:20rpx 80rpx}.guide-preview-panel .dp-title{font-size:46rpx;font-weight:700;line-height:1.4;text-align:center}.guide-preview-panel .guide-description{font-size:34.5rpx;line-height:1.65;padding:16rpx 24rpx;color:var(--ng-secondary)}
 .gc-image{position:absolute;width:100%;height:100%;left:0;top:0}.gc-empty{padding:70rpx 16rpx;text-align:center;font-size:27.6rpx;color:var(--ng-secondary)}.guide-description{display:block;padding:18rpx;color:var(--ng-secondary);font-size:27.6rpx;line-height:1.7}.guide-description text{display:block}.guide-preview-video{width:100%;height:600rpx}
 .gc-preview{position:absolute;right:10rpx;top:10rpx;z-index:3;padding:8rpx 16rpx;border-radius:12rpx;background:rgba(30,41,59,0.28);color:var(--ng-text);font-size:25.3rpx}
 .page{min-height:100vh;box-sizing:border-box;background-color:var(--ng-surface);position:relative}
@@ -367,7 +355,6 @@ export default {
 .cat-tabs{white-space:nowrap;margin-bottom:14rpx}.cat-tab{display:inline-block;font-size:25.3rpx;color:var(--ng-secondary);padding:8rpx 20rpx;margin-right:10rpx;border-radius:20rpx;background:rgba(99,102,241,0.08)}.cat-tab.on{background:rgba(99,102,241,0.18);color:var(--ng-text);font-weight:700}
 .spot-list{display:flex;flex-direction:column;gap:10rpx}.spot-card{display:flex;align-items:center;gap:12rpx;padding:14rpx;border:1rpx solid var(--ng-border);border-radius:14rpx;background:var(--ng-surface)}.spot-card.on{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.06)}.sc-img{width:64rpx;height:64rpx;border-radius:12rpx;flex-shrink:0}.sc-img-df{width:64rpx;height:64rpx;border-radius:12rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:32.2rpx;flex-shrink:0}.sc-body{display:flex;align-items:center;flex:1;min-width:0}.sc-info{flex:1;min-width:0}.sc-name{font-size:29.9rpx;font-weight:700;color:var(--ng-text);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sc-cat{font-size:23rpx;color:var(--ng-secondary);margin-top:2rpx}.sc-btn{font-size:23rpx;color:var(--ng-secondary);padding:6rpx 12rpx;border:1rpx solid rgba(99,102,241,0.25);border-radius:8rpx;flex-shrink:0}
 .guide-grid{display:flex;flex-wrap:wrap;gap:12rpx}.guide-card{width:calc(50% - 6rpx);min-height:200rpx;display:flex;align-items:flex-end;justify-content:flex-end;padding:10rpx;border:2rpx solid var(--ng-border);border-radius:16rpx;background-color:var(--ng-surface);background-size:contain;background-repeat:no-repeat;background-position:center;box-sizing:border-box;position:relative;overflow:hidden}.guide-card.on{border-color:rgba(99,102,241,0.25);box-shadow:0 0 0 3rpx rgba(99,102,241,0.15)}.guide-card::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.4) 0%,transparent 50%);z-index:1}.gc-name{position:relative;z-index:2;padding:6rpx 14rpx;border-radius:8rpx;background:rgba(0,0,0,.5);backdrop-filter: none;color:var(--ng-text);font-size:27.6rpx;font-weight:700}
-.pref-wrap{display:flex;flex-wrap:wrap;gap:10rpx}.pref-chip{padding:12rpx 22rpx;border:1rpx solid var(--ng-border);border-radius:26rpx;background:var(--ng-surface);font-size:27.6rpx;color:var(--ng-text)}.pref-chip.on{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.1);color:var(--ng-secondary)}
 .fab-btn{position:fixed;right:24rpx;bottom:200rpx;width:100rpx;height:100rpx;border-radius:50%;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));box-shadow:0 8rpx 24rpx rgba(99,102,241,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;opacity:0;transform:scale(.5);transition:all .3s}.fab-btn.show{opacity:1;transform:scale(1)}.fab-icon{font-size:28rpx;color:var(--ng-text)}.fab-text{font-size:23rpx;color:var(--ng-text);font-weight:600;margin-top:2rpx}
 .empty{color:var(--ng-secondary);font-size:27.6rpx;text-align:center;padding:40rpx}
 
@@ -432,16 +419,16 @@ export default {
 .empty-hint{font-size:24rpx;color:var(--ng-secondary);line-height:1.7}.route-cover-note{font-size:20.7rpx;color:var(--ng-secondary)}.scenic-fade{position:relative;height:360rpx;overflow:hidden}.scenic-clear,.scenic-blur{position:absolute;width:100%;height:100%;top:0;left:0}.scenic-blur{filter:blur(10px);mask-image:linear-gradient(to bottom,transparent 30%,black 70%,transparent 100%)}.scenic-veil{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 35%,var(--ng-surface) 60%,var(--ng-surface) 100%)}
 
 .route-detail-background{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-.route-detail-photo{position:absolute;top:0;left:0;width:100%;height:520rpx;opacity:.52}
-.route-detail-blur{filter:blur(12px);transform:scale(1.06);mask-image:linear-gradient(to bottom,transparent 10%,black 65%)}
-.route-detail-wash{position:absolute;inset:0;background:linear-gradient(to bottom,var(--ng-surface) 0%,var(--ng-surface) 20%,var(--ng-surface) 45%,var(--ng-surface) 68%)}
+.route-detail-photo{position:absolute;inset:0;width:100%;height:100%;opacity:1;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%);mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%)}
+.route-detail-blur{filter:blur(12px);transform:scale(1.06);-webkit-mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%);mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%)}
+.route-detail-wash{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.22) 0%,rgba(255,255,255,.38) 28%,rgba(255,255,255,.76) 70%,#fff 100%)}
 .route-detail-panel>.dp-handle,.route-detail-panel>.dp-hd,.route-detail-panel>.dp-body,.route-detail-panel>.dp-start,.route-detail-panel>.dp-actions{position:relative;z-index:1}
 .route-detail-panel .dp-title{font-size:40.25rpx;line-height:1.4}
 .route-detail-panel .dp-desc,.route-detail-panel .rd-desc{font-size:31.05rpx;color:var(--ng-secondary)}
 .route-detail-panel .dp-tag,.route-detail-panel .rd-tag{font-size:27.6rpx}
 .route-detail-panel .tlc-name{font-size:33.35rpx}
 .route-detail-panel .tlc-cat,.route-detail-panel .tlc-trans text{font-size:26.45rpx}
-.route-detail-panel .tl-card{background:var(--ng-surface)}
+.route-detail-panel .tl-card{background:rgba(255,255,255,.84);backdrop-filter:blur(8px)}
 /* 顶部标签与底部导航共用放大后的响应式字号。 */
 .page.aurora-page{--tab-label-size:16.1px}
 @media(min-width:390px){.page.aurora-page{--tab-label-size:17.25px}}
@@ -449,12 +436,35 @@ export default {
 
 .planner-note{display:block;font-size:26rpx;line-height:1.7;color:var(--ng-secondary);margin-top:14rpx}.planner-control{margin-top:18rpx;padding:20rpx;border-radius:16rpx;background:#f7f8fc;color:var(--ng-text);font-size:29rpx}.planner-generate{margin-top:22rpx;padding:22rpx;text-align:center;background:#5447db;border-radius:18rpx;color:#fff;font-size:30rpx}.planner-result{margin-top:28rpx;font-size:30rpx;color:var(--ng-text)}.planner-stop{padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}
 
-.spot-detail-panel>.scenic-fade{position:absolute;inset:0 0 auto;height:440rpx;width:100%;pointer-events:none;}
-.spot-detail-panel>.dp-handle,.spot-detail-panel>.dp-hd,.spot-detail-panel>.dp-body,.spot-detail-panel>.dp-btn{position:relative;z-index:1;}
-.spot-detail-panel.has-photo .dp-title{color:#fff;text-shadow:0 2rpx 12rpx rgba(0,0,0,.65);}
-.spot-detail-panel.has-photo .dp-close{background:rgba(255,255,255,.9);color:#475569;}
-.spot-detail-panel.has-photo .dp-handle{background:rgba(255,255,255,.8);}
-.spot-detail-panel.has-photo .dp-content{padding-top:300rpx;}
-.spot-detail-panel .scenic-veil{background:linear-gradient(to bottom,rgba(15,23,42,.25),transparent 35%,rgba(255,255,255,.8) 72%,#fff 100%)!important;}
+.scenic-page-stage{height:100vh;box-sizing:border-box;padding-bottom:90px;overflow-y:auto;background:var(--ng-night);}
+.sheet-content{border-radius:inherit;position:relative;width:100%;overflow:hidden;display:flex;flex-direction:column;height:100%;max-height:100%;min-height:0;background:#fff}
+.sheet-content>.dp-body{height:0;max-height:none;flex:1;min-height:0;overscroll-behavior:contain;background:#fff}
+.sheet-content>.dp-hd,.sheet-content>.dp-btn,.sheet-content>.dp-actions{flex-shrink:0}
+.photo-unavailable{font-size:20rpx;color:var(--ng-muted)}
+
+.spot-detail-panel>.dp-hd{position:absolute;top:24px;left:0;right:0;z-index:6;padding:8rpx 28rpx;pointer-events:none}
+.spot-detail-panel.has-photo .dp-title{color:#fff;text-shadow:0 2rpx 12rpx rgba(0,0,0,.7)}
+.spot-hero{position:relative;height:16vh;min-height:100px;width:100%;overflow:hidden}
+.spot-hero image{display:block;width:100%;height:100%}
+.spot-hero-wash{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(15,23,42,.25),transparent 65%,#fff)}
+.spot-hero-empty{height:84px;background:#f1f2fa}
+.spot-detail-panel .dp-content{padding:8rpx 28rpx 12rpx;background:#fff}
+.spot-detail-panel .dp-name{font-size:36rpx;margin-bottom:8rpx}
+.spot-detail-panel .dp-desc{margin-bottom:12rpx;line-height:1.7}
+.spot-detail-panel .dp-btn{margin:0;padding:12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));background:#fff;border-top:1rpx solid var(--ng-border)}
+.spot-detail-panel .dp-btn text{padding:18rpx;font-size:30rpx}
+.spot-detail-panel{height:auto;max-height:none}
+.spot-detail-panel>.dp-body{height:auto;max-height:none;flex:none}
+.route-detail-panel>.dp-hd{padding-top:28px;z-index:6;pointer-events:none}
+.route-detail-panel .dp-actions{background:#fff;padding-bottom:calc(12rpx + env(safe-area-inset-bottom))}
+
+.top-tabs.planning-ink-ready .tt-underline{opacity:0!important}
+.planning-liquid-ink{position:absolute;z-index:2;border-radius:2rpx;background:var(--ng-accent-text);pointer-events:none;transform-origin:center;will-change:left,right,transform}
+
+.planning-ink-moving{animation:planningInkRipple 400ms both}
+@keyframes planningInkRipple{0%,100%{transform:scaleY(1)}48%{transform:scaleY(.83)}82%{transform:scaleY(1.04)}}
+
+.sheet-content.route-detail-panel>.dp-body{background:transparent}
+.route-detail-panel .dp-title{text-shadow:0 1px 8px rgba(255,255,255,.85)}
 </style>
 

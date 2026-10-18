@@ -17,7 +17,7 @@ export default {
 }
 </script>
 <style scoped>
-.confirm-overlay{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:40rpx;box-sizing:border-box;background:rgba(30,41,59,0.28)}
+.confirm-overlay{position:fixed!important;top:0;right:0;bottom:0;left:0;z-index:2000!important;display:flex;align-items:center;justify-content:center;padding:40rpx;box-sizing:border-box;background:transparent}
 .confirm-panel{width:100%;max-width:600rpx;padding:40rpx;box-sizing:border-box;border-radius:48rpx;background:#ffffff;background-image:linear-gradient(135deg,rgba(99,102,241,0.12),transparent 50%);border:1rpx solid rgba(99,102,241,0.12);box-shadow:var(--ng-glass-shadow);backdrop-filter: none}
 .confirm-title{display:block;color:#1f2937;font-size:36rpx;font-family:var(--app-font-family);text-align:center}
 .confirm-content{display:block;margin:24rpx 0 36rpx;color:#64748b;font-size:28rpx;line-height:1.8;text-align:center}
@@ -25,5 +25,5 @@ export default {
 </style>
 
 <style scoped>
-.confirm-panel{background:#fff;background-image:none;border-color:transparent}.confirm-actions .confirm-primary{background:#4f46e5;color:#fff;border-color:transparent}.confirm-actions .confirm-primary:active{background:#4338ca;color:#fff}
+.confirm-panel{background:#f7f5ff;background-image:none;border:1rpx solid #c9c2ed;box-shadow:0 18px 54px rgba(59,43,110,.22),0 3px 12px rgba(59,43,110,.1)}.confirm-actions .confirm-cancel{background:#fff;border-color:#ddd7f3}.confirm-actions .confirm-primary{background:#4f46e5;color:#fff;border-color:transparent}.confirm-actions .confirm-primary:active{background:#4338ca;color:#fff}
 </style>
