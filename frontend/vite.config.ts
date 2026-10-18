@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
       '/tour-routes': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-session': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-experience': { target: backendUrl, bypass: spaNavigationBypass },
+      '/service-stations': { target: backendUrl, bypass: spaNavigationBypass },
       '/analytics': { target: backendUrl, bypass: spaNavigationBypass },
       '/system': { target: backendUrl, bypass: spaNavigationBypass },
       '/files': { target: backendUrl, bypass: spaNavigationBypass },

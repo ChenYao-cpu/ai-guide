@@ -9,6 +9,7 @@ export interface VisualContext {
 }
 export interface WalkingLeg {
   from_id: number; to_id: number; from_name: string; to_name: string
+  from_name_en?:string; to_name_en?:string
   meters: number | null; minutes: number | null; basis: string
   available?: boolean; geometry?: number[][]; has_steps?: boolean | null; steps_meters?: number | null
   sections?: Array<{way_id:number;road_name:string;meters:number;steps:boolean;bridge:boolean;highway:string}>
@@ -32,7 +33,7 @@ export interface RouteOverviewData {
   exit_leg?: WalkingLeg | null
   exit_anchor?: {latitude:number;longitude:number;label:string} | null
   entry_leg?: WalkingLeg | null
-  entry_anchor?: {latitude:number;longitude:number;label:string} | null
+  entry_anchor?: {latitude:number;longitude:number;label:string;label_en?:string} | null
   exit_minutes?: number | null
   reserve_minutes?: number
   network_version?: string

@@ -3,7 +3,7 @@
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { request_handler } from '@/api/base'
 import { avatarHeaders } from '@/api/xingyunTour'
-const props = defineProps<{ guideId?: number; tourId?: number; framing?: 'full' | 'half'; posterImage?: string }>()
+const props = defineProps<{ guideId?: number; tourId?: number; stationVisit?:{visit_id:string;access_token:string}; framing?: 'full' | 'half'; posterImage?: string }>()
 
 type Avatar = {
   init(options: Record<string, unknown>): Promise<void>
@@ -29,7 +29,7 @@ let avatar: Avatar | undefined
 let active = true
 let generation = 0
 let configPromise: Promise<void> = Promise.resolve()
-watch(() => [props.guideId, props.tourId,configRevision.value], () => {
+watch(() => [props.guideId, props.tourId, props.stationVisit?.visit_id,configRevision.value], () => {
   wanted=true;retryCount.value=0
   release(); configured.value = false; provider.value = ''
   querying.value = true
@@ -43,7 +43,7 @@ watch(() => [props.guideId, props.tourId,configRevision.value], () => {
       configured.value = data.configured
       provider.value = data.provider
       message.value = data.configured ? t("尚未连接实时数字人，请点击连接") : t("该数字人未上架或未完成应用绑定")
-      if (configured.value && props.tourId) {
+      if (configured.value && (props.tourId || props.stationVisit)) {
         void nextTick().then(() => {
           if (active && current === generation) void connect()
         })
@@ -111,8 +111,8 @@ async function connect() {
     const instance = new SDK({
       containerId: '#' + containerId,
       appId: 'server-proxy', appSecret: 'server-proxy',
-      gatewayServer: new URL('/xingyun/session/' + props.guideId + '?tour_id=' + (props.tourId || 0), location.origin).href,
-      headers: avatarHeaders(props.tourId || 0),
+      gatewayServer: new URL('/xingyun/session/' + props.guideId + '?tour_id=' + (props.tourId || 0) + (props.stationVisit?'&station_visit_id='+encodeURIComponent(props.stationVisit.visit_id):''), location.origin).href,
+      headers: props.stationVisit ? {'X-Station-Token':props.stationVisit.access_token} : avatarHeaders(props.tourId || 0),
       proxyWidget: {
         subtitle_on: () => {},
         subtitle_off: () => {},

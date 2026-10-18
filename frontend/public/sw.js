@@ -1,9 +1,9 @@
 // 景区导览 PWA Service Worker
 // 提供离线缓存和后台位置追踪能力
 
-const CACHE_NAME = 'tour-guide-v1'
+const CACHE_NAME = 'tour-guide-station-v2'
 const CACHE_URLS = [
-  '/visitor/home',
+  '/station/summer-palace-east',
   '/offline.html',
   '/manifest.json',
 ]
@@ -30,12 +30,18 @@ self.addEventListener('activate', (event) => {
 // 请求拦截：网络优先，失败时回退缓存
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
-  // API请求不缓存
-  if (event.request.url.includes('/api/') || event.request.url.includes('/tour-session/')) return
+  const url = new URL(event.request.url)
+  // Cache public presentation assets only. Tokens, chats, claims and admin API
+  // responses must never enter a shared-terminal browser cache.
+  if (url.origin !== self.location.origin) return
+  const allowed = /^\/(assets|images|brand|models)\//.test(url.pathname) ||
+    event.request.mode === 'navigate' && /^\/(station(?:\/|$)|m\/(?:home|receive)$)/.test(url.pathname)
+  if (!allowed) return
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        if (!response.ok) return response
         const cloned = response.clone()
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned))
         return response

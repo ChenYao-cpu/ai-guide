@@ -3,7 +3,7 @@ from array import array
 import math
 
 from .route_presentation import route_overview
-from .walking_network import distance_between, gate_distance, network_version
+from .walking_network import distance_between, gate_distance, anchor_distance, network_version
 
 INF = (1 << 63) - 1
 
@@ -96,7 +96,7 @@ def _bounded_order(vertices, head, tail, edges, entry, exit, original):
 
 
 def optimize_order(spots, *, fixed_start=True, fixed_end=False, pace='standard',
-                   start_area='auto', end_area='auto', avoid_steps=False, reserve=0):
+                   start_area='auto', end_area='auto', avoid_steps=False, reserve=0, start_anchor=None, end_anchor=None):
     if not 2 <= len(spots) <= 20:
         raise ValueError('请选择2至20个景点再优化顺序')
     ids = [s['spot_id'] for s in spots]
@@ -105,13 +105,15 @@ def optimize_order(spots, *, fixed_start=True, fixed_end=False, pace='standard',
     version = network_version()
     options = dict(pace=pace, start_area=start_area, end_area=end_area,
                    avoid_steps=avoid_steps, reserve=reserve)
+    if start_anchor: options['start_anchor'] = start_anchor
+    if end_anchor: options['end_anchor'] = end_anchor
     original = route_overview(spots, **options)
     if not original['complete']:
         raise ValueError('所选景点没有完整的步行路径，暂时无法优化顺序')
     n, speed = len(spots), 55 if pace == 'relaxed' else 75
     distances = [[distance_between(a, b, avoid_steps) for b in spots] for a in spots]
-    starts = [gate_distance(s, start_area, avoid_steps) if start_area != 'auto' else 0 for s in spots]
-    ends = [gate_distance(s, end_area, avoid_steps) if end_area != 'auto' else 0 for s in spots]
+    starts = [anchor_distance(s, start_anchor, avoid_steps) if start_anchor else gate_distance(s, start_area, avoid_steps) if start_area != 'auto' else 0 for s in spots]
+    ends = [anchor_distance(s, end_anchor, avoid_steps) if end_anchor else gate_distance(s, end_area, avoid_steps) if end_area != 'auto' else 0 for s in spots]
     finite = [m for row in distances for m in row if math.isfinite(m)] + [m for m in starts + ends if math.isfinite(m)]
     # A metre dominates every possible rounded walking-minute tie breaker.
     base = (n + 1) * math.ceil(max(finite, default=0) / speed) + 1

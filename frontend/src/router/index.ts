@@ -3,6 +3,19 @@ import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/', redirect: '/station/summer-palace-east' },
+    { path: '/station', redirect: '/station/summer-palace-east' },
+    { path:'/station-preview/:stationId',name:'StationPreview',component:()=>import('@/views/station/StationPreviewView.vue'),meta:{title:'服务站屏幕预览',requiresAuth:false} },
+    {
+      path: '/station/:stationId', name: 'ServiceStation',
+      component: () => import('@/views/station/StationServiceView.vue'),
+      meta: {title:'景区数字人服务站',requiresAuth:false},
+    },
+    {
+      path: '/m/receive', name: 'StationReceive',
+      component: () => import('@/views/station/StationReceiveView.vue'),
+      meta: {title:'领取游览方案',requiresAuth:false},
+    },
     {
       path: '/login',
       name: 'Login',
@@ -17,7 +30,7 @@ const router = createRouter({
     {
       path: '/visitor/home',
       name: 'VisitorHome',
-      component: () => import('@/views/visitor/VisitorHomeView.vue'),
+      redirect: '/station/summer-palace-east',
       meta: {
         title: '选择导游',
         requiresAuth: false,
@@ -55,13 +68,18 @@ const router = createRouter({
     //   管理后台（需要登录）
     // ==========================================
     {
-      path: '/',
+      path: '/admin',
       redirect: { name: 'Home' },
       component: () => import('@/layouts/BaseLayout.vue'),
       meta: {
         requiresAuth: true // 是否需要登录验证，配置根路由即可，子路由会继承
       },
       children: [
+        {
+          path:'/stations',name:'StationAdmin',
+          component:()=>import('@/views/station/StationAdminView.vue'),
+          meta:{title:'服务站管理'},
+        },
         {
           path: '/home',
           name: 'Home',
