@@ -23,10 +23,14 @@
       <view class="nav-end" @tap="endTour"><text>✕</text></view>
     </view>
 
+    <view v-if="spotCards.length" class="route-tools"><button :disabled="repairOpen||repairOpening||leavingTour" @tap="showRouteInfo=true">{{ t('路线与用时') }}</button><button :disabled="repairOpen||repairOpening||leavingTour" @tap="openRepair('')">{{ t(repairOpening?'正在加载…':'调整行程') }}</button></view>
+    <view v-if="showRouteInfo" class="tour-route-mask" @tap="showRouteInfo=false"><view class="tour-route-sheet" @tap.stop><view class="tour-route-heading"><text>{{ t('剩余游览路线') }}</text><button @tap="showRouteInfo=false" :aria-label="t('关闭')">×</button></view><scroll-view scroll-y class="tour-route-body"><RouteOverview v-if="routeOverview" :overview="routeOverview" :current-id="liveCurrentId" /><text v-else>{{ t('路线详情暂时无法加载') }}</text></scroll-view></view></view>
+    <TourRouteRepair v-if="repairOpen" ref="routeRepair" :sid="sid" :current-name="spotCards.find(s=>s.spot_id===liveCurrentId)?.spot_name||spotName" :remaining-spots="repairRemainingSpots" :initial="repairInitial" :prompt="repairPrompt" @close="repairOpen=false" @applied="routeRepaired" @refresh="refresh(true)" />
     <!-- 数字导游 -->
-    <view class="guide-stage" :style="!tourVisible || leavingTour ? 'visibility:hidden' : ''">
+    <view class="guide-stage" :style="!tourVisible || leavingTour || repairOpen || showRouteInfo ? 'visibility:hidden' : ''">
       <view v-if="spotCards.length" class="tp-stats stage-progress">
-        <text class="tp-stat" v-if="remainingDuration > 0">{{ t('预计剩余约 {minutes} 分钟', {minutes:remainingDuration}) }}</text>
+        <text class="tp-stat" v-if="routeOverview&&remainingDuration==null">{{ t('路线用时待确认') }}</text>
+        <text class="tp-stat" v-else-if="remainingDuration > 0">{{ t('预计剩余约 {minutes} 分钟', {minutes:remainingDuration}) }}</text>
         <text class="tp-stat done" v-else>{{ t('路线游览完毕') }}</text>
       </view>
       <text v-if="guideDisplayName" class="stage-guide-name">{{ guideDisplayName }}</text>
@@ -122,6 +126,9 @@
 
 <script>
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
+import RouteOverview from '../../components/RouteOverview.vue'
+import TourRouteRepair from '../../components/TourRouteRepair.vue'
+import { isRouteChange, repairDefaults } from '../../common/route-planning.js'
 import TourXingyun from '../../components/tour-xingyun.vue'
 // #ifdef MP-WEIXIN
 import TourXfyun from '../../components/tour-xfyun.vue'
@@ -131,24 +138,24 @@ import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
 
 function request(options) {
-  return new Promise(function(resolve, reject) {
+  var task;var promise=new Promise(function(resolve, reject) {
     var url = options.url
     if (url.indexOf('http') !== 0) url = BASE_URL + url
     var token = uni.getStorageSync('token') || ''
     var header = { 'Content-Type': 'application/json' }
     if (token) header['Authorization'] = 'Bearer ' + token
-    uni.request({
+    task=uni.request({
       url: url, method: options.method || 'GET',
       data: options.data || {}, header: header,
       timeout: options.timeout || 20000,
       success: function(res) {
         if (res.statusCode === 200) resolve({ data: res.data })
-        else if (res.statusCode === 401) { uni.reLaunch({url:'/pages/auth/auth'}) }
+        else if (res.statusCode === 401) { uni.reLaunch({url:'/pages/auth/auth'});reject(new Error('登录已过期，请重新进入导览')) }
         else reject(new Error(res.data && (res.data.detail || res.data.message) || '服务请求失败（HTTP ' + res.statusCode + '）'))
       },
       fail: reject
     })
-  })
+  });promise.abort=function(){if(task)task.abort()};return promise
 }
 var api = {
   getLiveInfo: function(sid) { return request({ url: '/tour-session/live-info/' + sid }) },
@@ -159,7 +166,7 @@ var api = {
 }
 
 export default {
-  components: {NocturneConfirm,TourXingyun,
+  components: {NocturneConfirm,TourXingyun,RouteOverview,TourRouteRepair,
     // #ifdef MP-WEIXIN
     TourXfyun,
     // #endif
@@ -167,7 +174,7 @@ export default {
   data: function() {
     return {
 
-      showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
+      showEndConfirm: false,showRouteInfo:false,repairOpen:false,repairOpening:false,repairPrompt:'',routeOverview:null,repairInitial:{},liveCurrentId:0,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
       motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
       guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
@@ -205,7 +212,9 @@ export default {
       }
       return total
     },
+    repairRemainingSpots:function(){var i=this.spotCards.findIndex(s=>s.spot_id===this.liveCurrentId);return this.spotCards.slice(i<0?this.spotIdx+1:i+1)},
     remainingDuration: function() {
+      if(this.routeOverview)return this.routeOverview.total_minutes
       var total = 0
       for (var i = this.spotIdx + 1; i < this.spotCards.length; i++) {
         total += this.spotCards[i].visit_duration || 20
@@ -321,13 +330,14 @@ export default {
     },
     prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') }},
     nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') }},
-    jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') },
+    jumpSpot: function(i){ if(i===this.spotIdx||this.loading||this.repairOpen||this.repairOpening) return; this.spotIdx=i; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') },
     send: function(msg) {
       var self = this; var t = (msg||'').trim()
-      if (!t || self.loading) return
+      if (!t || self.loading||self.repairOpen||self.repairOpening) return
+      if(isRouteChange(t)){self.text='';self.openRepair(t);return}
       if(!self.guideId){uni.showToast({title:'导游信息加载中，请稍后再试',icon:'none'});return}
       self.stopPlayback();self.text = ''; self.loading = true
-      var playbackVersion=self._playbackVersion
+      var playbackVersion=self._playbackVersion,turn=self._turnVersion=(self._turnVersion||0)+1
       var currentSpot = self.spotCards[self.spotIdx]
       var nextSpot = self.spotCards[self.spotIdx+1]
       self.msgs.push({ role:'user', message:t, send_time: new Date().toISOString() })
@@ -340,7 +350,8 @@ export default {
         }
       }).catch(function() {})
       // 发送消息（附带景点上下文）
-      Promise.resolve(self._capabilityPromise).then(function(){return api.sendMessage(self.sid, t, self.avatarMode, currentSpot&&currentSpot.spot_id, nextSpot?nextSpot.spot_id:null,self.tourLanguage)}).then(function(res) {
+      Promise.resolve(self._capabilityPromise).then(function(){if(turn!==self._turnVersion)return null;return self._chatTask=api.sendMessage(self.sid, t, self.avatarMode, currentSpot&&currentSpot.spot_id, nextSpot?nextSpot.spot_id:null,self.tourLanguage)}).then(function(res) {
+        if(turn!==self._turnVersion||!res)return
         var d = res.data
         if (d && d.success) {
           // TTS自动播报
@@ -361,18 +372,30 @@ export default {
           self.refresh()
         } else { uni.showToast({title:(d&&d.message)||'回复失败',icon:'none'}) }
       }).catch(function(e) {
+        if(turn!==self._turnVersion)return
         uni.showToast({title:e.message || (/timeout/i.test(e.errMsg||'')?'回答等待超时，请重试':'无法连接服务器，请检查网络'),icon:'none'})
       })
-        .finally(function() { self.loading = false; self.lastMsgId = 'bottom' })
+        .finally(function() { if(turn===self._turnVersion){self.loading = false; self.lastMsgId = 'bottom'} })
     },
     onConfirm: function(e) { this.send(e.detail ? e.detail.value : '') },
     onSend: function() { this.send(this.text) },
-    refresh: function() {
-      var self = this
-      api.getLiveInfo(self.sid).then(function(res) {
+    openRepair:async function(message){
+      if(this.repairOpening||this.repairOpen||this.leavingTour||this.endingTour)return
+      this.repairOpening=true;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.cancelRecord();this.stopPlayback()
+      const current=this._turnVersion
+      try{const ready=await this.refresh(true);if(current!==this._turnVersion||!this.tourVisible||this.leavingTour)return;if(!ready){uni.showToast({title:this.t('导览信息加载失败，请重试'),icon:'none'});return}this.repairPrompt=message||'';this.showRouteInfo=false;this.repairOpen=true}
+      finally{this.repairOpening=false}
+    },
+    routeRepaired:async function(){this.repairOpen=false;this._turnVersion=(this._turnVersion||0)+1;this.stopPlayback();if(await this.refresh(true))uni.showToast({title:this.t('路线已更新'),icon:'none'});else uni.showToast({title:this.t('路线已保存，请重新进入导览查看'),icon:'none'})},
+    refresh: function(preferServerCurrent) {
+      var self = this,version=self._liveVersion=(self._liveVersion||0)+1
+      return api.getLiveInfo(self.sid).then(function(res) {
+        if(version!==self._liveVersion||self.leavingTour)return false
         var d = res.data
         if (d && d.success) {
           var data = d.data
+          if(data.live_status===2){self.repairOpen=false;self.routeOverview=null;return false}
+          self.routeOverview=data.remaining_route_overview||data.route_overview||null;self.repairInitial=repairDefaults(data);self.liveCurrentId=data.current_spot_info?.spot_id||0
           self.msgs = data.conversation || []
           if (data.guide_info) {
             self.guideProvider = data.guide_info.render_mode || ''
@@ -390,31 +413,28 @@ export default {
               // #endif
             }else if(gid&&gid!==self.guideId){self.guideId=gid;self._capabilityPromise=request({url:'/avatar/capabilities/'+gid}).then(function(r){self.avatarCapability=r.data.data;self.avatarMode=self.avatarCapability.preferredMode==='3d'&&self.avatarCapability.threeD&&self.avatarCapability.threeD.ready?'3d':self.avatarCapability.realistic.ready?'realistic':(self.avatarCapability.cartoon.ready?'cartoon':'audio');self.updateAvatarMessage();if(!self.guideAvatar&&self.avatarCapability.cartoon.previewUrl)self.guideAvatar=self.avatarCapability.cartoon.previewUrl}).catch(function(){self.avatarMessage='数字人服务状态查询失败'})}
           }
-          // 加载景点卡片
           var selectedIds=[];try{selectedIds=JSON.parse(data.visitor_preferences||'{}').spot_ids||[]}catch(e){}
           if(!selectedIds.length&&data.route_info)selectedIds=data.route_info.spot_ids||[]
-          if (selectedIds.length) {
-            request({url:'/tour-session/spots'}).then(function(sr){
-              var spots = (sr.data&&sr.data.data&&sr.data.data.spot_list) ? sr.data.data.spot_list : []
-              var ids = selectedIds
-              var viewed = self.spotCards[self.spotIdx]
-              self.spotCards = ids.map(function(id){return spots.find(function(s){return s.spot_id===id})}).filter(Boolean)
-              var activeId = viewed?viewed.spot_id:(data.current_spot_info&&data.current_spot_info.spot_id)
-              if (activeId) {
-                for (var i=0;i<self.spotCards.length;i++) {
-                  if (self.spotCards[i].spot_id === activeId) { self.spotIdx = i; break }
-                }
-              }
-            }).catch(function(){})
+          const update=function(spots){
+            if(version!==self._liveVersion||self.leavingTour)return false
+            var viewed=self.spotCards[self.spotIdx]
+            self.spotCards=selectedIds.map(id=>spots.find(spot=>spot.spot_id===id)).filter(Boolean)
+            var activeId=preferServerCurrent?self.liveCurrentId:(viewed?.spot_id||self.liveCurrentId)
+            var index=self.spotCards.findIndex(spot=>spot.spot_id===activeId);self.spotIdx=index>=0?index:0
+            return true
           }
+          if(data.route_spots?.length)return update(data.route_spots)
+          if(selectedIds.length)return request({url:'/tour-session/spots'}).then(r=>update(r.data?.data?.spot_list||[]))
+          self.spotCards=[];return true
         }
-      }).catch(function() {})
+        return false
+      }).catch(function(){return false})
     },
     goBack: function() { this.leaveTour() },
     // 重建首页并移除导览页；返回不能依赖渲染层回调或云端响应。
     leaveTour: function(url) {
       if(this.leavingTour)return
-      this.leavingTour=true
+      this.leavingTour=true;this.repairOpen=false;this.showRouteInfo=false;this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort()
       this.showEndConfirm=false
       this.cancelRecord();this.stopPlayback();this.stopGps()
       this.closeXingyun()
@@ -462,12 +482,13 @@ export default {
       if (this.gpsTimer) { clearInterval(this.gpsTimer); this.gpsTimer = null }
     },
     checkNearby: function() {
+      if(this.repairOpen||this.repairOpening||this.showRouteInfo)return
       if (!this.userLat || !this.userLng || !this.sid) return
       var self = this
       var gps = gcj02ToWgs84(this.userLat, this.userLng)
       var target = this.currentSpot.spot_id || 0
       api.checkNearby(gps[0], gps[1], this.sid, target).then(function(res) {
-        if (!self.gpsTracking || target !== (self.currentSpot.spot_id || 0)) return
+        if (!self.gpsTracking || self.repairOpen || self.repairOpening || target !== (self.currentSpot.spot_id || 0)) return
         var d = res.data && res.data.data
         if (!d) return
         self.distanceStatus = d.target_spot ? '距'+d.target_spot.spot_name+'约 '+(d.target_spot.distance >= 1000 ? (d.target_spot.distance/1000).toFixed(2)+' 公里' : Math.round(d.target_spot.distance)+' 米')+'（直线距离）' : '当前景点暂无坐标，无法测距'
@@ -545,9 +566,10 @@ export default {
     cancelRecord: function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
   },
   onReady:function(){this.measureAvatar()},
+  onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
   onResize:function(){this.$nextTick(this.measureAvatar)},
-  onUnload:function(){this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
-  onHide:function(){this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
+  onUnload:function(){this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
+  onHide:function(){this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
     // #ifdef MP-WEIXIN
     if(this.$refs.xfyun)this.$refs.xfyun.close()
     // #endif
@@ -567,6 +589,7 @@ export default {
 </script>
 
 <style scoped>
+.route-tools{display:flex;gap:14rpx;padding:12rpx 24rpx;flex-shrink:0}.route-tools button{flex:1;min-width:0;margin:0;font-size:26rpx;line-height:2.5;border:1rpx solid var(--ng-border);border-radius:14rpx;color:#614b9a;background:#f0ecf8}.tour-route-mask{position:fixed;inset:0;z-index:1500;background:rgba(25,30,50,.35);display:flex;align-items:flex-end}.tour-route-sheet{width:100%;height:88vh;padding:28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));box-sizing:border-box;background:var(--ng-surface,#fff);border-radius:30rpx 30rpx 0 0;display:flex;flex-direction:column}.tour-route-heading{display:flex;align-items:center;justify-content:space-between;font-size:34rpx;padding-bottom:24rpx}.tour-route-heading button{margin:0;padding:0 20rpx;font-size:36rpx;line-height:1.7;background:#f5f1fa;color:#655574}.tour-route-body{flex:1;height:0;min-height:0}
 .xingyun-open{margin:8rpx 24rpx;padding:8rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:14rpx;color:var(--ng-secondary);background:var(--ng-surface);font-size:26rpx;flex-shrink:0}
 .native-3d-stage{width:100%;height:100%;overflow:hidden;border-radius:24rpx;}
 .stage-footer{position:relative;z-index:1;display:flex;align-items:center;gap:12rpx;padding:10rpx 24rpx;flex-shrink:0}

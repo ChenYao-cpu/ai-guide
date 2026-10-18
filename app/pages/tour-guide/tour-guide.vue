@@ -1,6 +1,6 @@
 <template>
   <view class="page aurora-page">
-    <page-meta :page-style="showMapPreview ? 'overflow:hidden' : 'overflow:auto'" />
+    <page-meta :page-style="showMapPreview||showItinerary ? 'overflow:hidden' : 'overflow:auto'" />
     <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
 
     <view class="ink-bg"><view class="ink-mountain ink-mt-1"></view><view class="ink-mountain ink-mt-2"></view></view>
@@ -19,7 +19,7 @@
       </view>
     </view>
 
-    <view class="main">
+    <view class="main" :class="{'itinerary-active':showItinerary}">
       <view v-if="loading" class="sk-wrap">
         <view class="sk-block" v-for="n in 3" :key="n">
           <view class="sk-line sk-w40"></view>
@@ -34,7 +34,7 @@
         <view class="block">
           <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("景区地图") }}</text></view>
           <view class="map-wrap">
-            <map v-if="pageReady && pageVisible && mapMarkers.length && !showMapPreview && !detailSpot && !routeDetail && !guidePicker && !previewingGuide" class="mini-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :markers="mapMarkers" :scale="12" :enable-scroll="false" :enable-zoom="false" :enable-rotate="false" @markertap="onMarkerTap"></map>
+            <map v-if="pageReady && pageVisible && mapMarkers.length && !showMapPreview && !showItinerary && !detailSpot && !routeDetail && !guidePicker && !previewingGuide" class="mini-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :markers="mapMarkers" :polyline="itineraryMap.polyline" :include-points="itineraryMap.points" :scale="12" :enable-scroll="false" :enable-zoom="false" :enable-rotate="false" @markertap="onMarkerTap"></map>
             <view v-else class="map-empty">{{ mapMarkers.length ? '' : loading ? t('地图加载中…') : t('暂无可定位的景点') }}</view>
           </view>
         </view>
@@ -42,7 +42,7 @@
         <view class="block" v-if="pageReady && pageVisible && routes.length">
           <view class="bl-hd"><view class="bl-dot"></view><text>{{ t("导览路线") }}</text></view>
           <view class="route-carousel-wrap">
-            <swiper class="route-carousel" :current="routeIndex" @change="routeIndex=$event.detail.current" :autoplay="routes.length > 1 && !routeDetail && !showMapPreview && !detailSpot && !guidePicker && !previewingGuide" :interval="4500" :indicator-dots="routes.length > 1" :circular="routes.length > 1" indicator-color="#64748b" indicator-active-color="#ffffff" :duration="350">
+            <swiper class="route-carousel" :current="routeIndex" @change="routeIndex=$event.detail.current" :autoplay="routes.length > 1 && !routeDetail && !showMapPreview && !showItinerary && !detailSpot && !guidePicker && !previewingGuide" :interval="4500" :indicator-dots="routes.length > 1" :circular="routes.length > 1" indicator-color="#64748b" indicator-active-color="#ffffff" :duration="350">
               <swiper-item v-for="r in routes" :key="r.route_id" class="route-slide">
                 <view class="route-card" :class="{on:pickedRouteId===r.route_id}" @tap="openRoute(r)">
                   <image v-if="r.cover_image" :src="fixImg(r.cover_image)" class="route-cover-photo" mode="aspectFill" />
@@ -81,7 +81,7 @@
         </view>
       </view>
 
-      <view v-if="tab==='route'&&pickedCount>0&&!canStart" class="selection-next" @tap="goSelectGuide">{{ t("选择导游") }}</view>
+      <view v-if="tab==='route'&&pickedCount>0&&!pickedGuide" class="selection-next" @tap="goSelectGuide">{{ t("选择导游") }}</view>
       <!-- ===== 个性化 ===== -->
       <view v-if="tab==='personal'">
         <view class="block">
@@ -117,6 +117,7 @@
         </view>
       </view>
 
+      <RouteTiming v-if="pageReady&&pageVisible&&pickedCount" :ids="selectedIds" :spots="spots" :plan="personalPlan" :pace="tab==='personal'&&paceIndex?'relaxed':'standard'" :details="showItinerary" :disabled="recommending||starting" @open="showItinerary=true" @close="showItinerary=false" @move="moveSelectedSpot" @remove="toggleSpot" @state="itineraryState=$event" />
       <view style="height:120rpx"></view>
     </view>
 
@@ -132,7 +133,7 @@
     </view>
     <view v-if="guidePicker" class="drawer-overlay" @tap="guidePicker=false"><view class="drawer-mask"></view><view class="drawer-panel" @tap.stop=""><view class="dp-hd"><text class="dp-title">{{ t("选择数字人") }}</text><text @tap="guidePicker=false">{{ t("关闭") }}</text></view><view class="guide-grid"><view v-for="g in guides" :key="g.guide_id" class="guide-card" @tap="pickedGuide=g;guidePicker=false"><image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" /><view class="gc-name">{{ t(g.name) }}</view></view></view></view></view>
     <!-- 悬浮开始按钮 -->
-    <view class="fab-btn" :class="{show:canStart}" @tap="startTour">
+    <view v-if="!showItinerary" class="fab-btn" :class="{show:canStart}" @tap="startTour">
       <text class="fab-icon">▶</text>
       <text class="fab-text">{{ pickedCount||'' }}</text>
     </view>
@@ -206,7 +207,7 @@
     </view>
 
     <!-- TabBar -->
-      <view class="tb-root">
+      <view v-if="!showItinerary" class="tb-root">
         <view class="tb-ink-line"></view>
         <view class="tb-inner">
 
@@ -220,6 +221,8 @@
 </template>
 
 <script>
+import RouteTiming from '../../components/RouteTiming.vue'
+import { selectedOrder, moveStop, previewOptions, roadMap } from '../../common/route-planning.js'
 import { prioritizeSummerPalace } from '../../common/scenic-order.js'
 import { BASE_URL, assetUrl } from '../../common/config.js'
 import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
@@ -229,23 +232,28 @@ var api={
   getSpots:function(){return req({url:'/tour-session/spots'})},
   getGuides:function(language){return req({url:'/tour-session/guides?language='+(language==='en'?'en':'zh')})},
   getRoutes:function(){return req({url:'/tour-session/routes'})},
-  createSession:function(n,g,p,s){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&visitor_preferences='+encodeURIComponent(p||'')+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[])),method:'POST'})},
+  createSession:function(n,g,p,s,planning){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&visitor_preferences='+encodeURIComponent(p||'')+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[]))+(planning?'&planning='+encodeURIComponent(JSON.stringify(planning)):''),method:'POST'})},
 }
 export default {
+  components:{RouteTiming},
   onReady:function(){
     this.pageReady=true
     // #ifdef MP-WEIXIN
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{statusH:20,showMapPreview:false,pageReady:false,pageVisible:false,
+  data:function(){return{statusH:20,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,pickedPrefs:[],loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
     prefs:[{value:'history',cls:'icon-lishiwenhua',label:'历史文化'},{value:'nature',cls:'icon-ziranfengguang',label:'自然风光'},{value:'photography',cls:'icon-cam-3',label:'拍照打卡'},{value:'family',cls:'icon-qinzi',label:'亲子'},{value:'comprehensive',cls:'icon-youlan',label:'综合'}],
   }},
   computed:{
-    canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending},
+    canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending&&!this.starting&&this.itineraryState.key===this.itineraryKey&&!this.itineraryState.busy&&!this.itineraryState.error&&!!this.itineraryState.data?.complete},
+    selectedIds:function(){return selectedOrder(this.orderedIds,this.pickedIds)},
+    itineraryOptions:function(){return previewOptions(this.selectedIds,this.personalPlan,this.tab==='personal'&&this.paceIndex?'relaxed':'standard')},
+    itineraryKey:function(){return JSON.stringify(this.itineraryOptions)},
+    itineraryMap:function(){return roadMap(this.itineraryState.key===this.itineraryKey?this.itineraryState.data:null)},
     pickedCount:function(){return Object.keys(this.pickedIds).length},
     filteredSpots:function(){var s=this;var kw=(s.keyword||'').toLowerCase();var list=s.spots;if(s.spotCat!=='all')list=list.filter(function(x){return x.category===s.spotCat});if(kw)list=list.filter(function(x){return(x.spot_name||'').indexOf(kw)>=0||(x.location||'').indexOf(kw)>=0||(x.tags||'').indexOf(kw)>=0});return list},
     mapMarkers:function(){var s=this;return s.spots.filter(function(x){return x.latitude&&x.longitude}).map(function(x,i){var picked=s.isPicked(x.spot_id);var point=wgs84ToGcj02(Number(x.latitude),Number(x.longitude));return{id:x.spot_id||i,latitude:point[0],longitude:point[1],width:28,height:28,iconPath:picked?'/static/pin-blue.png':'/static/pin-red.png',title:x.spot_name,callout:{content:x.spot_name,display:'BYCLICK',fontSize:11,borderRadius:5,padding:5}}})},
@@ -271,15 +279,16 @@ export default {
     loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.model3dUrl='';g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.model3dUrl=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?c.threeD.modelUrl:'';g.previewUrl=c.cartoon&&c.cartoon.previewUrl||'';g.previewMessage=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?'3D · '+c.threeD.name:c.realistic.ready?c.realistic.message:(c.cartoon.ready?c.cartoon.message:c.realistic.message+'；'+c.cartoon.message)}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
     goTab:function(p){uni.reLaunch({url:p})},
     isPicked:function(id){return!!this.pickedIds[id]},
-    toggleSpot:function(id){var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
-    pickRoute:function(r){this.pickedRouteId=r.route_id;var i={};(r.spot_ids||[]).forEach(function(id){i[id]=true});this.pickedIds=i},
-    switchPlanningTab:function(next){if(next===this.tab)return;this.planningDrafts[this.tab]={ids:this.pickedIds,routeId:this.pickedRouteId,guide:this.pickedGuide};var draft=this.planningDrafts[next]||{ids:{},routeId:null,guide:null};this.pickedIds=draft.ids;this.pickedRouteId=draft.routeId;this.pickedGuide=draft.guide;this.tab=next},
-    invalidatePlan:function(){this.personalPlan=null;if(this.tab==='personal')this.pickedIds={};else if(this.planningDrafts.personal)this.planningDrafts.personal.ids={}},
+    toggleSpot:function(id){if(this.starting||this.recommending)return;var order=this.selectedIds.slice();if(!this.pickedIds[id]&&order.length>=20){uni.showToast({title:this.t('路线最多支持20站，请先精简行程'),icon:'none'});return}var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;this.orderedIds=order.includes(id)?order.filter(x=>x!==id):order.concat(id);var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
+    pickRoute:function(r){if(this.starting||this.recommending)return;this.pickedRouteId=r.route_id;var i={};(r.spot_ids||[]).forEach(function(id){i[id]=true});this.pickedIds=i;this.orderedIds=(r.spot_ids||[]).slice()},
+    moveSelectedSpot:function(id,direction){if(this.starting||this.recommending)return;this.orderedIds=moveStop(this.selectedIds,id,direction);this.pickedRouteId=null;this.personalPlan=null},
+    switchPlanningTab:function(next){if(this.starting)return;if(next===this.tab)return;this.planningDrafts[this.tab]={ids:this.pickedIds,order:this.selectedIds.slice(),routeId:this.pickedRouteId,guide:this.pickedGuide};var draft=this.planningDrafts[next]||{ids:{},routeId:null,guide:null};this.pickedIds=draft.ids;this.orderedIds=(draft.order||[]).slice();this.pickedRouteId=draft.routeId;this.pickedGuide=draft.guide;this.tab=next},
+    invalidatePlan:function(){this.personalPlan=null;if(this.tab==='personal'){this.pickedIds={};this.orderedIds=[]}else if(this.planningDrafts.personal){this.planningDrafts.personal.ids={};this.planningDrafts.personal.order=[]}},
     togglePref:function(v){if(this.recommending)return;if(v==='comprehensive'){this.pickedPrefs=this.pickedPrefs.indexOf(v)>=0?[]:[v]}else{var list=this.pickedPrefs.filter(function(x){return x!=='comprehensive'});this.pickedPrefs=list.indexOf(v)>=0?list.filter(function(x){return x!==v}):list.concat(v)}this.invalidatePlan()},
     preferenceCount:function(v){return this.spots.filter(function(s){var p=s.preference_profile;return v==='comprehensive'||p&&p.affinities[v]>=3&&(v!=='family'||!p.stairs)}).length},
     changeBudget:function(e){if(this.recommending)return;this.budgetIndex=Number(e.detail.value);this.invalidatePlan()},
     changePace:function(e){if(this.recommending)return;this.paceIndex=Number(e.detail.value);this.invalidatePlan()},
-    generatePersonalPlan:function(){var s=this;if(s.recommending)return;if(!s.pickedPrefs.length){uni.showToast({title:'请选择游览偏好',icon:'none'});return}s.recommending=true;req({url:'/tour-routes/recommend',method:'POST',data:{preferences:s.pickedPrefs.slice(),time_budget_minutes:s.budgetOptions[s.budgetIndex],pace:s.paceIndex?'relaxed':'standard',start_area:'auto'}}).then(function(r){var b=r.data;if(b.code!==0||!b.data||!b.data.spot_ids.length){uni.showToast({title:b.message||'暂无匹配路线',icon:'none'});return}s.personalPlan=b.data;var ids={};b.data.spot_ids.forEach(function(id){ids[id]=true});if(s.tab==='personal'){s.pickedIds=ids;s.pickedRouteId=null}else{var draft=s.planningDrafts.personal||{guide:null};s.planningDrafts.personal={ids:ids,routeId:null,guide:draft.guide}}}).catch(function(){uni.showToast({title:'规划失败，请检查服务',icon:'none'})}).finally(function(){s.recommending=false})},
+    generatePersonalPlan:function(){var s=this;if(s.recommending)return;if(!s.pickedPrefs.length){uni.showToast({title:'请选择游览偏好',icon:'none'});return}s.recommending=true;req({url:'/tour-routes/recommend',method:'POST',data:{preferences:s.pickedPrefs.slice(),time_budget_minutes:s.budgetOptions[s.budgetIndex],pace:s.paceIndex?'relaxed':'standard',start_area:'auto'}}).then(function(r){var b=r.data;if(b.code!==0||!b.data||!b.data.spot_ids.length){uni.showToast({title:b.message||'暂无匹配路线',icon:'none'});return}s.personalPlan=b.data;var ids={};b.data.spot_ids.forEach(function(id){ids[id]=true});if(s.tab==='personal'){s.pickedIds=ids;s.orderedIds=b.data.spot_ids.slice();s.pickedRouteId=null}else{var draft=s.planningDrafts.personal||{guide:null};s.planningDrafts.personal={ids:ids,order:b.data.spot_ids.slice(),routeId:null,guide:draft.guide}}}).catch(function(){uni.showToast({title:'规划失败，请检查服务',icon:'none'})}).finally(function(){s.recommending=false})},
     openDetail:function(s){this.detailSpot=s;this.saveHistory(s)},
     saveHistory:function(s){try{var raw=uni.getStorageSync('view_history')||'[]';var list=JSON.parse(raw);list=list.filter(function(x){return x.spot_id!==s.spot_id});list.unshift({spot_id:s.spot_id,spot_name:s.spot_name,image_path:s.image_path||'',location:s.location||'',viewTime:new Date().toLocaleString()});if(list.length>50)list=list.slice(0,50);uni.setStorageSync('view_history',JSON.stringify(list))}catch(e){}},
     themeIcon:function(t){var m={comprehensive:'icon-youlan',history:'icon-lishiwenhua',nature:'icon-ziranfengguang',family:'icon-qinzi',photography:'icon-cam-3'};return m[t]||'icon-youlan'},
@@ -287,19 +296,42 @@ export default {
     openRoute:function(r){this.routeDetail=r},
     goSelectGuide:function(){this.routeDetail=null;
       // #ifdef APP-PLUS
-      var ids=this.pickedIds,routeId=this.pickedRouteId,guide=this.pickedGuide;
-      this.switchPlanningTab('personal');this.pickedIds=ids;this.pickedRouteId=routeId;this.pickedGuide=guide||this.pickedGuide;this.personalPlan=null;
+      var ids=this.pickedIds,order=this.selectedIds.slice(),routeId=this.pickedRouteId,guide=this.pickedGuide;
+      this.switchPlanningTab('personal');this.pickedIds=ids;this.orderedIds=order;this.pickedRouteId=routeId;this.pickedGuide=guide||this.pickedGuide;this.personalPlan=null;
       this.$nextTick(function(){uni.pageScrollTo({scrollTop:0,duration:200})});return;
       // #endif
       this.guidePicker=true},
     startTour:function(){var s=this;if(!s.pickedCount){uni.showToast({title:'请选择景点',icon:'none'});return}
-      if(s.recommending)return
-      var ids=s.tab==='personal'&&s.personalPlan?s.personalPlan.spot_ids:Object.keys(s.pickedIds).map(Number),gid=s.pickedGuide?s.pickedGuide.guide_id:0
+      if(s.recommending||s.starting)return
+      if(s.itineraryState.key!==s.itineraryKey||s.itineraryState.busy||s.itineraryState.error||!s.itineraryState.data?.complete){uni.showToast({title:s.t('请等待可用的路线与用时结果'),icon:'none'});return}
+      var ids=s.selectedIds.slice(),gid=s.pickedGuide?s.pickedGuide.guide_id:0
       if(!gid){uni.showToast({title:'请选择数字人形象',icon:'none'});return}
-      api.createSession('游客导览',gid,s.tab==='personal'?s.pickedPrefs.join(','):'',ids).then(function(r){
+      (s.starting=true,api.createSession('游客导览',gid,s.tab==='personal'?s.pickedPrefs.join(','):'',ids,s.tab==='personal'&&s.personalPlan?{preferences:s.pickedPrefs,time_budget_minutes:s.budgetOptions[s.budgetIndex],pace:s.paceIndex?'relaxed':'standard',start_area:s.itineraryOptions.start_area,end_area:s.itineraryOptions.end_area,avoid_steps:s.itineraryOptions.avoid_steps}:null)).then(function(r){
         var sid=null;if(r&&r.data&&r.data.data&&r.data.data.session_id)sid=r.data.data.session_id;else if(r&&r.data&&r.data.session_id)sid=r.data.session_id
         if(sid&&r.data.data&&r.data.data.avatar_access_token)uni.setStorageSync('xingyun-tour-'+sid,r.data.data.avatar_access_token);if(sid)return req({url:'/tour-session/start/'+sid,method:'PUT'}).then(function(start){if(!start.data.success){uni.showToast({title:start.data.message||'开始导览失败',icon:'none'});return}uni.navigateTo({url:'/pages/tour/tour?sessionId='+sid})});else uni.showToast({title:r&&r.data&&r.data.message||'创建失败',icon:'none'})
-      }).catch(function(){uni.showToast({title:'网络异常',icon:'none'})})},
+      }).catch(function(){uni.showToast({title:'网络异常',icon:'none'})}).finally(function(){s.starting=false})},
+    restoreAISelection:function(){
+      const rawIds=uni.getStorageSync('ai_spot_ids'),rawPlan=uni.getStorageSync('ai_route_plan'),owner=uni.getStorageSync('ai_route_owner')
+      if(!rawIds&&!rawPlan)return
+      uni.removeStorageSync('ai_spot_ids');uni.removeStorageSync('ai_route_plan');uni.removeStorageSync('ai_route_owner')
+      const id=uni.getStorageSync('user_id'),current=id?'id:'+id:uni.getStorageSync('username')?'name:'+uni.getStorageSync('username'):'guest'
+      if(owner!==current)return
+      try{
+        const plan=rawPlan?(typeof rawPlan==='string'?JSON.parse(rawPlan):rawPlan):null
+        const ids=plan?.spot_ids||(typeof rawIds==='string'?JSON.parse(rawIds):rawIds)
+        if(!Array.isArray(ids)||!ids.length||ids.length>20||ids.some(id=>!Number.isInteger(id)||id<=0)||new Set(ids).size!==ids.length)throw new Error()
+        const selected=ids.map(id=>this.spots.find(spot=>spot.spot_id===id))
+        if(selected.some(spot=>!spot?.city)||new Set(selected.map(spot=>spot.city)).size>1)throw new Error()
+        if(plan){
+          this.switchPlanningTab('personal');this.personalPlan=plan
+          if(Array.isArray(plan.preferences))this.pickedPrefs=plan.preferences.filter(value=>this.prefs.some(option=>option.value===value))
+          const budget=Number(plan.requested_time_minutes)
+          if(Number.isInteger(budget)&&budget>=15&&budget<=480){if(!this.budgetOptions.includes(budget))this.budgetOptions=this.budgetOptions.concat(budget).sort((a,b)=>a-b);this.budgetIndex=this.budgetOptions.indexOf(budget)}
+          this.paceIndex=plan.pace==='relaxed'?1:0
+        }
+        const picked={};ids.forEach(id=>{picked[id]=true});this.pickedIds=picked;this.orderedIds=ids.slice();this.pickedRouteId=null
+      }catch(_){uni.showToast({title:this.t('部分推荐景点已不可用，请重新规划'),icon:'none'})}
+    },
     loadData:function(){var s=this;s.loading=true;s.error=''
       Promise.all([api.getGuides(s.tourLanguage).catch(function(){return null}),api.getSpots().catch(function(){return null}),api.getRoutes().catch(function(){return null})]).then(function(r){
         var gr=r[0],sr=r[1],rr=r[2]
@@ -311,20 +343,21 @@ export default {
         s.guides=s.guides.map(function(g){return Object.assign({},g,{model3dUrl:(g.model3d_url||'').replace('.gltf','.glb'),previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
         if(!gr||!sr||!rr)s.error='部分数据加载失败，请重试'
         // 进入导览页不自动选景点：上一次 AI 推荐留下的暂存直接丢弃。
-        uni.removeStorageSync('ai_spot_ids')
+        s.restoreAISelection()
         s.loading=false
       }).catch(function(){s.error='网络连接失败';s.loading=false})},
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },
-  onBackPress:function(){if(this.showMapPreview){this.showMapPreview=false;return true}},
-  onHide:function(){this.pageVisible=false;this.showMapPreview=false},
+  onBackPress:function(){if(this.showItinerary){this.showItinerary=false;return true}if(this.showMapPreview){this.showMapPreview=false;return true}},
+  onHide:function(){this.showItinerary=false;this.pageVisible=false;this.showMapPreview=false},
   onUnload:function(){this.pageVisible=false;this.pageReady=false},
   onShow:function(){this.pageVisible=true;this.showMapPreview=false;if(this.checkAuth())this.loadData()},
 }
 </script>
 
 <style scoped>
+.main.itinerary-active{z-index:2200}
 .header-spacer{padding:0!important;border-bottom:0!important;pointer-events:none}
 .map-preview{margin:0 0 0 auto;padding:8rpx 24rpx;line-height:1.6;min-height:0;font-size:25rpx;color:#6840c2;background:#f1eaff;border-radius:14rpx}
 .map-preview::after{border:0}.map-preview[disabled]{color:#938aa5;background:#f4f0f8}
