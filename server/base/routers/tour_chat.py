@@ -18,6 +18,7 @@ from pathlib import Path
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException, Request
+from pydantic import BaseModel
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -1471,3 +1472,30 @@ async def go_to_next_spot(sessionId: int):
     if not success:
         return make_return_data(False, ResultCode.FAIL, "切换失败", "")
     return make_return_data(True, ResultCode.SUCCESS, "已切换到下一个景点", "")
+
+
+class TranslateTextsRequest(BaseModel):
+    texts: list[str] = []
+    target: str = 'zh'
+
+
+@router.post("/translate-texts", summary="翻译历史问答文本")
+async def translate_texts(payload: TranslateTextsRequest):
+    """把前端已存在的问答历史整体转换成当前界面语言。"""
+    target = 'en' if str(payload.target or '').lower().startswith('en') else 'zh'
+    from ..modules.tour_language import translate_to_english, translate_to_chinese, ENGLISH_UNAVAILABLE
+    generate = get_llm_res if _llm_is_configured() else None
+
+    async def convert(value):
+        text = str(value or '')
+        if not text.strip():
+            return ''
+        if target == 'en':
+            result = await translate_to_english(text, generate)
+            return text if result == ENGLISH_UNAVAILABLE else result
+        return await translate_to_chinese(text, generate)
+
+    texts = [str(item)[:4000] for item in (payload.texts or [])][:60]
+    logger.info(f"translate-texts requested: target={target} count={len(texts)}")
+    translations = list(await asyncio.gather(*[convert(item) for item in texts])) if texts else []
+    return make_return_data(True, ResultCode.SUCCESS, '成功', {'target': target, 'translations': translations})

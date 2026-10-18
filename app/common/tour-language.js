@@ -91,7 +91,6 @@ const appEnglish = {
   '界面语言': 'Interface language',
   '我的': 'Mine',
   '游览记录': 'Tour history',
-  '偏好设置': 'Preferences',
   '关于我们': 'About us',
   'AI小导游': 'AI Guide',
   '个人资料加载失败': 'Could not load profile',

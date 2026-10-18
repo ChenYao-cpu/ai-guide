@@ -40,7 +40,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .msg-bubble.user { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .aurora-page{background:transparent!important;color:var(--ng-text)}
 .aurora-background{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,var(--ng-surface) 0%,var(--ng-surface) 35%,var(--ng-surface) 70%,var(--ng-surface) 100%)}
-.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.spot-drawer):not(.fab-btn){position:relative;z-index:1}
+.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn){position:relative;z-index:1}
 .aurora-page .nav{background:transparent!important;border-bottom-color:var(--ng-border)!important;gap:18rpx}
 .aurora-page .nav-title{color:var(--ng-text)}
 .aurora-page .tb-root{position:fixed!important;background:var(--ng-surface)!important;border-top-color:var(--ng-border)!important}
@@ -64,4 +64,9 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 @media(min-width:430px){.aurora-page{--tab-icon-size:28px;--tab-label-size:16px;--tab-touch-height:68px}.aurora-page .tb-root{--tab-label-size:15px}}
 @keyframes auroraDrift{from{transform:translate(-6%,0) rotate(-18deg)}to{transform:translate(9%,12%) rotate(12deg)}}
 @keyframes auroraShimmer{from{transform:translateX(-18%) rotate(-6deg);opacity:.4}to{transform:translateX(18%) rotate(6deg);opacity:1}}
+
+.tab-enter-right .main,.tab-enter-right .chat-area,.tab-enter-right .profile-card,.tab-enter-right .quick-hints,.tab-enter-right .menu-group{animation:tabEnterRight 320ms cubic-bezier(.22,1,.36,1) both}
+.tab-enter-left .main,.tab-enter-left .chat-area,.tab-enter-left .profile-card,.tab-enter-left .quick-hints,.tab-enter-left .menu-group{animation:tabEnterLeft 320ms cubic-bezier(.22,1,.36,1) both}
+@keyframes tabEnterRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes tabEnterLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
 </style>

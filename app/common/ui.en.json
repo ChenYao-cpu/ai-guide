@@ -15,7 +15,6 @@
   "✓ 已选此路线": "✓ Route selected",
   "帮我规划一个适合拍照的一日游路线": "Plan a full-day photography route.",
   "北京": "Beijing",
-  "本次偏好": "Tour preferences",
   "标准": "Standard",
   "标准节奏": "Standard pace",
   "步行节奏：": "Walking pace: ",
@@ -81,7 +80,6 @@
   "清空": "Clear",
   "请介绍景点特色": "Tell me about this scenic stop.",
   "请选择数字人": "Choose a digital guide",
-  "请选择游览偏好": "Choose your tour interests",
   "去选数字人": "Choose a digital guide",
   "去选数字人形象": "Choose a digital guide",
   "全部": "All",
@@ -176,5 +174,10 @@
   "AI思考中...": "Your guide is thinking…",
   "cultural": "Cultural",
   "historical": "Historical",
-  "natural": "Natural"
+  "natural": "Natural",
+  "换个关键词再试试": "Try another keyword.",
+  "先在游览路线里选择景点，再生成个性化路线": "Select stops under Tour routes first, then generate the personalised route.",
+  "已按你选择的景点规划": "Planned from the stops you selected.",
+  "以下已选景点未纳入本次规划：": "These selected stops were not included: ",
+  "搜索景点": "Search stops"
 }

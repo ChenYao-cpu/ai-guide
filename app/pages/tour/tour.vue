@@ -9,12 +9,13 @@
       <view class="nav-back" @tap="goBack"><text>‹</text></view>
     <!-- 游览进度时间轴 -->
     <view class="tour-progress nav-progress" v-if="spotCards.length > 1">
-      <scroll-view scroll-x class="tp-track" :scroll-into-view="'tpn-' + spotIdx" scroll-with-animation>
+      <scroll-view scroll-x class="tp-track" :scroll-into-view="progressScrollTarget" scroll-with-animation>
         <view class="tp-nodes">
-          <view v-for="(s, i) in spotCards" :key="s.spot_id" :id="'tpn-' + i" class="tp-node" :class="{done: i < spotIdx, active: i === spotIdx}" @tap="jumpSpot(i)">
-            <view class="tp-dot"><text v-if="i < spotIdx" class="tp-check">✓</text><text v-else-if="i === spotIdx" class="tp-now">●</text></view>
+          <view v-for="(s, i) in progressSpots" :key="s.spot_id" :id="'tpn-' + i" class="tp-node" :class="{done: i < spotIdx, active: i === spotIdx}" @tap="onProgressLastTap(i)">
+            <view class="tp-dot"></view>
             <text class="tp-label">{{ t(s.spot_name) }}</text>
           </view>
+          <view v-if="progressHasMore" id="tpn-more" class="tp-node tp-more" :aria-label="t('更多景点')" @tap="showNextProgress"><text>· · ·</text></view>
         </view>
       </scroll-view>
 
@@ -33,8 +34,6 @@
       <!-- #ifdef APP-PLUS -->
       <tour-xingyun v-if="guideProvider==='xingyun'" :payload="xingyunPayload" @state="onXingyunState" />
       <!-- #endif -->
-      <image v-if="currentSpot.image_path" :src="fixImg(currentSpot.image_path)" class="spot-bg-img" mode="aspectFill" />
-      <view class="spot-bg-shade"></view>
       <!-- 知识卡片弹出 -->
       <view class="know-card" v-if="knowCard.visible" @tap="dismissKnowCard">
         <view class="kc-inner">
@@ -75,7 +74,7 @@
         <view class="ss-info">
           <view class="ss-top">
             <text class="ss-cat">{{ spotIdx+1 }}/{{ spotCards.length }}</text><text class="ss-name">{{ t(currentSpot.spot_name) }}</text>
-            <text class="ss-cat">{{ t(!currentSpot.image_path && currentSpot.route_cover_image ? '路线示意图' : (t(currentSpot.category)||'景点')) }}</text>
+            <text class="ss-cat" v-if="!currentSpot.image_path && currentSpot.route_cover_image">{{ t('路线示意图') }}</text>
           </view>
           <text class="ss-desc">{{ t(t(currentSpot.description)||'').substring(0,50) }}...</text>
         </view>
@@ -126,7 +125,7 @@ import TourXingyun from '../../components/tour-xingyun.vue'
 // #ifdef MP-WEIXIN
 import TourXfyun from '../../components/tour-xfyun.vue'
 // #endif
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
 
@@ -168,7 +167,7 @@ export default {
     return {
 
       showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
-      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
+      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown: 3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
       guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
       voiceMuted: false,
@@ -187,6 +186,9 @@ export default {
     spotIdx: function() { if(this.gpsTracking) { this.distanceStatus='正在更新目标景点距离…'; this.checkNearby() } },
   },
   computed: {
+    progressSpots:function(){var n=this.spotCards.length;if(n<=3)return this.spotCards;var k=Math.max(3,this.progressShown);if(k>=n)return this.spotCards;return this.spotCards.slice(0,k)},
+    progressHasMore:function(){var n=this.spotCards.length;if(n<=3)return false;var k=Math.max(3,this.progressShown);return k<n},
+    progressScrollTarget:function(){if(this.progressHasMore&&this.spotIdx>=this.progressSpots.length)return 'tpn-more';return 'tpn-'+this.spotIdx},
     languageBusy: function() { return this.loading || this.recording || this.voicePressing || this.transcribing },
     guideDisplayName: function() { if (this.tourLanguage === 'en' && this.guideNameEn) return this.guideNameEn; return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
     threeDModelUrl:function(){return assetUrl(this.avatarCapability&&this.avatarCapability.threeD&&this.avatarCapability.threeD.modelUrl||'')},
@@ -319,9 +321,11 @@ export default {
       if (!t) return ''
       try { return new Date(t).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) } catch(e) { return '' }
     },
-    prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') }},
-    nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') }},
-    jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false; this.send('请介绍「'+this.spotName+'」') },
+    prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
+    nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
+    jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false },
+    showNextProgress: function(){ var n=this.spotCards.length; var k=Math.max(3,this.progressShown); if(k>=n) return; this.progressShown = Math.min(k+1,n) },
+    onProgressLastTap: function(i){ var n=this.spotCards.length; if(n<=3) return; if(this.progressHasMore) return; if(i!==this.progressSpots.length-1) return; this.progressShown = 3 },
     send: function(msg) {
       var self = this; var t = (msg||'').trim()
       if (!t || self.loading) return
@@ -395,7 +399,7 @@ export default {
           if(!selectedIds.length&&data.route_info)selectedIds=data.route_info.spot_ids||[]
           if (selectedIds.length) {
             request({url:'/tour-session/spots'}).then(function(sr){
-              var spots = (sr.data&&sr.data.data&&sr.data.data.spot_list) ? sr.data.data.spot_list : []
+              var spots = ((sr.data&&sr.data.data&&sr.data.data.spot_list) ? sr.data.data.spot_list : []).filter(function(sp){return isBeijingCity(sp.city)})
               var ids = selectedIds
               var viewed = self.spotCards[self.spotIdx]
               self.spotCards = ids.map(function(id){return spots.find(function(s){return s.spot_id===id})}).filter(Boolean)
@@ -614,15 +618,13 @@ export default {
 .kc-img{width:100%;height:120rpx;border-radius:8rpx;margin-top:4rpx}
 
 /* 数字导游区域 — 大半屏 */
-.guide-stage{position:relative;z-index:1;height:34vh;display:flex;align-items:center;justify-content:center;margin:0 8rpx;border-radius:24rpx;overflow:hidden;background:linear-gradient(180deg,var(--ng-surface) 0%,var(--ng-surface) 50%,var(--ng-surface) 100%)}
-.spot-bg-img{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.28}
-.spot-bg-shade{position:absolute;inset:0;z-index:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,transparent 40%,transparent 60%,rgba(0,0,0,.35) 100%)}
+.page .guide-stage{position:relative;z-index:2;height:34vh;display:flex;align-items:center;justify-content:center;margin:0 8rpx;border-radius:24rpx;overflow:hidden;background:linear-gradient(180deg,var(--ng-surface) 0%,var(--ng-surface) 50%,var(--ng-surface) 100%);box-shadow:0 18rpx 44rpx -20rpx rgba(30,41,59,.24),0 4rpx 16rpx rgba(30,41,59,.06)}
 .spot-nav-bar{position:absolute;top:16rpx;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:12rpx;padding:0 20rpx}
 .spot-arrow{width:52rpx;height:52rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter: none;font-size:36rpx;color:var(--ng-text);flex-shrink:0}
 .spot-label-text{padding:8rpx 16rpx;border-radius:10rpx;background:rgba(0,0,0,.45);backdrop-filter: none;color:var(--ng-text);font-size:22rpx;font-weight:700;white-space:nowrap}
-.stage-status{position:absolute;bottom:16rpx;right:20rpx;z-index:2;padding:6rpx 14rpx;border-radius:10rpx;background:rgba(0,0,0,.35);backdrop-filter: none}
-.stage-status text{color:var(--ng-text);font-size:22rpx}
-.stage-status.on{background:rgba(99,102,241,0.12)}
+.stage-status{position:absolute;bottom:12rpx;left:50%;right:auto;transform:translateX(-50%);z-index:2;padding:6rpx 14rpx;border-radius:10rpx;background:rgba(0,0,0,.35);backdrop-filter: none}
+.stage-status text{color:#fff;font-size:22rpx;white-space:nowrap}
+.stage-status.on{background:rgba(30,30,50,.35)}
 .guide-img{width:80%;height:80%;background:transparent}
 .guide-img.speaking{animation:guideTalk .3s ease-in-out infinite}
 @keyframes guideBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
@@ -725,4 +727,10 @@ export default {
 .msg-voice-btn.muted .vm-bar{background:#64748b}
 .msg-voice-btn .vm-play{width:0;height:0;border-left:16rpx solid #64748b;border-top:10rpx solid transparent;border-bottom:10rpx solid transparent;margin-left:4rpx}
 .voice-mute-btn{display:none}
+
+.page .guide-stage{background:transparent}
+.nav-progress .tp-nodes{display:flex;align-items:stretch}
+.nav-progress .tp-more{justify-content:center;padding-top:0;padding-bottom:0}
+.tp-more text{display:block;font-size:32rpx;line-height:1;letter-spacing:2rpx;color:var(--ng-secondary)}
+.tp-dot{transition:background .25s ease,border-color .25s ease,box-shadow .25s ease}
 </style>

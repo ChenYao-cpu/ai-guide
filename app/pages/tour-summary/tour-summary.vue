@@ -3,9 +3,9 @@
     <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
 
     <view class="nav" :style="{paddingTop:statusH+'px'}">
-      <view class="nav-back" @tap="goHome"><text>‹</text></view>
+      <view class="nav-back" @tap="goHome"><text class="nav-back-icon">‹</text></view>
       <text class="nav-title">{{ t("导览记录") }}</text>
-      <view class="nav-share" @tap="shareTour"><text class="iconfont icon-fenxiang"></text></view>
+      <view class="nav-side"></view>
     </view>
 
     <view v-if="loading" class="state-tip"><text>{{ t("加载中...") }}</text></view>
@@ -72,7 +72,7 @@
                 <view v-else class="tl-img-df"></view>
                 <view class="tl-info">
                   <text class="tl-name">{{ t(s.spot_name) }}</text>
-                  <text class="tl-cat" v-if="s.category">{{ catLabel(s.category) }}{{ t('· 约') }}{{ s.visit_duration || 20 }}{{ t('分钟') }}</text>
+                  <text class="tl-cat" v-if="s.visit_duration">{{ t('· 约') }}{{ s.visit_duration }}{{ t('分钟') }}</text>
                   <text class="tl-desc" v-if="s.description">{{ t(s.description).substring(0, 50) }}...</text>
                 </view>
               </view>
@@ -108,14 +108,6 @@
         <view class="ai-summary-card">
 
           <text class="as-text">{{ aiSummary }}</text>
-        </view>
-      </view>
-
-      <!-- 偏好回顾 -->
-      <view class="section" v-if="preferences.length > 0">
-        <view class="section-head"><view class="sh-dot"></view><text>{{ t("本次偏好") }}</text></view>
-        <view class="pref-tags">
-          <view v-for="p in preferences" :key="p" class="pref-tag">{{ t(p) }}</view>
         </view>
       </view>
 
@@ -167,15 +159,11 @@
       <text class="loading-text">{{ t("生成游览回顾…") }}</text>
     </view>
 
-    <!-- 底部操作栏 -->
-    <view class="action-bar" v-if="!loading && sessionData">
-      <view class="ab-btn secondary" @tap="goHome">{{ t("返回首页") }}</view>
-    </view>
   </view>
 </template>
 
 <script>
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 
 function request(options) {
   return new Promise(function(resolve, reject) {
@@ -197,17 +185,12 @@ function request(options) {
   })
 }
 
-var PREF_LABELS = {
-  history: '历史文化', nature: '自然风光', photography: '摄影打卡',
-  family: '亲子体验', comprehensive: '综合游览'
-}
-
 export default {
   data: function() {
     return {
       statusH: 20, loading: true, sid: 0,
       sessionData: null, conversation: [], spots: [],
-      currentSpotIdx: 0, aiSummary: '', preferences: [],
+      currentSpotIdx: 0, aiSummary: '',
       quizQuestions: [], quizAnswers: {}, quizChecked: false, quizScore: 0,
     }
   },
@@ -288,13 +271,11 @@ export default {
         var prefs = {}
         try { prefs = JSON.parse(d.visitor_preferences || '{}') } catch(e) {}
         var spotIds = prefs.spot_ids || []
-        var prefList = prefs.preferences || []
-        self.preferences = prefList.map(function(p) { return PREF_LABELS[p] || p })
         var st = d.status || {}
         self.currentSpotIdx = st.current_spot_index || 0
         if (spotIds.length) {
           request({ url: '/tour-session/spots' }).then(function(sr) {
-            var allSpots = sr.data && sr.data.data && sr.data.data.spot_list ? sr.data.data.spot_list : []
+            var allSpots = (sr.data && sr.data.data && sr.data.data.spot_list ? sr.data.data.spot_list : []).filter(function(sp){return isBeijingCity(sp.city)})
             self.spots = spotIds.map(function(id) { return allSpots.find(function(s) { return s.spot_id === id }) }).filter(Boolean)
             self.loading = false
             self.tryAISummary()
@@ -352,10 +333,10 @@ export default {
 .ink-mt-2{bottom:22%;height:140rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
 
 .nav{position:relative;z-index:1;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx}
-.nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-title{flex:1;font-size:36rpx;font-weight:600;color:var(--ng-text);text-align:center}
-.nav-share{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
-.nav-share .iconfont{font-size:32rpx;color:var(--ng-secondary)}
+.nav-back{width:132rpx;height:96rpx;display:flex;align-items:center;justify-content:flex-start;padding-left:10rpx;box-sizing:border-box;flex-shrink:0;background:transparent}
+.nav-back-icon{font-size:56rpx;line-height:1;color:var(--ng-secondary)}
+.nav-side{width:132rpx;height:96rpx;flex-shrink:0}
 
 .main{position:relative;z-index:1;flex:1;min-height:0}
 
@@ -420,9 +401,6 @@ export default {
 .as-icon{font-size:32rpx;flex-shrink:0}
 .as-text{font-size:26rpx;color:var(--ng-text);line-height:1.7;flex:1}
 
-/* 偏好 */
-.pref-tags{display:flex;flex-wrap:wrap;gap:12rpx}
-.pref-tag{padding:8rpx 20rpx;border-radius:20rpx;background:rgba(99,102,241,0.1);font-size:24rpx;color:var(--ng-text)}
 
 /* 知识问答 */
 .quiz-wrap{display:flex;flex-direction:column;gap:16rpx}
@@ -456,10 +434,6 @@ export default {
 .loading-text{font-size:26rpx;color:var(--ng-secondary)}
 
 /* 底部操作 */
-.action-bar{position:relative;z-index:1;flex-shrink:0;display:flex;gap:16rpx;padding:16rpx 20rpx;border-top:1rpx solid var(--ng-border);background:var(--ng-surface)}
-.ab-btn{flex:1;height:80rpx;line-height:80rpx;text-align:center;border-radius:40rpx;font-size:28rpx;font-weight:600}
-.ab-btn.secondary{background:var(--ng-surface);border:1rpx solid var(--ng-border);color:var(--ng-text)}
-.ab-btn.primary{background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(99,102,241,0.15));color:var(--ng-text)}
 .state-tip{padding:120rpx 40rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--ng-secondary);font-size:28rpx}
 .state-tip .empty-art{width:320rpx;margin-bottom:24rpx}
 .state-title{font-size:28rpx;color:var(--ng-text);margin-bottom:28rpx}

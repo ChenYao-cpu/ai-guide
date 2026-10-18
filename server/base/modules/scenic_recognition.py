@@ -74,17 +74,25 @@ async def recognize_photo(content, catalog, question='', language='zh'):
             raise ValueError('invalid result')
         result = normalize_result(payload, catalog, language)
         if str(language or 'zh').lower().startswith('en') and result.get('status') == 'candidate':
-            # 英文模式：城市与景点描述也换成英文，避免中英混排。
+            # 英文模式：城市、证据和描述全部转成英文，避免中英混排。
             result['city'] = {'北京': 'Beijing', '上海': 'Shanghai', '杭州': 'Hangzhou', '成都': 'Chengdu',
                               '西安': "Xi'an", '桂林': 'Guilin', '厦门': 'Xiamen', '苏州': 'Suzhou'}.get(result.get('city', ''), result.get('city', ''))
+            from .tour_language import translate_to_english, ENGLISH_UNAVAILABLE
+            from ..routers.llm import get_llm_res
+            import os as _os
+            generate = get_llm_res if _os.getenv('LLM_API_KEY', '').strip() else None
+
+            async def english_only(value):
+                value = str(value or '').strip()
+                if not value:
+                    return ''
+                translated = await translate_to_english(value, generate)
+                return '' if translated == ENGLISH_UNAVAILABLE else translated
+
             try:
-                from .tour_language import translate_answer
-                from ..routers.llm import get_llm_res
-                import os as _os
-                if _os.getenv('LLM_API_KEY', '').strip():
-                    translated = await translate_answer(result.get('description', ''), get_llm_res)
-                    if translated:
-                        result['description'] = translated
+                result['evidence'] = await english_only(result.get('evidence', ''))
+                result['description'] = await english_only(result.get('description', ''))
+                result['message'] = await english_only(result.get('message', '')) or result.get('message', '')
             except Exception:
                 pass
         return result
