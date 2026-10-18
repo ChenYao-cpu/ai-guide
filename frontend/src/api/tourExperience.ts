@@ -57,6 +57,26 @@ export function getRouteOverview(spotIds: number[], pace = 'standard', signal?: 
     timeout: 15000
   })
 }
+export interface RouteOrderProposal {
+  input_spot_ids: number[]
+  spot_ids: number[]
+  original_route: RouteOverviewData
+  proposed_route: RouteOverviewData
+  unchanged: boolean
+  optimal: boolean
+  method: 'exact' | 'multistart_2opt'
+  saved_meters: number
+  saved_minutes: number
+  fixed_start: boolean
+  fixed_end: boolean
+  network_version: string
+}
+export function optimizeRouteOrder(spotIds: number[], options: {fixed_start:boolean;fixed_end:boolean;pace:'standard'|'relaxed'}, signal?:AbortSignal) {
+  return request_handler<{success:boolean;data:RouteOrderProposal}>({
+    url:'/tour-experience/optimize-order', method:'post',
+    data:{spot_ids:spotIds,...options}, signal, timeout:20000,
+  })
+}
 export async function getContentPreview(data: Record<string, unknown>, signal?: AbortSignal) {
   const { header_authorization } = await import('./user')
   return request_handler({

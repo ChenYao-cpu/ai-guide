@@ -39,6 +39,7 @@ import ScenicSpotCover from '@/components/ScenicSpotCover.vue'
 import ScenicSpotDetailDrawer from '@/components/ScenicSpotDetailDrawer.vue'
 import RecommendedRouteDrawer from '@/components/RecommendedRouteDrawer.vue'
 import SelectedItineraryDrawer from '@/components/SelectedItineraryDrawer.vue'
+import RouteOrderOptimizer from '@/components/RouteOrderOptimizer.vue'
 import type { RecommendedRoute } from '@/types/recommendedRoute'
 import { getRouteOverview, type RouteOverviewData } from '@/api/tourExperience'
 import { loadScenicMap } from '@/utils/leaflet'
@@ -55,6 +56,8 @@ let routeLineLayer:any = null
 const mapLoadError=ref(false), routePreview=ref<RouteOverviewData|null>(null)
 const routePreviewLoading=ref(false),routePreviewError=ref(false)
 const selectedItineraryVisible=ref(false)
+const orderOptimizerOpen=ref(false)
+const orderUndo=ref<{before:number[];after:number[];routeId:number|null}|null>(null)
 let previewVersion=0,previewController:AbortController|undefined
 
 // 高德瓦片（无需 API Key，国内可用）
@@ -337,6 +340,19 @@ const spotCount = computed(() => selectedSpotIds.value.size)
 const launchPanel=ref<HTMLElement|null>(null)
 const selectedSpotOrder=computed(()=>new Map([...selectedSpotIds.value].map((id,index)=>[id,index+1])))
 const selectedSpots = computed(() => [...selectedSpotIds.value].map(id => spotList.value.find(spot => spot.spot_id === id)).filter(Boolean))
+const canUndoOrder=computed(()=>activeMenuTab.value==='route'&&!!orderUndo.value&&JSON.stringify([...selectedSpotIds.value])===JSON.stringify(orderUndo.value.after))
+function applyRouteOrder(ids:number[]){
+  const before=[...selectedSpotIds.value]
+  if(activeMenuTab.value!=='route'||ids.length!==before.length||new Set(ids).size!==before.length||ids.some(id=>!before.includes(id)))return
+  orderUndo.value={before,after:[...ids],routeId:selectedRouteId.value}
+  drafts.route.spotIds=new Set(ids);drafts.route.routeId=null;orderOptimizerOpen.value=false
+  ElMessage.success(t('路线顺序已优化'))
+}
+function undoRouteOrder(){
+  if(!canUndoOrder.value||!orderUndo.value)return
+  drafts.route.spotIds=new Set(orderUndo.value.before);drafts.route.routeId=orderUndo.value.routeId;orderUndo.value=null
+  ElMessage.success(t('已恢复优化前顺序'))
+}
 const selectedSpotNames = computed(() => selectedSpots.value.map(spot => spot.spot_name))
 const selectedDuration = computed(() => {
   const estimate = activeMenuTab.value === 'route'
@@ -585,6 +601,7 @@ watch(selectedSpotIds, () => { nextTick(() => refreshMapMarkers()) }, { deep: tr
 watch(()=>[[...selectedSpotIds.value],walkingPace.value,preferenceRecommendation.value,activeMenuTab.value],refreshRoutePreview,{deep:true})
 // 切到游览路线 tab 时刷新地图尺寸
 watch(activeMenuTab, (tab) => {
+  orderOptimizerOpen.value=false
   if (tab === 'route') {
     nextTick(() => {
       initLeafletMap()
@@ -796,7 +813,7 @@ watch(activeMenuTab, (tab) => {
 
           <!-- 推荐路线 -->
           <div class="content-card recommended-routes" v-if="routeList.length > 0">
-            <RouteCarousel :routes="routeList" :suspended="routeDetailVisible || selectedItineraryVisible" v-slot="{route,index,active}">
+            <RouteCarousel :routes="routeList" :suspended="routeDetailVisible || selectedItineraryVisible || orderOptimizerOpen" v-slot="{route,index,active}">
               <div class="route-card" :class="[{selected:selectedRouteId===route.route_id},'route-tone-'+index%3]" role="button" :tabindex="active?0:-1" :aria-pressed="selectedRouteId===route.route_id" :aria-label="$t('选择路线：{p0}',{p0:route.name})" @click="selectRoute(route)" @keydown.enter.prevent="selectRoute(route)" @keydown.space.prevent="selectRoute(route)">
                 <span class="route-slide-number" aria-hidden="true">{{ String(index+1).padStart(2,'0') }}</span>
                 <div class="route-rich-main">
@@ -853,7 +870,8 @@ watch(activeMenuTab, (tab) => {
                <p v-if="routePreviewLoading" class="itinerary-time-breakdown" role="status">{{ $t('正在计算路线详情…') }}</p>
                <p v-else-if="routePreviewError" class="itinerary-load-error" role="alert">{{ $t('路线详情暂时无法加载') }} <button type="button" @click="refreshRoutePreview">{{ $t('重试') }}</button></p>
                <p v-else-if="routePreview" class="itinerary-time-breakdown"><span>{{ $t('停留') }} <b>{{ routePreview.visit_minutes }}</b></span><span>{{ $t('步行') }} <b>{{ routePreview.walking_minutes??'—' }}</b></span><span>{{ $t('休息') }} <b>{{ routePreview.rest_minutes }}</b> {{ $t('分钟') }}</span></p>
-               <button type="button" class="itinerary-details-button" aria-haspopup="dialog" @click="selectedItineraryVisible=true"><el-icon><Guide /></el-icon>{{ $t('路线与用时') }}<el-icon><ArrowRight /></el-icon></button>
+               <div class="itinerary-route-tools"><button type="button" class="itinerary-details-button" aria-haspopup="dialog" @click="selectedItineraryVisible=true">{{ $t('路线与用时') }}</button><button type="button" class="itinerary-optimize-button" :disabled="spotCount<2||routePreviewLoading||routePreview?.complete===false" :aria-label="$t('优化游览顺序')" aria-haspopup="dialog" @click="orderOptimizerOpen=true"><el-icon><Compass /></el-icon>{{ $t('减少绕路') }}</button></div>
+               <button v-if="canUndoOrder" type="button" class="itinerary-undo-order" @click="undoRouteOrder">{{ $t('恢复优化前顺序') }}</button>
                <TransitionGroup tag="ol" name="itinerary-list" class="itinerary-selected-list">
                 <li v-for="(spot,index) in selectedSpots" :key="spot.spot_id"><span class="itinerary-step">{{ index+1 }}</span><button type="button" class="itinerary-stop-name" @click="openSpotDetail(spot)">{{ $t(spot.spot_name) }}</button><div class="itinerary-stop-actions"><button type="button" :disabled="index===0" :aria-label="$t('上移 {p0}',{p0:spot.spot_name})" @click="moveSelectedSpot(spot.spot_id,-1)"><el-icon><ArrowUp /></el-icon></button><button type="button" :disabled="index===selectedSpots.length-1" :aria-label="$t('下移 {p0}',{p0:spot.spot_name})" @click="moveSelectedSpot(spot.spot_id,1)"><el-icon><ArrowDown /></el-icon></button><button type="button" :aria-label="$t('移除 {p0}',{p0:spot.spot_name})" @click="toggleSpot(spot.spot_id)"><el-icon><Close /></el-icon></button></div></li>
                </TransitionGroup>
@@ -965,6 +983,7 @@ watch(activeMenuTab, (tab) => {
               <h2>{{ $t(activeMenuTab === 'route' ? '路线导览' : '个性化导览') }}</h2>
               <div class="start-summary"><span>{{ $t(spotCount) }} {{ $t("个景点") }}</span><span v-if="spotCount"><el-icon aria-hidden="true"><Clock /></el-icon>{{ $t("约") }} {{ $t(selectedDuration) }} {{ $t("分钟") }}</span></div>
               <button v-if="spotCount" type="button" class="launch-itinerary-details" aria-haspopup="dialog" @click="selectedItineraryVisible=true">{{ $t('路线与用时') }}<el-icon><ArrowRight /></el-icon></button>
+              <button v-if="activeMenuTab==='route'&&spotCount>=2" type="button" class="launch-itinerary-details launch-order-optimize" :disabled="routePreviewLoading||routePreview?.complete===false" aria-haspopup="dialog" @click="orderOptimizerOpen=true">{{ $t('减少绕路') }}<el-icon><Compass /></el-icon></button>
               <p v-if="!spotCount" class="start-hint">{{ $t(activeMenuTab === 'route' ? '请先选择路线或景点' : '请先生成个性化行程') }}</p>
             </div>
           </div>
@@ -1016,8 +1035,9 @@ watch(activeMenuTab, (tab) => {
 
     <RecommendedRouteDrawer v-model="routeDetailVisible" :route="activeRouteDetail" :spots="spotList" :selected="activeRouteDetail?.route_id===selectedRouteId" @apply="applyDetailedRoute" />
     <SelectedItineraryDrawer v-model="selectedItineraryVisible" :overview="routePreview" :busy="routePreviewLoading" :error="routePreviewError" @retry="refreshRoutePreview" />
+    <RouteOrderOptimizer v-if="orderOptimizerOpen" :spots="selectedSpots" :pace="walkingPace" @close="orderOptimizerOpen=false" @apply="applyRouteOrder" />
     <PwaInstallPrompt />
-    <QrFloating v-if="!detailVisible && !routeDetailVisible && !selectedItineraryVisible" />
+    <QrFloating v-if="!detailVisible && !routeDetailVisible && !selectedItineraryVisible && !orderOptimizerOpen" />
   </main>
 </template>
 
@@ -2313,5 +2333,6 @@ watch(activeMenuTab, (tab) => {
 .itinerary-sidebar .itinerary-selected-list { max-height:clamp(110px,calc(100dvh - 470px),280px); }
 .launch-itinerary-details { display:inline-flex; align-items:center; gap:6px; border:0; border-bottom:1px solid #d9cae8; padding:5px 0; margin-top:6px; background:transparent; color:#8a67b2; font:inherit; font-size:16px; cursor:pointer; }
 .itinerary-details-button:hover { border-color:#bba2d4; background:#fff; }.itinerary-details-button:focus-visible,.launch-itinerary-details:focus-visible { outline:2px solid #a385c7; outline-offset:3px; }
+.itinerary-route-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}.itinerary-route-tools .itinerary-details-button{margin:0;font-size:16px;padding:10px 6px}.itinerary-optimize-button{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 6px;border:1px solid #b69bcc;border-radius:10px;background:#eae1f3;color:#79559f;font:inherit;font-size:16px;cursor:pointer}.itinerary-optimize-button:disabled,.launch-order-optimize:disabled{opacity:.45;cursor:default}.itinerary-optimize-button:focus-visible,.itinerary-undo-order:focus-visible{outline:2px solid #a385c7;outline-offset:3px}.itinerary-undo-order{display:block;margin:-4px 0 10px auto;padding:3px 0;border:0;border-bottom:1px solid #d3c3e2;background:transparent;color:#967bad;font:inherit;font-size:14px;cursor:pointer}.launch-order-optimize{margin-left:15px}.itinerary-sidebar:has(.itinerary-undo-order) .itinerary-selected-list{max-height:clamp(100px,calc(100dvh - 510px),250px)}
 @container(max-width:850px) { .itinerary-sidebar .itinerary-selected-list { max-height:180px; }.itinerary-sidebar .itinerary-live-totals { grid-template-columns:1fr 1fr; }.itinerary-time-breakdown { justify-content:center; } }
 </style>
