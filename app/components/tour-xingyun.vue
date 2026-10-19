@@ -3,6 +3,7 @@
 export default {props:{payload:{type:Object,default:()=>({})}},methods:{runtimeEvent(event){this.$emit('state',event)}}}
 </script>
 <script module="runtime" lang="renderjs">
+import { loadXingyunSdk } from '../common/xingyun-sdk.js'
 let avatar=null,generation=0,timer=null,ready=false,gateway='',pending='',ownerRef=null
 function release(){generation++;clearTimeout(timer);ready=false;gateway='';pending='';const previous=avatar;avatar=null;try{return Promise.resolve(previous&&previous.destroy()).catch(()=>{})}catch(e){return Promise.resolve()}}
 export default {
@@ -38,13 +39,11 @@ export default {
       report('connecting')
       timer=setTimeout(()=>fail('星云连接超时，请检查网络后重试'),60000)
       try{
-        if(!window.XmovAvatar)await new Promise((resolve,reject)=>{
-          const script=document.createElement('script');script.src=value.sdkUrl
-          script.onload=resolve;script.onerror=()=>reject(new Error('星云资源加载失败'));document.head.appendChild(script)
-        })
+        await loadXingyunSdk()
         if(current!==generation)return
         const headers=value.accessToken?{'X-Tour-Access':value.accessToken}:{Authorization:'Bearer '+value.token}
         avatar=new window.XmovAvatar({containerId:'#tour-xingyun-avatar',appId:'server-proxy',appSecret:'server-proxy',gatewayServer:value.gateway,headers,
+          hardwareAcceleration:'prefer-hardware',
           proxyWidget:{subtitle_on:()=>{},subtitle_off:()=>{}},
           onInitEvent:code=>{if(code===4000)connected()},
           onStateChange:state=>{if(state==='idle'||state==='interactive_idle')connected()},
@@ -60,5 +59,9 @@ export default {
 </script>
 <style scoped>
 .xingyun-stage{position:absolute;inset:0;z-index:1;overflow:hidden;border-radius:24rpx;background:transparent}
-#tour-xingyun-avatar{width:100%;height:100%;transform:translateX(-10%)}
+#tour-xingyun-avatar{position:relative;width:100%;height:100%;transform:none}
+/* The SDK sets intrinsic width/height on its native DOM canvas. Select those
+   attributes: uni-app rewrites a canvas type selector to uni-canvas, which
+   cannot match the element created by the SDK. Contain the full source frame. */
+#tour-xingyun-avatar :deep([width][height]){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;transform:none!important;object-fit:contain!important;object-position:50% 50%!important}
 </style>
