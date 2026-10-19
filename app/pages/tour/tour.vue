@@ -24,7 +24,6 @@
       <view class="nav-end" @tap="endTour"><text>✕</text></view>
     </view>
 
-    <view v-if="spotCards.length" class="route-tools"><button :disabled="repairOpen||repairOpening||leavingTour" @tap="showRouteInfo=true">{{ t('路线与用时') }}</button><button :disabled="repairOpen||repairOpening||leavingTour" @tap="openRepair('')">{{ t(repairOpening?'正在加载…':'调整行程') }}</button></view>
     <view v-if="showRouteInfo" class="tour-route-mask" @tap="showRouteInfo=false"><view class="tour-route-sheet" @tap.stop><view class="tour-route-heading"><text>{{ t('剩余游览路线') }}</text><button @tap="showRouteInfo=false" :aria-label="t('关闭')">×</button></view><scroll-view scroll-y class="tour-route-body"><RouteOverview v-if="routeOverview" :overview="routeOverview" :current-id="liveCurrentId" /><text v-else>{{ t('路线详情暂时无法加载') }}</text></scroll-view></view></view>
     <TourRouteRepair v-if="repairOpen" ref="routeRepair" :sid="sid" :current-name="spotCards.find(s=>s.spot_id===liveCurrentId)?.spot_name||spotName" :remaining-spots="repairRemainingSpots" :initial="repairInitial" :prompt="repairPrompt" @close="repairOpen=false" @applied="routeRepaired" @refresh="refresh(true)" />
     <!-- 数字导游 -->
@@ -108,12 +107,12 @@
     </scroll-view>
 
     <!-- 底部输入区 -->
-    <view class="bottom-bar">
+    <view class="bottom-bar" :class="{'keyboard-open':keyboardHeight>0}" :style="keyboardHeight>0?{bottom:keyboardHeight+'px'}:{}">
       <view class="input-row">
         <view class="voice-btn" :class="{rec:voiceMode}" @tap="toggleVoiceMode">
           <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
         </view>
-        <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
+        <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @keyboardheightchange="onKeyboardHeight" @blur="keyboardHeight=0" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
         <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart="startRecord" @touchend="stopRecord" @touchcancel="cancelRecord">
           <text>{{ t(transcribing ? '正在识别…' : loading ? '正在回答…' : voicePressing ? '松开发送' : '按住说话') }}</text>
         </view>
@@ -173,8 +172,8 @@ export default {
   data: function() {
     return {
 
-      showEndConfirm: false,showRouteInfo:false,repairOpen:false,repairOpening:false,repairPrompt:'',routeOverview:null,repairInitial:{},liveCurrentId:0,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
-      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown:3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
+      keyboardHeight:0,showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
+      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown: 3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
       guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
       voiceMuted: false,
@@ -260,6 +259,7 @@ export default {
     },
   },
   methods: {
+    onKeyboardHeight(e){this.keyboardHeight=Math.max(0,Number(e.detail?.height)||0)},
     connectXingyun:async function(){
       if(this._xingyunClosePromise)await this._xingyunClosePromise
       if(!this.tourVisible||this.leavingTour||this.endingTour)return
@@ -272,12 +272,15 @@ export default {
         if(!res.data.configured)throw new Error('所选星云数字人未启用或未绑定')
         self._xingyunGateway=BASE_URL+'/xingyun/session/'+self.guideId+'?tour_id='+self.sid+'&language='+(self.tourLanguage||'zh')
         self.xingyunPayload={id:Date.now(),command:'connect',text:self._xingyunPending||'',gateway:self._xingyunGateway,sdkUrl:res.data.sdkUrl,accessToken:uni.getStorageSync('xingyun-tour-'+self.sid),token:uni.getStorageSync('token')}
+        // The renderer now owns this queued text. Do not send it a second time on connected.
+        self._xingyunPending=''
       }).catch(function(error){if(version!==self._xingyunVersion)return;self.xingyunActive=false;self.xingyunFailed=true;self.avatarMessage=error.message||'星云连接失败，请重试'})
       // #endif
     },
     onXingyunState:function(event){
       if(event.state==='closed'){if(this._xingyunClosed&&event.id===this._xingyunCloseId){this._xingyunClosed();this._xingyunClosed=null}return}
       if(event.gateway!==this._xingyunGateway)return
+      if(event.state==='performance'){try{const {gateway,...metrics}=event;uni.setStorageSync('zhiyou.avatar.last-performance',metrics)}catch(e){}return}
       if(event.state==='connected'){
         this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage='';this.xingyunActive=true
         var pending=this._xingyunPending;if(pending&&this._xingyunGateway){this._xingyunPending='';this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:pending})}
@@ -330,9 +333,9 @@ export default {
       if (!t) return ''
       try { return new Date(t).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) } catch(e) { return '' }
     },
-    prevSpot: function(){ if(!this.repairOpen&&!this.repairOpening&&this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
-    nextSpot: function(){ if(!this.repairOpen&&!this.repairOpening&&this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
-    jumpSpot: function(i){ if(i===this.spotIdx||this.loading||this.repairOpen||this.repairOpening) return; this.spotIdx=i; this.mediaExpanded=false },
+    prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
+    nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
+    jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false },
     showNextProgress: function(){ var n=this.spotCards.length; var k=Math.max(3,this.progressShown); if(k>=n) return; this.progressShown = Math.min(k+1,n) },
     onProgressLastTap: function(i){ var n=this.spotCards.length; if(n<=3) return; if(this.progressHasMore) return; if(i!==this.progressSpots.length-1) return; this.progressShown = 3 },
     send: function(msg) {
@@ -421,7 +424,7 @@ export default {
           if(!selectedIds.length&&data.route_info)selectedIds=data.route_info.spot_ids||[]
           const update=function(spots){
             if(version!==self._liveVersion||self.leavingTour)return false
-            spots=spots.filter(spot=>isBeijingCity(spot.city));var viewed=self.spotCards[self.spotIdx]
+            var viewed=self.spotCards[self.spotIdx]
             self.spotCards=selectedIds.map(id=>spots.find(spot=>spot.spot_id===id)).filter(Boolean)
             var activeId=preferServerCurrent?self.liveCurrentId:(viewed?.spot_id||self.liveCurrentId)
             var index=self.spotCards.findIndex(spot=>spot.spot_id===activeId);self.spotIdx=index>=0?index:0
@@ -573,7 +576,7 @@ export default {
   onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
   onResize:function(){this.$nextTick(this.measureAvatar)},
   onUnload:function(){this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
-  onHide:function(){this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
+  onHide:function(){this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
     // #ifdef MP-WEIXIN
     if(this.$refs.xfyun)this.$refs.xfyun.close()
     // #endif
@@ -752,8 +755,10 @@ export default {
 .voice-mute-btn{display:none}
 
 .page .guide-stage{background:transparent}
+.page .guide-stage{height:calc(56.25vw - 9rpx);min-height:160px;max-height:40vh}
 .nav-progress .tp-nodes{display:flex;align-items:stretch}
 .nav-progress .tp-more{justify-content:center;padding-top:0;padding-bottom:0}
 .tp-more text{display:block;font-size:32rpx;line-height:1;letter-spacing:2rpx;color:var(--ng-secondary)}
 .tp-dot{transition:background .25s ease,border-color .25s ease,box-shadow .25s ease}
+.bottom-bar.keyboard-open{position:fixed!important;left:0;right:0;z-index:10001;padding-bottom:0!important}
 </style>

@@ -2,6 +2,10 @@
   "name": "tour-guide-app",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "check:avatar": "node scripts/verify-avatar-release.cjs",
+    "test:avatar": "node --test tests/xingyun-sdk.test.cjs tests/avatar-release.test.cjs"
+  },
   "dependencies": {
     "vue": "^3.4.0",
     "@dcloudio/uni-app": "latest",

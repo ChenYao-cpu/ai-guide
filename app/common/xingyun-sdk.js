@@ -2,6 +2,12 @@
 // A successful frame decode remains required; unsupported devices still fail.
 export const XINGYUN_SDK_ASSET = './static/sdk/xmov-avatar-2.4.1-compatible.js'
 
+// SDK handles these notifications/recovery events itself. Tearing down the
+// session here would interrupt otherwise recoverable animation and speech.
+export function isRecoverableXingyunEvent(event) {
+  return [20005,20006,30005,50002,50003,60001,60002,60004,60007,60008].includes(Number(event && event.code))
+}
+
 export function loadXingyunSdk(runtimeWindow = window, runtimeDocument = document) {
   if (runtimeWindow.__zhiyouAvatarSdkReady) return Promise.resolve(runtimeWindow.XmovAvatar)
   if (runtimeWindow.__zhiyouAvatarSdkLoading) return runtimeWindow.__zhiyouAvatarSdkLoading

@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view class="page aurora-page history-page">
+    <!-- #ifdef APP-PLUS -->
+    <view class="app-status-bar-shield" aria-hidden="true"></view>
+    <!-- #endif -->
+    <view class="aurora-background" aria-hidden="true"></view>
     <view class="nav" :style="{paddingTop:headerTop+'px'}"><text class="nav-back" @tap="goBack">‹</text><text class="nav-title">{{ t("游览记录") }}</text></view>
     <scroll-view scroll-y class="main">
       <view v-if="loading" class="empty">{{ t("加载中…") }}</view>
@@ -68,4 +72,5 @@ export default {
 .c-info{flex:1;min-width:0}.c-name{font-size:28rpx;font-weight:600;color:var(--ng-text);display:block}.c-desc{font-size:22rpx;color:var(--ng-secondary);display:block;margin-top:4rpx}.c-time{font-size:20rpx;color:var(--ng-secondary);margin-top:4rpx;display:block}
 .history-detail{padding:24rpx;background:var(--ng-surface);border-radius:18rpx;margin-bottom:30rpx}.history-close{padding:18rpx 0;color:var(--ng-secondary)}.history-message{padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}.message-text{display:block;font-size:28rpx;line-height:1.7;margin-top:8rpx}
 .empty-art{width:280rpx;margin:0 auto 16rpx;opacity:.95}.history-section-title{display:block;padding:24rpx 0 16rpx;font-size:30rpx;font-weight:600;color:var(--ng-text)}
+.page.history-page{padding-bottom:env(safe-area-inset-bottom)!important;background:transparent}
 </style>
