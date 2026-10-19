@@ -20,10 +20,6 @@ export const BASE_URL = SERVER_ORIGIN + '/api/v1'
 
 export function assetUrl(value) {
   if (!value) return ''
-  if (value.indexOf('/digital_guide/3d/')>=0) {
-    value=value.replace(/\.gltf(?=\?|$)/, '.glb')
-    if (/\.glb(?:\?|$)/.test(value)) value+=(value.includes('?')?'&':'?')+'avatarMotion=bent-elbow-intro-v7'
-  }
   if (/^https?:\/\//i.test(value)) {
     return value.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, SERVER_ORIGIN)
   }

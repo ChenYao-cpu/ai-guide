@@ -80,7 +80,7 @@ def _migrate_add_missing_columns():
         {"table":"scenic_spot_info","columns":[("city", "TEXT NOT NULL DEFAULT ''")]},
         {"table":"tour_route","columns":[("city", "TEXT NOT NULL DEFAULT ''")]},
         {"table":"tour_route","columns":[("cover_image", "TEXT NOT NULL DEFAULT ''"),("cover_generated","BOOLEAN NOT NULL DEFAULT FALSE")]},
-        {"table": "digital_guide_info", "columns": [("base_video_metadata", "TEXT NOT NULL DEFAULT ''"), ("model3d_path", "TEXT NOT NULL DEFAULT ''"), ("render_mode", "TEXT NOT NULL DEFAULT 'realistic'")]},
+        {"table": "digital_guide_info", "columns": [("base_video_metadata", "TEXT NOT NULL DEFAULT ''"), ("render_mode", "TEXT NOT NULL DEFAULT 'realistic'")]},
         # ScenicSpotInfo: GPS字段（LBS位置服务）
         {
             "table": "scenic_spot_info",

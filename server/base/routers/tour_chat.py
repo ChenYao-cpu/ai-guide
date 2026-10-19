@@ -40,7 +40,7 @@ from ..models.tour_models import TourChatItem
 from ..modules.rag import rag_worker
 from ..modules.json_utils import extract_json_object
 from ..modules.issue_analysis import normalize_issue_analysis
-from ..modules.guide_identity import resolve_model_path, resolve_guide_voice
+from ..modules.guide_identity import resolve_guide_voice
 from ..modules.xingyun_access import selectable, issue_tour_avatar_token
 from ..modules.session_report import normalize_session_report
 from ..modules.sentiment_analyzer import analyze_sentiment
@@ -500,7 +500,6 @@ async def get_visitor_guides(language: str = "zh"):
 
     guide_list = []
     for g in (guides or []):
-        model_path = resolve_model_path(g.voice_style, g.live2d_model_path)
         guide_list.append({
             "guide_id": g.guide_id,
             "name": (getattr(g, "name_en", "") or g.name) if english_mode else g.name,
@@ -508,15 +507,13 @@ async def get_visitor_guides(language: str = "zh"):
             "avatar": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.avatar.lstrip('/')) if g.avatar and not g.avatar.startswith(('http://','https://')) else (g.avatar or ""),
             "poster_image": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.poster_image.lstrip('/')) if g.poster_image and not g.poster_image.startswith(('http://','https://')) else (g.poster_image or ""),
             "base_mp4_path": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.base_mp4_path.lstrip('/')) if g.base_mp4_path and not g.base_mp4_path.startswith(('http://','https://')) else (g.base_mp4_path or ""),
-            "voice_style": resolve_guide_voice(g.voice_style, model_path, g.render_mode),
+            "voice_style": resolve_guide_voice(g.voice_style),
             "voice_speed": g.voice_speed,
             "language": getattr(g, "language", "zh") or "zh",
             "name_en": getattr(g, "name_en", "") or "",
             "character_en": getattr(g, "character_en", "") or "",
-            "live2d_model_path": model_path,
             "render_mode": g.render_mode,
             "voice_label": voice_labels[g.guide_id],
-            "model3d_url": ("/api/v1/files/" + g.model3d_path.lstrip("/")) if g.render_mode == "3d" and g.model3d_path else "",
         })
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"guide_list": guide_list, "total": len(guide_list)})
 
@@ -844,7 +841,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     from ..modules.reply_media import prepare_reply_media
     native_voice = chat_item.avatarMode == 'xingyun'
     speech_pending = chat_item.defer_speech and not chat_item.text_only and not native_voice
-    media = dict(ttsAudioUrl='', avatarJob=None, avatarPerformance=None)
+    media = dict(ttsAudioUrl='', avatarJob=None)
     if not chat_item.text_only and not speech_pending:
         media = await prepare_reply_media(guide_info_data, session_id, interaction.message_id, speech_text,
             chat_item.avatarMode, chat_item.language, background_tasks)

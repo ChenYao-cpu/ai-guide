@@ -77,7 +77,7 @@
           </div>
           <div class="avatar-space">
             <DigitalAvatarPlayer
-              ref="live2dRef"
+              ref="avatarRef"
               :tour-id="Number(props.sessionId)"
               :audioElement="ttsAudio"
               :width="1000"
@@ -380,7 +380,7 @@ let disposed = false
 let chatController: AbortController | undefined
 let sessionController:AbortController|undefined,sessionVersion=0
 const currentEmotion = ref('neutral')
-const live2dRef = ref<InstanceType<typeof DigitalAvatarPlayer> | null>(null)
+const avatarRef = ref<InstanceType<typeof DigitalAvatarPlayer> | null>(null)
 const {
   recording: isRecording,
   recognizing,
@@ -424,7 +424,7 @@ const playbackStatus = computed(() => {
   return avatarConnected.value ? t("数字人已就绪") : t("可文字或语音问答")
 })
 
-/** 情感标签映射: 后端 sentment label → Live2D emotion */
+/** 情感标签映射: 后端 sentiment label → 数字人情绪 */
 const SENTIMENT_TO_EMOTION: Record<string, string> = {
   positive: 'happy',
   negative: 'sad',
@@ -529,7 +529,7 @@ function stopPlayback() {
   playbackVersion++
   speechController?.abort()
   loadingSpeech.value=false
-  live2dRef.value?.stop()
+  avatarRef.value?.stop()
   ttsAudio.value?.pause()
   isSpeaking.value = false
 }
@@ -551,10 +551,9 @@ async function playReply(data: any) {
   if (textOnly.value) return
   const version = playbackVersion
   try {
-    if (live2dRef.value?.speak(data.spokenText || data.message)) return
-    await live2dRef.value?.acceptPerformance(data.avatarPerformance)
+    if (avatarRef.value?.speak(data.spokenText || data.message)) return
     if (disposed || version !== playbackVersion) return
-    if (live2dRef.value?.acceptJob(data.avatarJob)) return
+    if (avatarRef.value?.acceptJob(data.avatarJob)) return
     if (data.ttsAudioUrl && ttsAudio.value) {
       ttsAudio.value.src = data.ttsAudioUrl.replace(/^https?:\/\/[^/]+/, '')
       ttsAudio.value.currentTime = 0
@@ -618,7 +617,7 @@ async function sendMessage(message: string) {
       message,
       currentSpot.value?.spot_id,
       nextViewingSpot?.spot_id || 0,
-      (await live2dRef.value?.getMode()) || 'audio',
+      (await avatarRef.value?.getMode()) || 'audio',
       { signal, timeout: 75000, language: tourLanguage.value,
         explanation_mode: explanationMode.value, text_only: textOnly.value, persona: persona.value, defer_speech: true }
     )

@@ -15,7 +15,7 @@ vi.mock('@/components/TourRouteRepair.vue', () => ({ default: defineComponent({ 
 vi.mock('@/components/PwaInstallPrompt.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/DigitalAvatarPlayer.vue', () => ({ default: defineComponent({
   setup(_, { expose }) {
-    expose({ getMode: async () => 'audio', speak: avatarSpeak, acceptPerformance: async () => false, acceptJob: () => false, stop: () => {} })
+    expose({ getMode: async () => 'audio', speak: avatarSpeak, acceptJob: () => false, stop: () => {} })
     return () => h('div', { class: 'test-avatar' })
   },
 }) }))

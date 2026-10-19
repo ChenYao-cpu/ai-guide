@@ -1,6 +1,6 @@
 <script setup lang="ts">import { t } from '@/i18n'
 
-import { computed, onMounted, ref, reactive } from 'vue'
+import { onMounted, ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus/es'
 import { Plus, Delete, Edit } from '@element-plus/icons-vue'
 import AvatarConfiguration from '@/components/AvatarConfiguration.vue'
@@ -21,7 +21,6 @@ import FileUpload from '@/components/FileUpload.vue'
 import VisitorContentPreview from '@/components/VisitorContentPreview.vue'
 const previewVisible=ref(false)
 import { AxiosError } from 'axios'
-// Live2DGuide 使用动态 import 避免阻塞页面加载
 
 // ======================== 列表数据 ========================
 
@@ -82,7 +81,6 @@ const form = reactive({
   base_mp4_path: '',
   tts_reference_audio: '',
   tts_reference_sentence: '',
-  live2d_model_path: '',
 })
 
 // ======================== 角色标签输入 ========================
@@ -110,15 +108,6 @@ const syncCharacter = () => {
   form.character = characterTags.value.join('，')
 }
 
-// ======================== 后端提供的卡通模型清单 ========================
-const availableVRMModels = ref<{ label: string; path: string }[]>([])
-async function scanVRMModels() {
-  try {
-    const response = await request_handler.get('/avatar/cartoon-models')
-    availableVRMModels.value = response.data.data || []
-  } catch { availableVRMModels.value = []; ElMessage.error(t("卡通模型清单读取失败")) }
-}
-
 // ======================== 语音风格选项 ========================
 
 const voiceStyleOptions = [
@@ -127,28 +116,6 @@ const voiceStyleOptions = [
   { label: '温厚男声', value: 'male_wenhou' },
   { label: '洪亮男声', value: 'male_hongliang' },
 ]
-
-const voiceGender = (style: string) => style.startsWith('male_') ? 'male' : 'female'
-const modelGender = (path: string) => {
-  if (path.includes('女') || path.toLowerCase().includes('female')) return 'female'
-  if (path.includes('男') || path.toLowerCase().includes('male')) return 'male'
-  return 'unknown'
-}
-const compatibleVRMModels = computed(() => {
-  const gender = voiceGender(form.voice_style)
-  return availableVRMModels.value.filter((model) => {
-    const modelType = modelGender(model.path)
-    return modelType === 'unknown' || modelType === gender
-  })
-})
-const syncVoiceAndModel = () => {
-  const currentGender = modelGender(form.live2d_model_path)
-  const expectedGender = voiceGender(form.voice_style)
-  if (!form.live2d_model_path || (currentGender !== 'unknown' && currentGender !== expectedGender)) {
-    form.live2d_model_path = compatibleVRMModels.value[0]?.path
-      || ''
-  }
-}
 
 // ======================== 打开对话框 ========================
 
@@ -165,7 +132,6 @@ const resetForm = () => {
   form.base_mp4_path = ''
   form.tts_reference_audio = ''
   form.tts_reference_sentence = ''
-  form.live2d_model_path = ''
   characterTags.value = []
   characterInput.value = ''
   characterInputVisible.value = false
@@ -197,7 +163,6 @@ const openEditDialog = async (guideId: number) => {
       form.base_mp4_path = item.base_mp4_path
       form.tts_reference_audio = item.tts_reference_audio
       form.tts_reference_sentence = item.tts_reference_sentence
-      form.live2d_model_path = item.live2d_model_path || ''
       characterTags.value = item.character ? item.character.split(/[,，]/).filter(Boolean) : []
       dialogVisible.value = true
     } else {
@@ -239,7 +204,6 @@ const handleSave = async () => {
       base_mp4_path: form.base_mp4_path,
       tts_reference_audio: form.tts_reference_audio,
       tts_reference_sentence: form.tts_reference_sentence,
-      live2d_model_path: form.live2d_model_path,
     }
 
     const res = isEditMode.value && form.guide_id > 0
@@ -410,7 +374,7 @@ onMounted(() => {
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item :label='$t("语音风格")'>
-              <el-select v-model="form.voice_style" :placeholder='$t("选择语音风格")' style="width: 100%" @change="syncVoiceAndModel">
+              <el-select v-model="form.voice_style" :placeholder='$t("选择语音风格")' style="width: 100%">
                 <el-option
                   v-for="opt in voiceStyleOptions"
                   :key="opt.value"

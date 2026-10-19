@@ -18,16 +18,9 @@
     <!-- 标题 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">{{ $t("清空") }}</text>
-    </view>
-
-    <view class="chat-tools">
-      <view class="chat-modes" role="tablist">
-        <button class="chat-mode" :class="{selected:chatMode==='guide'}" :aria-pressed="chatMode==='guide'" :disabled="loading" @tap="setChatMode('guide')">{{ $t('景点问答') }}</button>
-        <button class="chat-mode" :class="{selected:chatMode==='route'}" :aria-pressed="chatMode==='route'" :disabled="loading" @tap="setChatMode('route')">{{ $t('路线规划') }}</button>
+      <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
+        <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
       </view>
-      <button v-if="chatMode==='guide'" class="question-place" :disabled="loading||qaCatalogLoading" @tap="chooseQuestionSpot">
-        <text>{{ qaSpot ? $t(qaSpot.spot_name) : $t('选择问答景点') }}</text><text aria-hidden="true">⌄</text>
-      </button>
     </view>
 
     <!-- 快捷提示 -->
@@ -44,7 +37,7 @@
     </view>
 
     <!-- 对话区 -->
-    <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="true">
+    <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim">
       <view v-if="msgs.length === 0 && !loading" class="chat-empty">
 
         <text class="ce-title">{{ $t(chatMode==='guide'?'想了解哪个景点？':'想去哪里？') }}</text>
@@ -54,7 +47,7 @@
         <view class="msg-bubble" :class="m.role">
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
           <text v-if="m.content" class="msg-text">{{ m.content }}</text>
-          <button v-if="m.recognitionEvidence" class="photo-evidence-toggle" @tap="m.showEvidence=!m.showEvidence">{{ $t(m.showEvidence?'收起识别依据':'查看识别依据（原文）') }}</button>
+          <button v-if="m.recognitionEvidence" class="photo-evidence-toggle" @tap="toggleEvidence(m)">{{ $t(m.showEvidence?'收起识别依据':'查看识别依据（原文）') }}</button>
           <text v-if="m.showEvidence&&m.recognitionEvidence" class="photo-evidence">{{ m.recognitionEvidence }}</text>
           <view v-if="m.role==='ai' && m.content" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" @tap="replayTTS(m.content,i)">
             <text>{{ $t(speakingIndex===i ? (ttsLoading ? $t("正在生成语音…") : $t("停止播报")) : $t("语音播报")) }}</text>
@@ -114,6 +107,7 @@
       <text class="rh-text">{{ $t(recordingText) }}</text>
     </view>
 
+    <view v-if="showPhotoChoices" class="photo-popover-mask" @tap="showPhotoChoices=false"></view>
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
     <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible}">
       <view v-if="pendingPhoto || recognitionError" class="photo-draft">
@@ -123,7 +117,13 @@
       </view>
       <!-- 输入栏 -->
     <view class="input-bar">
-      <button class="photo-add" :disabled="recognizing" :aria-label="$t(&quot;拍照或相册识景&quot;)" @tap="chooseScenicPhoto">＋</button>
+      <view class="photo-entry-wrap">
+        <button class="photo-add" :disabled="recognizing" :aria-label="$t(&quot;拍照或相册识景&quot;)" :aria-expanded="showPhotoChoices" @tap="chooseScenicPhoto">＋</button>
+        <view v-if="showPhotoChoices" class="photo-popover" role="menu">
+          <button class="photo-choice" @tap.stop="selectScenicSource(0)">{{ $t('拍照识景') }}</button>
+          <button class="photo-choice" @tap.stop="selectScenicSource(1)">{{ $t('从相册选择') }}</button>
+        </view>
+      </view>
       <view class="voice-btn" :class="{ active: voiceMode }" @tap="toggleVoiceMode">
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
@@ -138,8 +138,27 @@
 
     <TabBarNav v-show="!keyboardVisible" current="ai" />
     </view>
-    <NocturneSelect v-if="showPhotoChoices" :title="$t('拍照或相册识景')" :options="['拍照识景','从相册选择']" @change="selectScenicSource" @close="showPhotoChoices=false" />
     <NocturneSelect v-if="showQASpots" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" @change="selectQuestionSpot" @close="showQASpots=false" />
+
+    <!-- 问答历史记录 -->
+    <view v-if="showHistory" class="history-mask" @tap="closeHistory">
+      <view class="history-panel" @tap.stop>
+        <view class="hp-head">
+          <text class="hp-title">{{ $t('问答历史') }}</text>
+          <view class="hp-actions">
+            <text class="hp-clear" @tap.stop="clearHistoryFromPanel">{{ $t('清除历史记录') }}</text>
+            <view class="hp-close" @tap="closeHistory" :aria-label="$t('关闭')"><text>×</text></view>
+          </view>
+        </view>
+        <view class="hp-body">
+          <view v-if="!historyPairs.length" class="hp-empty">{{ $t('还没有问答记录') }}</view>
+          <view v-for="(pair, i) in historyPairs" :key="i" class="hp-item">
+            <view class="hp-q"><text class="hp-tag">Q</text><text class="hp-qtext">{{ pair.q }}</text></view>
+            <view v-if="pair.a" class="hp-a"><text class="hp-tag a">A</text><text class="hp-atext">{{ pair.a }}</text></view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -181,13 +200,18 @@ export default {
   data: function () {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
-      voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,
-      text: '', msgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
+      voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,scrollAnim:false,
+      showHistory:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
   },
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6},
+  watch:{
+    pendingPhoto:function(){this.scrollChat()},
+    recognitionError:function(){this.scrollChat()},
+    loading:function(){this.scrollChat()},
+  },
   onLoad:function(){
     this._keyboardListener=event=>this.updateKeyboardHeight(event.height)
     if(uni.onKeyboardHeightChange)uni.onKeyboardHeightChange(this._keyboardListener)
@@ -199,7 +223,17 @@ export default {
     this.stopTTS()
   },
   computed: {
-    qaSpot:function(){return this.qaSpots.find(spot=>spot.spot_id===this.qaSpotId)||null},
+    historyPairs:function(){
+      var self=this,out=[],cur=null
+      this.historyMsgs.forEach(function(m){
+        var text=m.content||''
+        if(m.image&&!text)text=self.$t('照片')
+        if(!text)return
+        if(m.role==='user'){cur={q:text,a:''};out.push(cur)}
+        else if(m.role==='ai'){if(cur&&!cur.a){cur.a=text}else{out.push({q:'',a:text})}}
+      })
+      return out.slice().reverse()
+    },
     qaOptions:function(){return this.qaSpots.map(spot=>[this.$t(spot.city),this.$t(spot.spot_name)].filter(Boolean).join(' · '))},
     totalDuration: function () {
       if(!this.recommendedPlan)return null
@@ -208,10 +242,13 @@ export default {
     },
   },
   methods: {
+    openHistory:function(){this.showHistory=true},
+    closeHistory:function(){this.showHistory=false},
+    clearHistoryFromPanel:function(){this.clearHistory();this.showHistory=false},
+    pushMsg:function(msg){this.msgs.push(msg);this.historyMsgs.push(msg);this.saveHistory()},
     storageOwner:function(){const id=uni.getStorageSync('user_id');return id?'id:'+id:uni.getStorageSync('username')?'name:'+uni.getStorageSync('username'):'guest'},
     historyKey:function(){return 'ai_chat_state:'+encodeURIComponent(this.storageOwner())},
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
-    setChatMode:function(mode){if(this.loading)return;this.chatMode=mode==='route'?'route':'guide';this.saveHistory()},
     loadQACatalog:async function(){
       if(this.qaSpots.length&&this.qaGuides.length)return
       this.qaCatalogLoading=true
@@ -222,11 +259,6 @@ export default {
         this.qaSpots=spots.data?.data?.spot_list||[]
         this.qaGuides=guides.data?.data?.guide_list||[]
       }finally{if(this.isCurrentRequest(epoch,owner))this.qaCatalogLoading=false}
-    },
-    chooseQuestionSpot:async function(){
-      if(this.loading||this.qaCatalogLoading)return
-      try{await this.loadQACatalog();if(!this.qaSpots.length)throw new Error('暂无可用景点');this.showQASpots=true}
-      catch(error){uiToast({title:error.message||'景点加载失败，请稍后重试',icon:'none'})}
     },
     selectQuestionSpot:function(event){this.qaSpotId=this.qaSpots[Number(event.detail.value)]?.spot_id||null;this.showQASpots=false;this.saveHistory()},
     sendGuideQuestion:async function(message,language,epoch,owner,contextSpotId){
@@ -268,9 +300,9 @@ export default {
       if(this.recognizing)return
       uni.hideKeyboard()
       this.recognitionError=''
-      this.showPhotoChoices=true
+      this.showPhotoChoices=!this.showPhotoChoices
     },
-    selectScenicSource:function(event){this.showPhotoChoices=false;this.openScenicSource(event.detail.value===0?'camera':'album')},
+    selectScenicSource:function(index){this.showPhotoChoices=false;this.openScenicSource(Number(index)===0?'camera':'album')},
     openScenicSource:function(source){
       const epoch=this.requestEpoch,owner=this.storageOwner()
       // #ifdef APP-PLUS
@@ -306,7 +338,7 @@ export default {
       const language=questionLanguage(caption,this.tourLanguage)
       this.pendingPhoto='';this.text='';this.recognitionError=''
       this.qaSpotId=null;this.chatMode='guide'
-      this.msgs.push({role:'user',image:path,content:caption})
+      this.pushMsg({role:'user',image:path,content:caption})
       const epoch=++this.requestEpoch,owner=this.storageOwner()
       this.recognizing=true;this.loading=true;this.scrollChat();this.saveHistory()
       try{
@@ -320,7 +352,7 @@ export default {
         let reply=prefix
         if(result.status==='candidate'&&Number.isInteger(result.spot_id)&&result.spot_id>0){
           try{
-            const question=caption||translateTour('这个景点在哪里？有哪些拍照建议？',language)
+            const question=translateTour('介绍「{spot}」的历史、典故和看点。',language,{spot:result.spot_name||''})
             const answer=await this.sendGuideQuestion(question,language,epoch,owner,result.spot_id)
             if(answer)reply+='\n\n'+answer
           }catch(error){
@@ -330,19 +362,26 @@ export default {
           }
         }
         if(!this.isCurrentRequest(epoch,owner))return
-        this.msgs.push({role:'ai',content:reply,recognition_id:result.recognition_id,recognitionEvidence:result.evidence||''})
+        this.pushMsg({role:'ai',content:reply,recognition_id:result.recognition_id,recognitionEvidence:result.evidence||''})
       }catch(error){
         if(!this.isCurrentRequest(epoch,owner))return
         const translated=translateTour(error.message||'照片上传失败，请检查网络连接',language)
-        this.msgs.push({role:'ai',content:language==='en'&&/[\u3400-\u9fff]/.test(translated)?translateTour('照片识别失败，请稍后重试或联系管理员。',language):translated})
+        this.pushMsg({role:'ai',content:language==='en'&&/[\u3400-\u9fff]/.test(translated)?translateTour('照片识别失败，请稍后重试或联系管理员。',language):translated})
         this.pendingPhoto=path;this.text=caption
       }finally{
         if(this.isCurrentRequest(epoch,owner)){this.recognizing=false;this.loading=false;this.scrollChat();this.saveHistory()}
       }
     },
-    scrollChat:function(){this.$nextTick(()=>{this.chatScrollTop+=100000})},
+    toggleEvidence:function(m){m.showEvidence=!m.showEvidence;this.scrollChat()},
+    scrollChat:function(){
+      const self=this
+      self.scrollAnim=false
+      self.$nextTick(()=>{self.chatScrollTop+=100000})
+      clearTimeout(self._scrollAnimTimer)
+      self._scrollAnimTimer=setTimeout(()=>{self.scrollAnim=true},260)
+    },
     saveHistory:function(){
-      try{uni.setStorageSync(this.historyKey(),JSON.stringify({messages:this.msgs.slice(-200),mode:this.chatMode,session:this.qaSession,spotId:this.qaSpotId,plan:this.recommendedPlan}))}catch(e){}
+      try{uni.setStorageSync(this.historyKey(),JSON.stringify({messages:this.historyMsgs.slice(-200),mode:this.chatMode,session:this.qaSession,spotId:this.qaSpotId,plan:this.recommendedPlan}))}catch(e){}
     },
     loadHistory:function(){
       this.requestEpoch++;this.historyOwner=this.storageOwner();this.loading=false;this.recognizing=false;this.qaCatalogLoading=false
@@ -350,17 +389,18 @@ export default {
       uni.removeStorageSync('ai_chat_msgs') // Old shared history has no reliable account owner.
       try{
         const raw=uni.getStorageSync(this.historyKey()),state=raw?JSON.parse(raw):{}
-        this.msgs=Array.isArray(state.messages)?state.messages.filter(item=>item&&['ai','user'].includes(item.role)&&typeof item.content==='string').slice(-200):[]
-        this.chatMode=state.mode==='route'?'route':'guide'
+        this.historyMsgs=Array.isArray(state.messages)?state.messages.filter(item=>item&&['ai','user'].includes(item.role)&&typeof item.content==='string').slice(-200):[]
+      this.msgs=[]
+        this.chatMode='guide'
         if(Number.isInteger(state.session?.session_id)&&state.session.session_id>0)this.qaSession=state.session
         this.qaSpotId=Number.isInteger(state.spotId)?state.spotId:null
         if(state.plan&&Array.isArray(state.plan.spot_ids)){this.recommendedPlan=state.plan;this.lastSpotIds=state.plan.spot_ids;this.fetchRecommendSpots(this.lastSpotIds)}
-      }catch(e){this.msgs=[]}
+      }catch(e){this.historyMsgs=[];this.msgs=[]}
     },
     clearRoutePreview:function(){this.lastSpotIds=[];this.recommendSpots=[];this.recommendedPlan=null;this.recommendLoading=false;uni.removeStorageSync('ai_spot_ids');uni.removeStorageSync('ai_route_plan')},
     clearHistory:function(){
       this.requestEpoch++;this.stopTTS();this.cancelRecord();this.loading=false;this.recognizing=false;this.transcribing=false;this.qaCatalogLoading=false
-      this.msgs=[];this.qaSession=null;this.text='';this.voiceError='';this.showPhotoChoices=false;this.showQASpots=false;this.pendingPhoto='';this.recognitionError='';this.applyingRoute=false;this.clearRoutePreview();this.saveHistory()
+      this.msgs=[];this.historyMsgs=[];this.qaSession=null;this.text='';this.voiceError='';this.showPhotoChoices=false;this.showQASpots=false;this.pendingPhoto='';this.recognitionError='';this.applyingRoute=false;this.clearRoutePreview();this.saveHistory()
       uni.removeStorageSync('ai_chat_msgs');uiToast({title:'已清除',icon:'none'})
     },
     fixImg: function (u) { if (!u) return ''; return assetUrl(u) },
@@ -397,14 +437,14 @@ export default {
       if (!msg || self.loading) return
       if(Array.from(msg).length>2000){uiToast({title:'请输入2000字以内的问题',icon:'none'});return}
       const epoch=++this.requestEpoch,owner=this.storageOwner()
-      self.msgs.push({ role: 'user', content: msg })
+      self.pushMsg({ role: 'user', content: msg })
       self.text = ''; self.loading = true; self.scrollChat()
       self.saveHistory()
       var requestLanguage = questionLanguage(msg,self.tourLanguage)
       try{
       if(self.chatMode==='guide'){
         const reply=await self.sendGuideQuestion(msg,requestLanguage,epoch,owner)
-        if(reply&&self.isCurrentRequest(epoch,owner)){self.msgs.push({role:'ai',content:reply});self.playTTS(reply,self.msgs.length-1)}
+        if(reply&&self.isCurrentRequest(epoch,owner)){self.pushMsg({role:'ai',content:reply});self.playTTS(reply,self.msgs.length-1)}
         return
       }
       self.clearRoutePreview()
@@ -417,16 +457,16 @@ export default {
         if (d && d.success && d.data) {
           var dd = d.data
           var reply = recommendationText(dd,requestLanguage)
-          self.msgs.push({ role: 'ai', content: reply })
+          self.pushMsg({ role: 'ai', content: reply })
           if (dd.spot_ids && dd.spot_ids.length) {
             self.recommendedPlan=dd
             self.lastSpotIds = dd.spot_ids
             self.fetchRecommendSpots(dd.spot_ids)
           }
           self.playTTS(reply,self.msgs.length-1)
-        } else { self.msgs.push({ role: 'ai', content: self.$t(d && d.message || '没有找到匹配路线，请调整需求。') }) }
+        } else { self.pushMsg({ role: 'ai', content: self.$t(d && d.message || '没有找到匹配路线，请调整需求。') }) }
       }catch(error){
-        if(self.isCurrentRequest(epoch,owner))self.msgs.push({role:'ai',content:self.$t(error.message||error.errMsg||'无法连接推荐服务，请检查网络。')})
+        if(self.isCurrentRequest(epoch,owner))self.pushMsg({role:'ai',content:self.$t(error.message||error.errMsg||'无法连接推荐服务，请检查网络。')})
       }finally{if(self.isCurrentRequest(epoch,owner)){self.loading=false;self.scrollChat();self.saveHistory()}}
     },
     applyRecommend: function () {
@@ -525,14 +565,21 @@ export default {
 
 <style scoped>
 .photo-evidence-toggle{margin:12rpx 0 0;padding:8rpx 0;background:transparent;color:#625a75;font-size:22rpx;line-height:1.5;text-align:left}.photo-evidence-toggle::after{border:0}.photo-evidence{display:block;margin-top:8rpx;font-size:23rpx;line-height:1.7;color:#625a75}
-.chat-tools{position:relative;z-index:1;padding:0 24rpx 12rpx;display:flex;gap:12rpx;flex-wrap:wrap;align-items:center;flex-shrink:0}
-.chat-modes{display:flex;gap:4px;padding:4px;background:#eeeafa;border-radius:12px}.chat-mode{margin:0;padding:8px 12px;border-radius:9px;background:transparent;font-size:14px;line-height:1.5;color:#625a75}.chat-mode::after,.question-place::after{border:0}.chat-mode.selected{background:white;color:#5145cd;font-weight:700;box-shadow:0 2px 6px #30285e10}.question-place{display:flex;align-items:center;gap:10px;max-width:100%;margin:0;padding:9px 12px;border-radius:12px;background:white;border:1px solid #e8e2f5;color:#5145cd;font-size:14px;line-height:1.5}.question-place text:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .photo-draft{display:flex;align-items:center;gap:20rpx;padding:16rpx 24rpx;flex-wrap:wrap;border-top:1rpx solid var(--ng-border)}
 .draft-thumbnail{position:relative;width:112rpx;height:112rpx}.draft-thumbnail image{width:100%;height:100%;border-radius:12rpx}
 .draft-remove{position:absolute;top:-10rpx;right:-10rpx;display:flex;align-items:center;justify-content:center;width:36rpx;height:36rpx;margin:0;padding:0;border-radius:50%;background:#625a75;color:#fff;font-size:28rpx;line-height:1}.draft-remove::after{border:0}
 .draft-note{font-size:23rpx;color:#817994}.chat-photo{display:block;width:320rpx;max-width:100%;border-radius:14rpx;margin-bottom:10rpx}
 
 .photo-entry{position:relative;padding:12rpx 24rpx;z-index:1}
+.photo-entry-wrap{position:relative;flex-shrink:0;display:flex;align-items:center}
+.photo-popover{position:absolute;left:0;bottom:calc(100% + 14rpx);width:296rpx;padding:8rpx;background:var(--ng-surface,#fff);border-radius:26rpx;box-shadow:0 20rpx 54rpx rgba(48,40,94,.2),0 2rpx 8rpx rgba(48,40,94,.08);z-index:1200;transform-origin:left bottom;animation:photoPopIn 340ms cubic-bezier(.18,1.35,.3,1) both;overflow:hidden}
+.photo-choice{display:flex;align-items:center;width:100%;margin:0;padding:24rpx 26rpx;background:transparent;border-radius:18rpx;font-size:29rpx;line-height:1.4;color:#3f3a55;text-align:left;box-shadow:none}
+.photo-choice::after{border:0}
+.photo-choice:active{background:#f3effb}
+.photo-choice + .photo-choice{border-top:1rpx solid var(--ng-border,#eee)}
+.photo-popover-mask{position:fixed;inset:0;z-index:997;background:rgba(20,24,40,.06);animation:photoMaskIn 180ms ease both}
+@keyframes photoPopIn{0%{opacity:0;transform:translateY(26rpx) scale(.82)}55%{opacity:1;transform:translateY(-6rpx) scale(1.04)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes photoMaskIn{from{opacity:0}to{opacity:1}}
 .photo-add{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:64rpx;height:64rpx;margin:0;padding:0;line-height:1;font-family:Arial,sans-serif;font-size:44rpx;font-weight:400;color:#6840c2;background:#f1eaff;border-radius:50%}.photo-add::after{border:0}.photo-add[disabled]{opacity:.45}
 .bottom-fixed.keyboard-open{padding-bottom:0}.keyboard-open .input-bar{padding-bottom:10rpx}
 .input-bar .msg-input{min-width:0}.input-bar .voice-btn{flex-shrink:0}
@@ -548,9 +595,31 @@ export default {
 .ink-mt-2 { bottom:35%; height:130rpx; opacity:0.02; transform:scaleX(1.5) translateX(-10%); }
 .ink-circle { position:absolute; top:20%; right:-100rpx; width:360rpx; height:360rpx; border-radius:50%; border:1rpx solid rgba(99,102,241,0.25); }
 
-.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;padding:16rpx 24rpx}
+.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;padding:12rpx 24rpx;min-height:88rpx;box-sizing:border-box}
+.nav-actions{display:flex;align-items:center;gap:16rpx;margin-left:auto}
 .nav-title { font-size:44rpx; font-weight:900; color:var(--ng-text); letter-spacing:8rpx; font-family:var(--app-font-family); }
-.nav-clear{position:absolute;right:28rpx;font-size:24rpx;color:var(--ng-secondary);padding:6rpx 14rpx;border-radius:8rpx;background:rgba(99,102,241,0.06)}
+.nav-clear{position:absolute;left:28rpx;font-size:24rpx;color:var(--ng-secondary);padding:6rpx 14rpx;border-radius:8rpx;background:rgba(99,102,241,0.06)}
+.nav-history{position:relative;flex-shrink:0;width:68rpx;height:68rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.82);border:1rpx solid var(--ng-border);box-shadow:0 4rpx 14rpx rgba(99,102,241,0.14)}
+.hist-clock{position:relative;width:34rpx;height:34rpx;border:3rpx solid var(--ng-secondary);border-radius:50%;box-sizing:border-box}
+.hc-hour{position:absolute;left:50%;top:50%;width:2.5rpx;height:9rpx;background:var(--ng-secondary);border-radius:2rpx;transform:translate(-50%,-100%)}
+.hc-minute{position:absolute;left:50%;top:50%;width:9rpx;height:2.5rpx;background:var(--ng-secondary);border-radius:2rpx;transform-origin:0 50%;transform:translateY(-50%) rotate(32deg)}
+.history-mask{position:fixed!important;inset:0!important;z-index:9500!important;background:rgba(24,20,40,0.38);display:flex;align-items:center;justify-content:center;padding:0 24rpx}
+.history-panel{width:86vw;max-width:660rpx;max-height:74vh;background:var(--ng-surface);border-radius:34rpx;box-shadow:0 30rpx 80rpx rgba(40,30,70,0.28);display:block;overflow:hidden;transform-origin:top right;animation:historyPop .42s cubic-bezier(.18,1.3,.3,1)}
+@keyframes historyPop{0%{transform:translate(40rpx,-60rpx) scale(0.18);opacity:0}55%{transform:translate(0,0) scale(1.04);opacity:1}100%{transform:translate(0,0) scale(1)}}
+.hp-head{display:flex;align-items:center;justify-content:space-between;padding:26rpx 28rpx 16rpx}
+.hp-actions{display:flex;align-items:center;gap:14rpx}
+.hp-clear{font-size:24rpx;color:var(--ng-secondary);padding:8rpx 18rpx;border-radius:12rpx;background:rgba(99,102,241,0.08)}
+.hp-title{font-size:30rpx;font-weight:700;color:var(--ng-text)}
+.hp-close{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.08);font-size:34rpx;color:var(--ng-secondary)}
+.hp-body{max-height:calc(74vh - 110rpx);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:auto;touch-action:pan-y;padding:0 24rpx 24rpx;box-sizing:border-box}
+.hp-empty{padding:60rpx 0;text-align:center;color:var(--ng-secondary);font-size:26rpx}
+.hp-item{margin-top:18rpx;padding:18rpx;border-radius:20rpx;background:rgba(99,102,241,0.05);border:1rpx solid rgba(99,102,241,0.12)}
+.hp-q{display:flex;gap:12rpx;align-items:flex-start}
+.hp-a{display:flex;gap:12rpx;align-items:flex-start;margin-top:12rpx;padding-top:12rpx;border-top:1rpx dashed var(--ng-border)}
+.hp-tag{flex-shrink:0;width:34rpx;height:34rpx;border-radius:10rpx;background:rgba(99,102,241,0.18);color:var(--ng-text);font-size:20rpx;font-weight:700;display:flex;align-items:center;justify-content:center}
+.hp-tag.a{background:rgba(59,91,255,0.12);color:var(--ng-secondary)}
+.hp-qtext,.hp-atext{font-size:24rpx;line-height:1.6;color:var(--ng-text);word-break:break-word}
+.hp-atext{color:var(--ng-secondary)}
 
 .quick-hints { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:10rpx; padding:8rpx 24rpx 16rpx; }
 .qh-chip { padding:12rpx 20rpx; border-radius:22rpx; background:rgba(99,102,241,0.12); border:1rpx solid rgba(99,102,241,0.25); font-size:22rpx; color:var(--ng-secondary); }

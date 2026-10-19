@@ -44,10 +44,10 @@ export function questionLanguage(message, appLanguage) {
 
 export function photoIdentificationText(result, language) {
   if(result.status!=='candidate'||!Number.isInteger(result.spot_id)||result.spot_id<=0)
-    return translateTour('暂时无法确认照片中的景点。请补拍全景、标志建筑或名称标识，或手动选择景点继续提问。',language)
+    return translateTour('照片里没有匹配到已收录的景点，请补拍全景、标志建筑或名称标识，或手动选择景点继续提问。',language)
   let name=translateTour(result.spot_name||'景点',language)
   if(language==='en'&&/[\u3400-\u9fff]/.test(name))name='the candidate place'
-  return translateTour('照片可能是「{spot}」。识别结果尚未确认，请以现场标识为准。',language,{spot:name})
+  return translateTour('已识别为「{spot}」。',language,{spot:name})
 }
 
 export function findQuestionSpot(message, spots, selectedId) {

@@ -32,7 +32,6 @@ with Session(DB_ENGINE) as db:
         guide.poster_image = path
         guide.voice_style = voice
         guide.character = '专业、亲切，提供景区历史文化讲解'
-        guide.live2d_model_path = ''
         guide.base_mp4_path = ''
         guide.delete = False
         db.add(guide)

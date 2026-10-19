@@ -22,14 +22,14 @@ ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {
     'scenic_spot_info': 'spot_id spot_name category tags location city latitude longitude trigger_radius visit_duration best_season description history_detail photo_tips service_facilities tour_tips image_path instruction upload_date delete'.split(),
     'tour_route': 'route_id name theme city estimated_time_minutes cover_image cover_generated description delete'.split(),
-    'digital_guide_info': 'guide_id name character avatar voice_style voice_speed outfit_images tts_weight_tag tts_reference_sentence tts_reference_audio poster_image base_mp4_path base_video_metadata model3d_path render_mode is_enabled live2d_model_path delete'.split(),
+    'digital_guide_info': 'guide_id name character avatar voice_style voice_speed outfit_images tts_weight_tag tts_reference_sentence tts_reference_audio poster_image base_mp4_path base_video_metadata render_mode is_enabled delete'.split(),
     'knowledge_document': 'doc_id title file_path file_type chunk_count content_hash upload_time status'.split(),
     'tour_route_spot': 'id route_id spot_id spot_order'.split(),
 }
 ASSETS = {
     'scenic_spot_info': ['image_path', 'instruction'],
     'tour_route': ['cover_image'],
-    'digital_guide_info': ['avatar', 'poster_image', 'base_mp4_path', 'model3d_path', 'tts_reference_audio'],
+    'digital_guide_info': ['avatar', 'poster_image', 'base_mp4_path', 'tts_reference_audio'],
     'knowledge_document': ['file_path'],
 }
 
@@ -97,15 +97,6 @@ def export_pack(root, engine, output):
                 source = local_asset(row.get(field, ''), root)
                 if source is not None:
                     row[field] = add_file(source)
-                    if field == 'model3d_path':
-                        # Preserve the native model, buffers, textures and metadata together.
-                        for dependency in source.parent.rglob('*'):
-                            if dependency.is_file():
-                                if dependency.suffix.lower() not in ('.gltf', '.glb', '.bin', '.json', '.png', '.jpg', '.jpeg', '.webp', '.ktx2'):
-                                    raise ValueError('Unexpected file in model asset directory')
-                                if not dependency.resolve().is_relative_to((root / 'static').resolve()):
-                                    raise ValueError('Model dependency escapes static directory')
-                                add_file(dependency)
             if name == 'digital_guide_info':
                 row['is_enabled'] = False
                 row['base_video_metadata'] = ''  # Revalidate on the receiving machine.
@@ -147,8 +138,7 @@ def export_pack(root, engine, output):
         f"{counts['digital_guide_info']} 个数字人配置、{counts['knowledge_document']} 份知识文档，"
         f"{len(sources)} 个素材文件。\n\n"
         '此包是本机未删除内容的快照，包括已下架的数字人。所有数字人导入后默认下架；'
-        '星云角色需绑定接收方自己的应用，原生 3D 角色附带本地模型及依赖文件。'
-        'Live2D 素材沿用仓库 frontend/public/live2d 目录。\n\n'
+        '星云角色需绑定接收方自己的应用。\n\n'
         '不含用户账号、密码、游客会话、星云应用绑定、平台密钥或数据库备份。'
         '知识文档需在接收方重新建立索引。原始景点 ID 是导入映射依据，导入后的 ID 可能变化。\n\n'
         '解压后先按项目说明配置 .env、初始化数据库和管理员，再执行：\n\n'

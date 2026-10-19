@@ -3,12 +3,12 @@
     <!-- #ifdef APP-PLUS -->
     <view class="app-status-bar-shield" aria-hidden="true"></view>
     <!-- #endif -->
-    <page-meta :page-style="showMapPreview||showItinerary||itineraryDragging||tourButtonDragging ? 'overflow:hidden;overscroll-behavior:none' : 'overflow:auto'" />
     <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
 
     <view class="ink-bg"><view class="ink-mountain ink-mt-1"></view><view class="ink-mountain ink-mt-2"></view></view>
 
     <!-- 毛体标题 -->
+    <scroll-view scroll-y class="page-scroll" :style="viewportH?{height:viewportH+'px'}:null" :show-scrollbar="false">
     <view class="nav header-spacer" aria-hidden="true" :style="{height:statusH+'px'}"></view>
     <!-- 双按钮切换 -->
     <view class="top-tabs" :class="{'planning-ink-ready':planningInkReady}">
@@ -88,9 +88,8 @@
           <view class="guide-grid" v-if="guides.length">
             <view v-for="g in guides" :key="g.guide_id" class="guide-card" :class="{on:pickedGuide&&pickedGuide.guide_id===g.guide_id}" @tap="pickedGuide=g">
               <image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" @error="imageFailed(g)" />
-              <view v-else-if="g.model3dUrl" class="gc-empty">{{ t("暂无预览") }}</view>
               <view v-else class="gc-empty">{{ g.previewLoading ? t('正在加载形象…') : t('形象未配置') }}</view>
-              <view v-if="g.model3dUrl||guideImage(g)||g.base_mp4_path" class="gc-preview" @tap.stop="previewGuide(g)">{{ t("预览") }}</view>
+              <view v-if="guideImage(g)||g.base_mp4_path" class="gc-preview" @tap.stop="previewGuide(g)">{{ t("预览") }}</view>
               <view class="gc-name">{{ guideName(g) }}{{ pickedGuide&&pickedGuide.guide_id===g.guide_id ? t(' · 已选择') : '' }}</view>
             </view>
           </view>
@@ -102,6 +101,8 @@
 
       <view style="height:120rpx"></view>
     </view>
+    <view class="page-bottom-space"></view>
+    </scroll-view>
 
     <view v-if="previewingGuide" class="drawer-overlay" @tap="previewingGuide=null">
       <view class="drawer-mask"></view>
@@ -215,7 +216,7 @@ export default {
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,statusH:20,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
+  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
@@ -234,7 +235,7 @@ export default {
     routeTotalTime:function(){return this.routeDetail&&this.routeDetail.estimated_time_minutes||null},
 
   },
-  mounted:function(){var info=uni.getSystemInfoSync();this.statusH=info.statusBarHeight||20},
+  mounted:function(){var info=uni.getSystemInfoSync();this.statusH=info.statusBarHeight||20;this.viewportH=info.windowHeight||800},
   methods:{
     catLabel: function (c) { var m = { historical: '历史', natural: '自然', cultural: '文化' }; return this.t(m[c] || c) },
     guideName: function (g) { if (!g) return ""; return (this.tourLanguage === "en" && g.name_en) ? g.name_en : g.name },
@@ -247,9 +248,8 @@ export default {
     previewGuide:function(g){this.previewModelStatus=this.guideImage(g)?'正在加载形象图片':'暂无预览';this.previewingGuide=g},
     previewModelReady:function(){this.previewModelStatus=''},
     previewImageError:function(){this.previewModelStatus='形象图片加载失败，请关闭预览后重试'},
-    previewModelError:function(e){this.previewModelStatus=e.detail&&e.detail.message||'3D模型加载失败，请重试';uni.showToast({title:e.detail&&e.detail.message||'3D模型加载失败，请重试',icon:'none'})},
     previewVideoError:function(){uni.showToast({title:'形象视频播放失败，请检查素材',icon:'none'})},
-    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.model3dUrl='';g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.model3dUrl=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?c.threeD.modelUrl:'';g.previewUrl=c.cartoon&&c.cartoon.previewUrl||'';g.previewMessage=c.preferredMode==='3d'&&c.threeD&&c.threeD.ready?'3D · '+c.threeD.name:c.realistic.ready?c.realistic.message:(c.cartoon.ready?c.cartoon.message:c.realistic.message+'；'+c.cartoon.message)}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
+    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.previewUrl='';g.previewMessage=c.realistic.message}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
     goTab:function(p){uni.reLaunch({url:p})},
     isPicked:function(id){return!!this.pickedIds[id]},
     toggleSpot:function(id){if(this.starting||this.recommending)return;var order=this.selectedIds.slice();if(!this.pickedIds[id]&&order.length>=20){uni.showToast({title:this.t('路线最多支持20站，请先精简行程'),icon:'none'});return}var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;this.orderedIds=order.includes(id)?order.filter(x=>x!==id):order.concat(id);var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
@@ -347,7 +347,7 @@ export default {
         s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)})
         var ordered=prioritizeSummerPalace(s.spots,s.routes);s.spots=ordered.spots;s.routes=ordered.routes
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}
-        s.guides=s.guides.map(function(g){return Object.assign({},g,{model3dUrl:(g.model3d_url||'').replace('.gltf','.glb'),previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
+        s.guides=s.guides.map(function(g){return Object.assign({},g,{previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
         if(!gr||!sr||!rr)s.error='部分数据加载失败，请重试'
         // 进入导览页不自动选景点：上一次 AI 推荐留下的暂存直接丢弃。
         s.restoreAISelection()
@@ -471,6 +471,9 @@ export default {
 .empty-hint{font-size:24rpx;color:var(--ng-secondary);line-height:1.7}.route-cover-note{font-size:20.7rpx;color:var(--ng-secondary)}.scenic-fade{position:relative;height:360rpx;overflow:hidden}.scenic-clear,.scenic-blur{position:absolute;width:100%;height:100%;top:0;left:0}.scenic-blur{filter:blur(10px);mask-image:linear-gradient(to bottom,transparent 30%,black 70%,transparent 100%)}.scenic-veil{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 35%,var(--ng-surface) 60%,var(--ng-surface) 100%)}
 
 .route-detail-background{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.page.aurora-page{height:100vh;overflow:hidden;padding-bottom:0!important}
+.page-scroll{display:block;height:100vh;box-sizing:border-box}
+.page-bottom-space{height:calc(110px + env(safe-area-inset-bottom))}
 .route-detail-photo{position:absolute;inset:0;width:100%;height:100%;opacity:1;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%);mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%)}
 .route-detail-blur{filter:blur(12px);transform:scale(1.06);-webkit-mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%);mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%)}
 .route-detail-wash{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.22) 0%,rgba(255,255,255,.38) 28%,rgba(255,255,255,.76) 70%,#fff 100%)}

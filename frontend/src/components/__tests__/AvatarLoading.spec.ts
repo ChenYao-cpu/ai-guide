@@ -7,7 +7,6 @@ import DigitalAvatarPlayer from '../DigitalAvatarPlayer.vue'
 const http = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('@/api/base', () => ({ request_handler: http }))
 vi.mock('@/api/xingyunTour', () => ({ avatarHeaders: () => ({}) }))
-vi.mock('../TourAvatar3D.vue', () => ({ default: { render: () => null } }))
 let wrapper: VueWrapper | undefined
 let callbacks: Record<string, any>
 let download: Record<string, any>
@@ -92,7 +91,7 @@ describe('数字人加载呈现', () => {
     await flushPromises()
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.find('.avatar-loading').text()).toBe('数字人正在加载中')
-    resolve({ data: { data: { preferredMode: 'xingyun', realistic: { ready: false }, cartoon: { ready: false } } } })
+    resolve({ data: { data: { preferredMode: 'xingyun', realistic: { ready: false } } } })
     await flushPromises()
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.find('.avatar-loading').exists()).toBe(false)
