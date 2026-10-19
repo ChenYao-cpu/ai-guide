@@ -1,9 +1,11 @@
+import { lzxScenicInterceptor } from './common/scenic-images.js'
 import App from './App'
 import { tabMotionMixin } from './common/tab-motion.js'
 import { createSSRApp } from 'vue'
 import { appLanguageMixin, syncAppLanguage, tApp } from './common/app-language.js'
 
 export function createApp() {
+  uni.addInterceptor('request', lzxScenicInterceptor)
   const app = createSSRApp(App)
   syncAppLanguage()
   app.mixin(appLanguageMixin)

@@ -1,7 +1,7 @@
 // Real Leaflet/SVG renderer; only base-map images are simulated. No phone claim.
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict')
 const {chromium}=require('playwright-core')
-const root=path.resolve(__dirname,'..'),version=process.env.APP_QA_VERSION||'1.2.7',out=path.join(root,'unpackage/main-d31183c-'+version+'/overlap-results')
+const root=path.resolve(__dirname,'..'),version=process.env.APP_QA_VERSION||'1.3.0',out=path.join(root,'unpackage/main-9ec7dec-'+version+'/overlap-results')
 fs.mkdirSync(out,{recursive:true})
 const html=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}#map{width:390px;height:340px}</style><div id="map"></div><script type="module">
 import {createRouteMap,loadRouteLibrary} from '/common/route-map-runtime.js';

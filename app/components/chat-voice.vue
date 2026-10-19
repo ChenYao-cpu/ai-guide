@@ -8,7 +8,7 @@ export default {
 }
 </script>
 <script module="voice" lang="renderjs">
-import { loadXingyunSdk } from '../common/xingyun-sdk.js'
+import {loadXingyunSdk} from '../common/xingyun-sdk.js'
 let avatar=null,generation=0,timer=null
 function release(){generation++;clearTimeout(timer);try{if(avatar)avatar.destroy()}catch(e){}avatar=null}
 export default {

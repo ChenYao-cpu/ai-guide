@@ -3,7 +3,7 @@
 export default {props:{payload:{type:Object,default:()=>({})}},methods:{runtimeEvent(event){this.$emit('state',event)}}}
 </script>
 <script module="runtime" lang="renderjs">
-import { loadXingyunSdk } from '../common/xingyun-sdk.js'
+import {loadXingyunSdk} from '../common/xingyun-sdk.js'
 let avatar=null,generation=0,timer=null,ready=false,gateway='',pending='',ownerRef=null
 function release(){generation++;clearTimeout(timer);ready=false;gateway='';pending='';const previous=avatar;avatar=null;try{return Promise.resolve(previous&&previous.destroy()).catch(()=>{})}catch(e){return Promise.resolve()}}
 export default {
@@ -60,8 +60,7 @@ export default {
 <style scoped>
 .xingyun-stage{position:absolute;inset:0;z-index:1;overflow:hidden;border-radius:24rpx;background:transparent}
 #tour-xingyun-avatar{position:relative;width:100%;height:100%;transform:none}
-/* The SDK sets intrinsic width/height on its native DOM canvas. Select those
-   attributes: uni-app rewrites a canvas type selector to uni-canvas, which
-   cannot match the element created by the SDK. Contain the full source frame. */
+/* The SDK creates a native canvas with intrinsic dimensions. Match those
+   attributes because uni-app rewrites a canvas selector to uni-canvas. */
 #tour-xingyun-avatar :deep([width][height]){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;transform:none!important;object-fit:contain!important;object-position:50% 50%!important}
 </style>

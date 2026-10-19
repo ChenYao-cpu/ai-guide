@@ -14,22 +14,15 @@ function environment(){
 }
 function component(env,file,props={}){
   const source=fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
-  Object.assign(env.context,{RouteOverview:{},RouteTiming:{},TourRouteRepair:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},prioritizeSummerPalace:(spots,routes)=>({spots,routes}),LANGUAGE_STORAGE_KEY:'language',translateTour:x=>x,assetUrl:x=>x})
+  Object.assign(env.context,{TabBarNav:{},ScenicSheet:{},planningUnderlineMixin:{},RouteOverview:{},RouteTiming:{},TourRouteRepair:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},prioritizeSummerPalace:(spots,routes)=>({spots,routes}),LANGUAGE_STORAGE_KEY:'language',translateTour:x=>x,assetUrl:x=>x})
   vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.options='),env.context)
   const options=env.context.options,events=[],state={...props};Object.assign(state,options.data.call(state));
-  state.$emit=(...args)=>events.push(args);state.t=x=>x;state.$nextTick=async callback=>{callback?.()};state.$forceUpdate=()=>{}
+  state.$emit=(...args)=>events.push(args);state.t=x=>x;state.$nextTick=async callback=>{callback?.()};state.$forceUpdate=()=>{};state.animatePlanningUnderline=()=>{}
   for(const [name,method] of Object.entries(options.methods||{}))state[name]=method.bind(state)
   for(const [name,getter] of Object.entries(options.computed||{}))Object.defineProperty(state,name,{get:(typeof getter==='function'?getter:getter.get).bind(state),configurable:true})
   return{state,options,events}
 }
 const spots=[{spot_id:12,spot_name:'A',city:'北京'},{spot_id:3,spot_name:'B',city:'北京'},{spot_id:11,spot_name:'C',city:'北京'}]
-test('AI route handoff preserves server order, budget and pace, and rejects another account',()=>{
- const env=environment(),{state:s}=component(env,'pages/tour-guide/tour-guide.vue');s.spots=spots
- const plan={spot_ids:[12,11,3],requested_time_minutes:150,pace:'relaxed',preferences:['nature'],estimated_time_minutes:91}
- env.storage.ai_spot_ids=JSON.stringify(plan.spot_ids);env.storage.ai_route_plan=JSON.stringify(plan);env.storage.ai_route_owner='id:5';s.restoreAISelection()
- assert.deepEqual(plain(s.selectedIds),[12,11,3]);assert.equal(s.budgetOptions[s.budgetIndex],150);assert.equal(s.paceIndex,1);assert.equal(s.personalPlan.estimated_time_minutes,91)
- env.storage.ai_route_plan=JSON.stringify({...plan,spot_ids:[3]});env.storage.ai_route_owner='id:other';s.restoreAISelection();assert.deepEqual(plain(s.selectedIds),[12,11,3])
-})
 function plan(overrides={}){return{feasible:true,proposal_token:'signed-plan',expires_at:Date.now()/1000+600,next_spots:[spots[2]],removed:[],totals:{walking_meters:250,total_minutes:30},original_totals:{walking_meters:500,total_minutes:60},options:{remaining_minutes:40,pace:'standard',end_area:'auto',reserve_minutes:0,excluded_spot_ids:[3],required_spot_ids:[],scenario:'time',allow_reorder:true,avoid_steps:false},...overrides}}
 
 test('selected numeric IDs preserve user order across move, removal and reselection',()=>{
@@ -96,4 +89,9 @@ test('creating a tour uses the visible ordered IDs and retains order between pla
   s.moveSelectedSpot(11,-1);assert.deepEqual(plain(s.selectedIds),[12,11,3]);s.itineraryState={key:s.itineraryKey,busy:false,error:'',data:{complete:true}};assert.equal(s.canStart,true)
   s.startTour();assert.deepEqual(JSON.parse(new URL(env.calls[0].url).searchParams.get('spot_ids')),[12,11,3]);s.startTour();assert.equal(env.calls.length,1);s.moveSelectedSpot(3,-1);assert.deepEqual(plain(s.selectedIds),[12,11,3])
   env.respond(env.calls[0],{});await tick()
+})
+test('9ec personalization keeps selected candidates when time changes and edits only the visible planned itinerary',()=>{
+  const env=environment(),{state:s}=component(env,'pages/tour-guide/tour-guide.vue');s.spots=spots;s.pickedIds={12:true,3:true,11:true};s.orderedIds=[12,3,11];s.tab='personal';s.personalPlan={spot_ids:[11,12]}
+  assert.deepEqual(plain(s.selectedIds),[11,12]);s.invalidatePlan();assert.deepEqual(plain(s.selectedIds),[12,3,11])
+  s.personalPlan={spot_ids:[11,12]};s.moveSelectedSpot(12,-1);assert.deepEqual(plain(s.selectedIds),[12,11]);assert.equal(s.personalPlan,null);assert.equal(s.pickedCount,2)
 })

@@ -2,7 +2,7 @@
 // canvas content only: no real avatar session or Android device is claimed.
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict')
 const {chromium}=require('playwright-core')
-const root=path.resolve(__dirname,'..'),version=process.env.APP_QA_VERSION||'1.2.8',out=path.join(root,'unpackage/main-d31183c-'+version+'/avatar-layout-results')
+const root=path.resolve(__dirname,'..'),version=process.env.APP_QA_VERSION||'1.3.2',out=path.join(root,'unpackage/main-9ec7dec-'+version+'/avatar-layout-results')
 fs.mkdirSync(out,{recursive:true})
 const component=fs.readFileSync(path.join(root,'components/tour-xingyun.vue'),'utf8')
 let css=component.match(/<style scoped>([\s\S]*?)<\/style>/)[1].replace(/:deep\(([^)]+)\)/g,'$1'),scope=''

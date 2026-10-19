@@ -21,7 +21,7 @@ function renderer(){
 test('all road bends and stops determine padded bounds; choosing another leg preserves manual zoom',async()=>{
   const h=renderer();await h.controller.update(h.payload)
   assert.equal(h.fits.length,1);assert.equal(h.fits[0].bounds.length,3);assert.equal(h.fits[0].bounds[1][0],40.07)
-  assert.deepEqual(Array.from(h.fits[0].options.padding),[28,28]);assert.equal(h.fits[0].options.maxZoom,17)
+  assert.deepEqual(Array.from(h.fits[0].options.padding),[24,24]);assert.equal(h.fits[0].options.maxZoom,18)
   await h.controller.update({...h.payload,activeLeg:1});assert.equal(h.fits.length,1)
   await h.controller.update({...h.payload,fitCounter:1});assert.equal(h.fits.length,2)
 })

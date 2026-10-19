@@ -173,8 +173,8 @@ export default {
   data: function() {
     return {
 
-      showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
-      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown: 3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
+      showEndConfirm: false,showRouteInfo:false,repairOpen:false,repairOpening:false,repairPrompt:'',routeOverview:null,repairInitial:{},liveCurrentId:0,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
+      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown:3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
       guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
       voiceMuted: false,
@@ -330,9 +330,9 @@ export default {
       if (!t) return ''
       try { return new Date(t).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) } catch(e) { return '' }
     },
-    prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
-    nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
-    jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false },
+    prevSpot: function(){ if(!this.repairOpen&&!this.repairOpening&&this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
+    nextSpot: function(){ if(!this.repairOpen&&!this.repairOpening&&this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
+    jumpSpot: function(i){ if(i===this.spotIdx||this.loading||this.repairOpen||this.repairOpening) return; this.spotIdx=i; this.mediaExpanded=false },
     showNextProgress: function(){ var n=this.spotCards.length; var k=Math.max(3,this.progressShown); if(k>=n) return; this.progressShown = Math.min(k+1,n) },
     onProgressLastTap: function(i){ var n=this.spotCards.length; if(n<=3) return; if(this.progressHasMore) return; if(i!==this.progressSpots.length-1) return; this.progressShown = 3 },
     send: function(msg) {
@@ -421,7 +421,7 @@ export default {
           if(!selectedIds.length&&data.route_info)selectedIds=data.route_info.spot_ids||[]
           const update=function(spots){
             if(version!==self._liveVersion||self.leavingTour)return false
-            var viewed=self.spotCards[self.spotIdx]
+            spots=spots.filter(spot=>isBeijingCity(spot.city));var viewed=self.spotCards[self.spotIdx]
             self.spotCards=selectedIds.map(id=>spots.find(spot=>spot.spot_id===id)).filter(Boolean)
             var activeId=preferServerCurrent?self.liveCurrentId:(viewed?.spot_id||self.liveCurrentId)
             var index=self.spotCards.findIndex(spot=>spot.spot_id===activeId);self.spotIdx=index>=0?index:0

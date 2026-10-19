@@ -36,7 +36,7 @@ export function createRouteMap(element, report = () => {}, win = window, doc = d
     if (!map || !payload || disposed || !element.isConnected) return
     const points = payload.data.points.map(p => [p.latitude, p.longitude])
     map.invalidateSize({ pan: false })
-    if (points.length) map.fitBounds(win.L.latLngBounds(points), { padding: [28, 28], maxZoom: 17, animate: false })
+    if (points.length) map.fitBounds(win.L.latLngBounds(points), { padding: [24, 24], maxZoom: 18, animate: false })
   }
   const destroy = () => {
     if (disposed) return
@@ -56,7 +56,7 @@ export function createRouteMap(element, report = () => {}, win = window, doc = d
       const L = await loadRouteLibrary(win, doc, next.assetBase)
       if (disposed || own !== version || !element.isConnected) return
       if (!map) {
-        map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, zoomAnimation: false })
+        map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, zoomAnimation: false, zoomSnap: 0.1, zoomDelta: 0.5 })
         L.control.zoom({ position: 'topright', zoomInTitle: next.zoomIn, zoomOutTitle: next.zoomOut }).addTo(map)
         tiles = L.tileLayer(SCENIC_TILES, { maxZoom: 18 }).addTo(map)
         tiles.on('tileload', () => { tileLoaded++; if (!disposed && tileLoaded === 1) report({ state: 'ready' }) })
