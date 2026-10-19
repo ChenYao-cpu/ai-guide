@@ -25,7 +25,7 @@ function loaderHarness(){
   return {nodes,window:runtimeWindow,load:()=>context.load(runtimeWindow,document)}
 }
 
-test('tour and voice share one packaged SDK load instead of using the remote latest',async()=>{
+test('legacy packaged loader deduplicates its script load',async()=>{
   const h=loaderHarness(),first=h.load(),second=h.load()
   assert.equal(first,second);assert.equal(h.nodes.length,1)
   assert.equal(h.nodes[0].src,'./static/sdk/xmov-avatar-2.4.1-compatible.js')
@@ -44,7 +44,7 @@ test('SDK load failure can be retried and an empty script is not treated as succ
 })
 
 for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue','voice']]){
-  test(file+' initializes the pinned SDK with hardware decoding and surfaces failures',async()=>{
+  test(file+' initializes the original API-provided SDK and surfaces failures',async()=>{
     const source=fs.readFileSync(path.join(root,'components',file),'utf8').match(new RegExp('<script module="'+moduleName+'" lang="renderjs">([\\s\\S]*?)<\\/script>'))[1]
     const instances=[],events=[]
     const context={loadXingyunSdk:async()=>{},window:{XmovAvatar:class{
@@ -56,9 +56,21 @@ for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue'
     vm.runInContext(source.replace(/^import .*$/m,'').replace('export default','globalThis.component='),context)
     const owner={callMethod:(method,event)=>events.push(event)}
     await context.component.methods.apply({command:'connect',id:1,gateway:'http://local/session',accessToken:'test',text:moduleName==='voice'?'test speech':'',token:'test'},null,owner)
-    assert.equal(instances.length,1);assert.equal(instances[0].options.hardwareAcceleration,'prefer-hardware')
+    assert.equal(instances.length,1);assert.equal(instances[0].options.hardwareAcceleration,undefined)
     instances[0].options.onMessage({code:1234,message:'Decoder unavailable'})
     assert.equal(events.at(-1).state,'error');assert.match(events.at(-1).message,/Decoder unavailable/)
     context.component.beforeUnmount()
   })
 }
+
+ test('tour preserves cloud canvas framing and character transforms',()=>{
+ const source=fs.readFileSync(path.join(root,'components/tour-xingyun.vue'),'utf8');
+ assert.ok(!source.includes(':deep([width][height])'));
+ assert.ok(!/transform:\s*none!important/.test(source));
+ });
+
+test('tour restores old project framing without per-frame logging',()=>{
+const source=fs.readFileSync(path.join(root,'components/tour-xingyun.vue'),'utf8');
+assert.ok(!source.includes('onRenderChange:'));assert.ok(source.includes('transform:translateX(-10%)'));
+assert.ok(source.includes('script.src=value.sdkUrl'));
+});

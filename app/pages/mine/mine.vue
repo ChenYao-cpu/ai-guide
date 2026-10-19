@@ -1,5 +1,8 @@
 <template>
   <view class="page aurora-page" :class="tabEnterClass">
+    <!-- #ifdef APP-PLUS -->
+    <view class="app-status-bar-shield" aria-hidden="true"></view>
+    <!-- #endif -->
     <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
 
     <view class="ink-bg">

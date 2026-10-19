@@ -1,5 +1,8 @@
 <template>
   <view class="page aurora-page" :class="{'app-english':tourLanguage==='en'}">
+    <!-- #ifdef APP-PLUS -->
+    <view class="app-status-bar-shield" aria-hidden="true"></view>
+    <!-- #endif -->
     <!-- #ifdef APP-PLUS || H5 -->
     <chat-voice :payload="voicePayload" @state="onDigitalVoiceState" style="position:fixed;left:-2000px;top:0;width:240px;height:320px;pointer-events:none" aria-hidden="true" />
     <!-- #endif -->
@@ -133,7 +136,7 @@
       </view>
     </view>
 
-    <view v-show="!keyboardVisible" class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ $t("智能导览") }}</text></view><view class="tb-item highlight on"><view class="tb-hl-ring on"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ $t("AI小导游") }}</text><view class="tb-dot"></view></view><view class="tb-item highlight" @tap="goTab('/pages/mine/mine')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ $t("我的") }}</text></view></view><view class="tb-safe"></view></view>
+    <TabBarNav v-show="!keyboardVisible" current="ai" />
     </view>
     <NocturneSelect v-if="showPhotoChoices" :title="$t('拍照或相册识景')" :options="['拍照识景','从相册选择']" @change="selectScenicSource" @close="showPhotoChoices=false" />
     <NocturneSelect v-if="showQASpots" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" @change="selectQuestionSpot" @close="showQASpots=false" />
@@ -174,7 +177,7 @@ function request(options) {
 }
 
 export default {
-  components:{ChatVoice,NocturneSelect},
+  components:{ChatVoice,NocturneSelect,TabBarNav},
   data: function () {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
