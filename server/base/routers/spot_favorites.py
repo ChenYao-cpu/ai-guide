@@ -19,7 +19,7 @@ def list_history(user_id: int = Depends(get_current_user_info)):
             .where(SpotView.user_id == user_id, ScenicSpotInfo.delete == False)
             .order_by(SpotView.viewed_at.desc()).limit(50)).all()
         return make_return_data(True, ResultCode.SUCCESS, "成功", {"spot_list": [
-            {**spot.model_dump(), "viewTime": viewed_at.isoformat()} for spot, viewed_at in rows
+            {**spot.model_dump(), "viewTime": (viewed_at.replace(tzinfo=timezone.utc) if viewed_at.tzinfo is None else viewed_at).isoformat()} for spot, viewed_at in rows
         ]})
 
 

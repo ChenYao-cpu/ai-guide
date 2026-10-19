@@ -38,8 +38,7 @@
           <image v-if="detailSpot.image_path" :src="fixImg(detailSpot.image_path)" class="dp-hero" mode="aspectFill"></image>
           <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
           <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.location)||t('暂无') }}</text></view>
-          <view class="dp-row"><text>{{ t("分类") }}</text><text>{{ t(detailSpot.category)||t('景点') }}</text></view>
-          <view class="dp-row"><text>{{ t("标签") }}</text><text>{{ detailSpot.tags||t('暂无') }}</text></view>
+                    <view class="dp-row"><text>{{ t("标签") }}</text><text>{{ detailSpot.tags||t('暂无') }}</text></view>
         </scroll-view>
         <view class="dp-like-bar">
           <view class="dpl-btn" :class="{on:liked[detailSpot.spot_id]}" @tap="toggleLike(detailSpot.spot_id)">
@@ -56,7 +55,7 @@
 </template>
 
 <script>
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 
 function req(o){return new Promise(function(rs,rj){uni.request({url:BASE_URL+o.url,method:o.method||'GET',data:o.data||{},header:{'Content-Type':'application/json','Authorization':'Bearer '+uni.getStorageSync('token')},success:function(r){if(r.statusCode===200&&r.data&&r.data.success)rs({data:r.data});else rj(new Error('请求失败'))},fail:rj})})}
 export default {
@@ -71,7 +70,7 @@ export default {
       var pages=getCurrentPages();var opts=pages[pages.length-1].options||{}
       var t=opts.type||'must';s.type=t;s.title=t==='must'?'探索景点':'景点图鉴';s.loadFavorites()
       req({url:'/tour-session/spots'}).then(function(r){
-        var d=r.data;var list=(d&&d.data&&d.data.spot_list)?d.data.spot_list:(d&&d.spot_list)||[]
+        var d=r.data;var list=(d&&d.data&&d.data.spot_list)?d.data.spot_list:(d&&d.spot_list)||[];list=list.filter(function(x){return isBeijingCity(x.city)})
         list=list.filter(function(x){return x.image_path}).sort(function(a,b){return (b.visit_duration||0)-(a.visit_duration||0)})
         s.spots=list.slice(0,20);s.loading=false;if(opts.spotId){var selected=list.find(function(x){return x.spot_id===Number(opts.spotId)});if(selected)s.openDetail(selected)}
       }).catch(function(){s.loading=false})

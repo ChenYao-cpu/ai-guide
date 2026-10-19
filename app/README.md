@@ -1,4 +1,4 @@
-# 智游灵境 App
+# 智游知境 App
 
 此目录是 Android App 的 uni-app 源码，在 HBuilderX 中打开本目录。
 与同一仓库下的 `frontend/`（Web）、`server/`（后端）、`shared/`（共享坐标转换）配套使用。

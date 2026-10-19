@@ -1,5 +1,5 @@
 <template>
-  <view class="page aurora-page">
+  <view class="page aurora-page" :class="tabEnterClass">
     <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
 
     <view class="ink-bg">
@@ -42,10 +42,6 @@
             <button class="lang-btn" :class="{active:tourLanguage==='en'}" :aria-pressed="tourLanguage==='en'" @tap="setTourLanguage('en')">English</button>
           </view>
         </view>
-        <view class="menu-item" @tap="showPrefs=true">
-          <view class="mi-left"><text class="mi-icon iconfont icon-pianhao"></text><text class="mi-label">{{ t('偏好设置') }}</text></view>
-          <text class="mi-arrow">›</text>
-        </view>
         <view class="menu-item" @tap="showAbout=true">
           <view class="mi-left"><text class="mi-icon iconfont icon-guanyuwomen"></text><text class="mi-label">{{ t('关于我们') }}</text></view>
           <text class="mi-arrow">›</text>
@@ -56,21 +52,6 @@
           <view class="mi-left"><text class="mi-icon iconfont icon-tuichu" style="color:var(--ng-secondary);"></text><text class="mi-label" style="color:var(--ng-secondary);">{{ t('退出登录') }}</text></view>
           <text class="mi-arrow" style="color:var(--ng-secondary);">›</text>
         </view>
-      </view>
-    </view>
-
-    <!-- 偏好设置抽屉 -->
-    <view class="drawer-overlay" v-if="showPrefs" @tap="showPrefs=false">
-      <view class="drawer-mask"></view>
-      <view class="drawer-panel" @tap.stop="">
-        <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ t('偏好设置') }}</text><text class="dp-close" @tap="showPrefs=false">✕</text></view>
-        <scroll-view scroll-y class="dp-content prefs-scroll">
-          <view class="pref-item" v-for="p in preferenceOptions" :key="p.value">
-            <text class="pref-label">{{ t(p.label) }}</text>
-            <text class="pref-desc">{{ t(p.desc) }}</text>
-          </view>
-        </scroll-view>
       </view>
     </view>
 
@@ -88,29 +69,23 @@
 
     <NocturneConfirm v-if="showLogout" :title="t('退出登录')" :content="t('确定要退出登录吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showLogout=false" @confirm="confirmLogout" />
 
-    <view class="tb-root"><view class="tb-ink-line"></view><view class="tb-inner"><view class="tb-item highlight" @tap="goTab('/pages/tour-guide/tour-guide')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-daolan"></text></view><text class="tb-label">{{ t('智能导览') }}</text></view><view class="tb-item highlight" @tap="goTab('/pages/ai-chat/ai-chat')"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-aishuziren"></text></view><text class="tb-label">{{ t('AI小导游') }}</text></view><view class="tb-item on"><view class="tb-hl-ring"><text class="tb-icon iconfont icon-wode1"></text></view><text class="tb-label">{{ t('我的') }}</text><view class="tb-dot"></view></view></view><view class="tb-safe"></view></view>
+    <TabBarNav current="mine" />
   </view>
 </template>
 
 <script>
+import TabBarNav from '../../components/TabBarNav.vue'
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
 import { BASE_URL, assetUrl } from '../../common/config.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 export default {
-  components: {NocturneConfirm},
+  components:{TabBarNav,NocturneConfirm},
   data: function () {
     return {
       // 与 pages/tour/tour.vue 共用同一个 storage key，切换后全 App 一致。
 
       username: '', userId: '', avatarUrl: '', statusH: 20,
-      showPrefs: false, showAbout: false, showLogout: false,
-      preferenceOptions: [
-        { value:'history', label:'历史文化', desc:'优先了解典故与历史脉络' },
-        { value:'nature', label:'自然风光', desc:'侧重山水景观与生态故事' },
-        { value:'photography', label:'拍照打卡', desc:'推荐构图视角与拍摄点位' },
-        { value:'family', label:'亲子游览', desc:'提供更轻松易懂的讲解' },
-        { value:'comprehensive', label:'综合游览', desc:'均衡介绍特色与服务信息' },
-      ],
+      showAbout: false, showLogout: false,
     }
   },
   computed: {
@@ -120,8 +95,73 @@ export default {
     // 与网页端 LanguageSwitch 行为一致：切换界面语言并持久化，用户自填内容保持原样。
     setTourLanguage: function (language) {
       var next = language === 'en' ? 'en' : 'zh'
+      var previous = this.tourLanguage
       this.tourLanguage = next
       uni.setStorageSync(LANGUAGE_STORAGE_KEY, next)
+      if (previous !== next) this.translateAiChatHistory(next)
+    },
+    // 切换语言时，把本地保存的 AI 小导游问答一起转换成新语言。
+    translateAiChatHistory: function (target) {
+      var raw = ''
+      try { raw = uni.getStorageSync('ai_chat_msgs') || '' } catch (e) { raw = '' }
+      if (!raw) return
+      var list
+      try { list = JSON.parse(raw) } catch (e) { return }
+      if (!Array.isArray(list) || !list.length) return
+      var guess = function (text) {
+        var value = String(text || '')
+        var cjk = (value.match(/[\u4e00-\u9fff]/g) || []).length
+        var latin = (value.match(/[A-Za-z]/g) || []).length
+        if (latin >= 5 && latin >= cjk * 2) return 'en'
+        if (cjk > 0) return 'zh'
+        if (latin > 0) return 'en'
+        return target
+      }
+      var pending = []
+      list.forEach(function (m, index) {
+        if (!m || typeof m.content !== 'string' || !m.content.trim()) return
+        m.lang = guess(m.content)
+        var body = String(m.content || '')
+        var mixedForEnglish = target === 'en' && /[\u4e00-\u9fff]/.test(body)
+        var englishForChinese = target === 'zh' && !/[\u4e00-\u9fff]/.test(body) && /[A-Za-z]/.test(body)
+        if (m.lang === target && !mixedForEnglish && !englishForChinese) return
+        if (m.translations && typeof m.translations[target] === 'string' && m.translations[target].trim()) {
+          m.content = m.translations[target]
+          m.lang = target
+          return
+        }
+        pending.push({ index: index, text: body, from: m.lang })
+      })
+      if (!pending.length) { try { uni.setStorageSync('ai_chat_msgs', JSON.stringify(list)) } catch (e) {} return }
+      uni.request({
+        url: BASE_URL + '/tour-session/translate-texts', method: 'POST',
+        header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (uni.getStorageSync('token') || '') },
+        timeout: 90000,
+        data: { texts: pending.map(function (x) { return x.text }), target: target },
+        success: function (res) {
+          try {
+            var translations = res.data && res.data.data && res.data.data.translations
+            if (!Array.isArray(translations)) return
+            pending.forEach(function (p, k) {
+              var m = list[p.index]
+              if (!m) return
+              var translated = translations[k]
+              if (typeof translated !== 'string' || !translated.trim()) return
+              var nextText = translated.trim()
+              var hasCJK = /[\u4e00-\u9fff]/.test(nextText)
+              if (nextText !== String(m.content || '').trim()) {
+                if (!m.translations) m.translations = {}
+                m.translations[m.lang || p.from] = m.content
+                m.content = nextText
+                m.lang = target
+              } else if ((target === 'zh' && hasCJK) || (target === 'en' && !hasCJK)) {
+                m.lang = target
+              }
+            })
+            uni.setStorageSync('ai_chat_msgs', JSON.stringify(list))
+          } catch (e) {}
+        }
+      })
     },
     // 只翻译界面文案；用户昵称等用户自填内容保持原样。
     t: function (value, params) {
@@ -147,9 +187,8 @@ export default {
   mounted:function(){
     this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6
   },
-  onHide:function(){this.showPrefs=false;this.showAbout=false;this.showLogout=false},
+  onHide:function(){this.showAbout=false;this.showLogout=false},
   onShow: function () {
-    this.showPrefs=false
     this.showAbout=false
     var token = uni.getStorageSync('token')
     if (!token) { uni.reLaunch({ url: '/pages/auth/auth' }); return }
@@ -227,13 +266,7 @@ export default {
 .dp-hd{display:flex;justify-content:space-between;padding:8rpx 32rpx 14rpx}
 .dp-title{font-size:30rpx;font-weight:600;color:var(--ng-text)}
 .dp-close{font-size:32rpx;color:var(--ng-secondary)}
-.dp-content{padding:0 32rpx 32rpx;box-sizing:border-box}.prefs-scroll{height:55vh;width:100%}
-
-/* 偏好设置项 */
-.pref-item{padding:18rpx 0;border-bottom:1rpx solid var(--ng-border)}
-.pref-item:last-child{border-bottom:0}
-.pref-label{display:block;font-size:28rpx;font-weight:700;color:var(--ng-text);margin-bottom:6rpx}
-.pref-desc{display:block;font-size:22rpx;color:var(--ng-secondary)}
+.dp-content{padding:0 32rpx 32rpx;box-sizing:border-box}
 
 /* 关于我们 */
 .about-content{display:flex;flex-direction:column}

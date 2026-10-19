@@ -34,8 +34,7 @@
           <image v-if="detailSpot.image_path" :src="fixImg(detailSpot.image_path)" class="dp-hero" mode="aspectFill"></image>
           <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
           <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.location)||t('暂无') }}</text></view>
-          <view class="dp-row"><text>{{ t("分类") }}</text><text>{{ t(detailSpot.category)||t('景点') }}</text></view>
-        </scroll-view>
+                  </scroll-view>
         <view class="dp-like-bar">
           <view class="dpl-btn-star" @tap="unlike(detailSpot.spot_id);detailSpot=null">
             <text>{{ t(' 已收藏 (取消)') }}</text>
@@ -47,7 +46,7 @@
 </template>
 
 <script>
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 
 function req(o){return new Promise(function(rs,rj){uni.request({url:BASE_URL+o.url,method:o.method||'GET',header:{'Content-Type':'application/json','Authorization':'Bearer '+uni.getStorageSync('token')},success:function(r){if(r.statusCode===200&&r.data&&r.data.success)rs({data:r.data});else rj(new Error('请求失败'))},fail:rj})})}
 export default {
@@ -61,7 +60,7 @@ export default {
       req({url:'/spot-favorites/'+sid,method:'DELETE'}).then(function(){self.loadData();uni.showToast({title:'已取消收藏',icon:'none'})}).catch(function(){uni.showToast({title:'取消失败，请重试',icon:'none'})})
     },
     loadData:function(){var self=this;self.loading=true;self.error=''
-      req({url:'/spot-favorites'}).then(function(r){self.list=r.data.data.spot_list;self.loading=false}).catch(function(){self.error='收藏加载失败';self.loading=false})
+      req({url:'/spot-favorites'}).then(function(r){self.list=(r.data.data.spot_list||[]).filter(function(sp){return isBeijingCity(sp.city)});self.loading=false}).catch(function(){self.error='收藏加载失败';self.loading=false})
     },
   },
   onShow:function(){this.loadData()},

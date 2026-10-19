@@ -53,3 +53,8 @@ export const LOGIN_PROVIDER = APP_LOGIN ? 'password' : DEVELOPMENT_LOGIN ? 'deve
 
 
 
+
+
+export function isBeijingCity(value) {
+  return String(value || '').replace(/\s+/g, '') === '北京'
+}

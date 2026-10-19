@@ -141,9 +141,8 @@
 </template>
 
 <script>
-
-
-import { BASE_URL, assetUrl } from '../../common/config.js'
+import TabBarNav from '../../components/TabBarNav.vue'
+import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import ChatVoice from '../../components/chat-voice.vue'
 import NocturneSelect from '../../components/NocturneSelect.vue'
 import { planningMessage, recommendationText, questionLanguage, findQuestionSpot, photoIdentificationText } from '../../common/planning-language.js'
@@ -281,7 +280,6 @@ export default {
           const mediaPermission=Number(Version.SDK_INT)>=33&&Number(appInfo.targetSdkVersion)>=33?'android.permission.READ_MEDIA_IMAGES':'android.permission.READ_EXTERNAL_STORAGE'
           const permission=source==='camera'?'android.permission.CAMERA':mediaPermission
           plus.android.requestPermissions([permission],result=>{
-            if(!this.isCurrentRequest(epoch,owner))return
             if(result.deniedAlways&&result.deniedAlways.length){this.recognitionError='权限已被关闭，请到手机设置 → 应用设置 → HBuilder（或智游知境）→ 权限管理，允许'+(source==='camera'?'相机':'照片与视频／存储')+'权限';return}
             if(result.deniedPresent&&result.deniedPresent.length){this.recognitionError='需要允许'+(source==='camera'?'相机':'相册读取')+'权限才能选择照片';return}
             this.pickScenicImage(source,epoch,owner)
@@ -381,6 +379,7 @@ export default {
         if(!self.isCurrentRequest(epoch,owner))return
         var d = res.data
         var list = (d && d.data && d.data.spot_list) ? d.data.spot_list : (d && d.spot_list ? d.spot_list : [])
+        list = list.filter(function(sp){ return isBeijingCity(sp.city) })
         var map = {}
         list.forEach(function (sp) { map[sp.spot_id] = sp })
         self.recommendSpots = ids.map(function (id) { return map[id] }).filter(Boolean)
