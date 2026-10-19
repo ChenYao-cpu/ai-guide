@@ -72,7 +72,7 @@
                 <view v-else class="tl-img-df"></view>
                 <view class="tl-info">
                   <text class="tl-name">{{ t(s.spot_name) }}</text>
-                  <text class="tl-cat" v-if="s.visit_duration">{{ t('· 约') }}{{ s.visit_duration }}{{ t('分钟') }}</text>
+                  <text class="tl-cat" v-if="s.visit_duration">{{ t('约') }}{{ s.visit_duration }}{{ t('分钟') }}</text>
                   <text class="tl-desc" v-if="s.description">{{ t(s.description).substring(0, 50) }}...</text>
                 </view>
               </view>

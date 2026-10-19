@@ -69,4 +69,9 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .tab-enter-left .main,.tab-enter-left .chat-area,.tab-enter-left .profile-card,.tab-enter-left .quick-hints,.tab-enter-left .menu-group{animation:tabEnterLeft 320ms cubic-bezier(.22,1,.36,1) both}
 @keyframes tabEnterRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes tabEnterLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+/* #ifdef APP-PLUS */
+page{--app-page-gradient:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%)}
+page .page .aurora-background{background:var(--app-page-gradient)!important;background-size:100vw 100vh!important;background-position:0 0!important;background-repeat:no-repeat!important}
+.page.aurora-page > .app-status-bar-shield{position:fixed!important;top:0;left:0;right:0;height:var(--status-bar-height);z-index:10000!important;background:var(--app-page-gradient);background-size:100vw 100vh;background-position:0 0;background-repeat:no-repeat;pointer-events:none}
+/* #endif */
 </style>

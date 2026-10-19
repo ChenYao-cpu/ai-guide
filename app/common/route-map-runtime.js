@@ -32,14 +32,29 @@ export function loadRouteLibrary(win = window, doc = document, assetBase = './st
 export function createRouteMap(element, report = () => {}, win = window, doc = document) {
   let map, group, tiles, resize, removal, payload, boundsKey = '', fitCounter = -1, version = 0, disposed = false, frame = 0
   let tileLoaded = 0, tileErrors = 0, revision = 0
+  // Keep map gestures inside the map while Leaflet receives the original events.
+  const gestureStart = () => report({ state: 'gesture', active: true })
+  const gestureMove = event => { if (event.cancelable) event.preventDefault() }
+  const gestureEnd = event => { if (!event.touches?.length) report({ state: 'gesture', active: false }) }
+  element.addEventListener('touchstart', gestureStart, { passive: true, capture: true })
+  element.addEventListener('touchmove', gestureMove, { passive: false, capture: true })
+  element.addEventListener('touchend', gestureEnd, true)
+  element.addEventListener('touchcancel', gestureEnd, true)
   const fitAll = () => {
     if (!map || !payload || disposed || !element.isConnected) return
     const points = payload.data.points.map(p => [p.latitude, p.longitude])
+    map.stop()
+    map.closePopup()
     map.invalidateSize({ pan: false })
     if (points.length) map.fitBounds(win.L.latLngBounds(points), { padding: [28, 28], maxZoom: 17, animate: false })
   }
   const destroy = () => {
     if (disposed) return
+    element.removeEventListener('touchstart', gestureStart, true)
+    element.removeEventListener('touchmove', gestureMove, true)
+    element.removeEventListener('touchend', gestureEnd, true)
+    element.removeEventListener('touchcancel', gestureEnd, true)
+    report({ state: 'gesture', active: false })
     disposed = true; version++; win.cancelAnimationFrame(frame); resize?.disconnect(); removal?.disconnect(); map?.remove()
     map = group = tiles = null
   }
@@ -56,8 +71,7 @@ export function createRouteMap(element, report = () => {}, win = window, doc = d
       const L = await loadRouteLibrary(win, doc, next.assetBase)
       if (disposed || own !== version || !element.isConnected) return
       if (!map) {
-        map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, zoomAnimation: false })
-        L.control.zoom({ position: 'topright', zoomInTitle: next.zoomIn, zoomOutTitle: next.zoomOut }).addTo(map)
+        map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, zoomAnimation: false, dragging: true, touchZoom: true, bounceAtZoomLimits: false })
         tiles = L.tileLayer(SCENIC_TILES, { maxZoom: 18 }).addTo(map)
         tiles.on('tileload', () => { tileLoaded++; if (!disposed && tileLoaded === 1) report({ state: 'ready' }) })
         tiles.on('tileerror', () => { if (!disposed && ++tileErrors >= 3 && !tileLoaded) report({ state: 'tiles-error' }) })
