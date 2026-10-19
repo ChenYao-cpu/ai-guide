@@ -14,7 +14,7 @@ await context.route('**/api/v1/**',async route=>{const req=route.request(),url=n
  else if(p==='/tour-session/spots')data=ok({spot_list:spots})
  else if(p==='/tour-session/guides')data=ok({guide_list:[guide]})
  else if(p==='/tour-session/routes')data=ok({route_list:[]})
- else if(p.startsWith('/avatar/capabilities/'))data=ok({preferredMode:'audio',threeD:{ready:false},realistic:{ready:false},cartoon:{ready:false}})
+ else if(p.startsWith('/avatar/capabilities/'))data=ok({preferredMode:'audio',realistic:{ready:false},cartoon:{ready:false}})
  else if(p==='/tour-session/visitor-create')data=ok({session_id:71})
  else if(p==='/tour-session/chat')data=ok({message:'English history answer',language:'en'})
  else if(p==='/tour-session/ai-chat-recommend'){data=ok(plan);if(holdNext){holdNext=false;await new Promise(resolve=>held=resolve)}}

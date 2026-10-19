@@ -1,5 +1,6 @@
 <template>
-  <view class="page">
+  <view class="page aurora-page">
+    <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
     <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
 
     <view class="nav" :style="{paddingTop:statusH+'px'}">
@@ -327,6 +328,7 @@ export default {
 
 <style scoped>
 .page{height:100vh;display:flex;flex-direction:column;background:var(--ng-surface);position:relative;overflow:hidden}
+.page.aurora-page{padding-bottom:0!important;background:transparent!important}
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}
 .ink-mt{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:55% 75% 0 0}
 .ink-mt-1{bottom:18%;height:200rpx;opacity:.04;transform:scaleX(1.3)}

@@ -39,8 +39,8 @@ def normalize_result(payload, catalog, language='zh'):
                             '暂时无法确认景点，请拍摄包含全景、标志建筑或景点名称的照片后再试。')}
     return {'status': 'candidate', 'spot_id': match['spot_id'], 'spot_name': spot_name,
             'city': match['city'], 'description': match['description'], 'evidence': evidence,
-            'message': ('AI result is for reference only. Confirm with the on-site signs.' if english else
-                        'AI 识别结果仅供参考，请结合现场标识确认。')}
+            'message': ('Identified and matched to the spot catalog.' if english else
+                        '识别完成，已匹配景点资料。')}
 
 
 async def recognize_photo(content, catalog, question='', language='zh'):

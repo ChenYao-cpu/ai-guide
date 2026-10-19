@@ -22,9 +22,6 @@
       "path": "pages/tour/tour",
       "style": {
         "app-plus": {"softinputMode": "adjustNothing"},
-        "usingComponents": {
-          "tour-avatar-3d": "/wxcomponents/tour-avatar-3d/index"
-        },
         "navigationStyle": "custom",
         "disableScroll": true,
         "navigationBarBackgroundColor": "#f8fafc",

@@ -3,15 +3,20 @@
     <view class="itinerary-panel">
         <view class="itinerary-totals"><view class="total-stations"><text class="metric-value">{{ ids.length }}{{ t('站') }}</text></view><view><text>{{ t('预计步行') }}</text><text class="metric-value">{{ overview?distance(overview.walking_meters):(busy?'…':'—') }}</text></view><view><text>{{ t('预计用时') }}</text><text class="metric-value">{{ overview?.total_minutes??(busy?'…':'—') }} {{ t('分钟') }}</text></view></view>
         <view v-if="error" class="itinerary-error"><text>{{ t(error) }}</text><button @tap="refresh">{{ t('重试') }}</button></view>
-        <scroll-view :bounces="false" :show-scrollbar="false" class="stop-scroll" :scroll-y="dragId===null" :scroll-top="scrollTarget" @scroll="onScroll">
-          <view class="stop-stack" :style="{height:ids.length*rowHeight+'px'}">
-            <view v-for="(id,index) in ids" :key="id" class="itinerary-stop" :class="{'stop-dragging':dragId===id}" :style="stopStyle(id,index)" @touchstart.stop="holdRow($event,id)" @touchmove.stop.prevent="moveRow" @touchend.stop="endRow" @touchcancel.stop="cancelRow">
+        <view class="stop-scroll" :class="{dragging:dragId!==null}" :style="{height:listHeight}">
+          <view class="stop-stack" :style="{height:visibleIds.length*rowHeight+'px'}">
+            <view v-for="(id,index) in visibleIds" :key="id" class="itinerary-stop" :class="{'stop-dragging':dragId===id}" :style="stopStyle(id,index)">
               <text class="itinerary-number">{{ (dragId===null?ids:dragOrder).indexOf(id)+1 }}</text>
               <text class="itinerary-name">{{ t(spots.find(s=>s.spot_id===id)?.spot_name||'景点') }}</text>
               <button class="stop-remove" :disabled="disabled||dragId!==null" :aria-label="t('移除')" @touchstart.stop @touchmove.stop @touchend.stop @tap.stop="$emit('remove',id)">×</button>
+              <view class="drag-handle" role="button" :aria-label="t('拖动排序')" @touchstart.stop.prevent="startHandleDrag($event,id)" @touchmove.stop.prevent="moveRow" @touchend.stop="endRow" @touchcancel.stop="cancelRow">
+                <view class="drag-line"></view><view class="drag-line"></view><view class="drag-line"></view>
+              </view>
             </view>
           </view>
-        </scroll-view>
+        </view>
+        <button v-if="collapsible&&!expanded" class="itinerary-more" :aria-label="t('展开全部景点')" @tap="toggleExpanded">· · ·</button>
+        <button v-else-if="collapsible&&expanded" class="itinerary-collapse" :aria-label="t('收起')" @tap="toggleExpanded">{{ t('收起') }}</button>
         <text v-if="overview&&!overview.complete&&!busy" class="itinerary-error">{{ t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</text>
         <button class="itinerary-details" :disabled="dragId!==null" @tap="openDetails">{{ t('路线与用时') }} <text>↗</text></button>
     </view>
@@ -24,9 +29,15 @@ import RouteOverview from './RouteOverview.vue'
 import { previewOptions, routeRequest } from '../common/route-planning.js'
 export default {
   components:{RouteOverview},props:{ids:{type:Array,default:()=>[]},spots:Array,plan:Object,pace:String,details:Boolean,disabled:Boolean},
-  data(){return{busy:false,error:'',overview:null,mapInteracting:false,detailOrigin:'50% 85%',dragId:null,dragOrder:[],dragY:0,startY:0,startIndex:0,rowHeight:72,scrollOffset:0,scrollTarget:0,dragScrollStart:0}},
-  computed:{options(){return previewOptions(this.ids,this.plan,this.pace)},signature(){return JSON.stringify(this.options)}},
-  watch:{details(value){if(!value)this.mapInteracting=false},ids(){if(this.dragId!==null)this.cancelDrag()},signature:{immediate:true,handler(){this.refresh()}}},
+  data(){return{busy:false,error:'',overview:null,mapInteracting:false,detailOrigin:'50% 85%',dragId:null,dragOrder:[],dragY:0,startY:0,startIndex:0,rowHeight:72,scrollOffset:0,scrollTarget:0,dragScrollStart:0,expanded:false}},
+  computed:{
+    options(){return previewOptions(this.ids,this.plan,this.pace)},
+    signature(){return JSON.stringify(this.options)},
+    collapsible(){return this.ids.length>5},
+    visibleIds(){return this.expanded?this.ids:this.ids.slice(0,5)},
+    listHeight(){return Math.max(0,this.visibleIds.length)*this.rowHeight+'px'},
+  },
+  watch:{details(value){if(!value)this.mapInteracting=false},ids(){if(this.dragId!==null)this.cancelDrag();if(!this.collapsible)this.expanded=false},signature:{immediate:true,handler(){this.refresh()}}},
   methods:{
     openDetails(){
       const info=uni.getWindowInfo?uni.getWindowInfo():uni.getSystemInfoSync()
@@ -36,20 +47,23 @@ export default {
       }).exec()
     },
 
-    holdRow(e,id){
-      if(this.disabled||!e.touches?.length)return
-      this.cancelRow();const touch=e.touches[0];this._heldTouch={clientX:touch.clientX,clientY:touch.clientY};this.$emit('dragging',true)
-      this._holdRowTimer=setTimeout(()=>{this._holdRowTimer=null;this.startDrag({touches:[this._heldTouch]},id)},280)
+    toggleExpanded(){
+      if(this.dragId!==null)return
+      this.expanded=!this.expanded
+      try{uni.vibrateShort({type:'light'})}catch(_){}
+    },
+    startHandleDrag(e,id){
+      if(this.disabled)return
+      this.cancelRow()
+      this.startDrag(e,id)
     },
     moveRow(e){
-      if(!e.touches?.length)return
-      if(this.dragId!==null){e.preventDefault?.();this.moveDrag(e);return}
-      const p=e.touches[0],start=this._heldTouch
-      if(start&&Math.abs(p.clientX-start.clientX)+Math.abs(p.clientY-start.clientY)>8){clearTimeout(this._holdRowTimer);this._holdRowTimer=null}
+      if(this.dragId===null||!e.touches?.length)return
+      e.preventDefault?.()
+      this.moveDrag(e)
     },
-    endRow(){clearTimeout(this._holdRowTimer);this._holdRowTimer=null;this._heldTouch=null;this.endDrag();this.$emit('dragging',false)},
-    cancelRow(){clearTimeout(this._holdRowTimer);this._holdRowTimer=null;this._heldTouch=null;this.cancelDrag()},
-    onScroll(e){if(this._holdRowTimer)this.cancelRow();this.scrollOffset=e.detail.scrollTop},
+    endRow(){this.endDrag();this.$emit('dragging',false)},
+    cancelRow(){this.cancelDrag()},
     stopStyle(id,index){const active=this.dragId===id;const slot=this.dragId===null?index:this.dragOrder.indexOf(id);return {height:this.rowHeight+'px',transform:'translate3d(0,'+(active?this.startIndex*this.rowHeight+this.dragY:slot*this.rowHeight)+'px,0)',transition:active?'none':'transform 240ms cubic-bezier(.2,.8,.2,1)'}},
     startDrag(e,id){
       if(this.disabled||!e.touches?.length)return
@@ -96,9 +110,19 @@ export default {
 .itinerary-panel{padding:4px 20px 16px;color:var(--ng-text)}.itinerary-totals{padding:16px 0 4px}.stop-scroll{height: min(42vh,432px);margin:10px 0}.stop-stack{position:relative}.itinerary-stop{position:absolute;top:0;left:0;right:0;box-sizing:border-box;padding:8px 10px;gap:10px;background:var(--ng-surface,#fff);border-bottom:1px solid var(--ng-border);border-radius:14px;will-change:transform;user-select:none}.stop-dragging{z-index:5;box-shadow:0 9px 24px rgba(89,70,165,.2);background:#f1edff;border-color:transparent}.itinerary-number{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#eee9fc;font-size:12px}.itinerary-name{font-size:15px;line-height:1.4}.stop-remove{width:30px;height:34px;padding:0;margin:0;font-size:23px;line-height:32px;background:transparent;color:var(--ng-secondary)}.stop-remove:after{border:0}.drag-handle{width:40px;height:52px;display:flex;align-items:center;justify-content:center;font-size:29px;color:#8a7cad;touch-action:none}.handle-disabled{opacity:.3}.itinerary-details{margin:12px 0 0}
 
 .itinerary-widget{margin-top:0;padding-top:0}
-.itinerary-panel{padding:0}.itinerary-title{font-size:17px}.stop-scroll{height: min(42vh,432px)}
+.itinerary-panel{padding:0}.itinerary-title{font-size:17px}
+.stop-scroll{overflow:visible;touch-action:pan-y;transition:height 360ms cubic-bezier(.22,1.32,.28,1),opacity 220ms ease}
+.itinerary-more{display:flex;align-items:center;justify-content:center;margin:2px 0 6px;padding:2px 0 6px;width:100%;height:auto;line-height:1;background:transparent;color:var(--ng-secondary,#8a7cad);font-size:22px;letter-spacing:6px;border:0;box-shadow:none}
+.itinerary-more::after{border:0}
+.itinerary-collapse{display:flex;align-items:center;justify-content:center;margin:6px auto 10px;padding:6px 22px;width:auto;height:auto;line-height:1.4;background:#f0ecf8;color:#5b4695;border-radius:999px;font-size:13px;border:0;box-shadow:none}
+.itinerary-collapse::after{border:0}
+.itinerary-more[disabled],.itinerary-collapse[disabled],.itinerary-details[disabled]{opacity:1;background:#f0ecf8;color:#5b4695;border:0}
 .stop-dragging{touch-action:none}
-.itinerary-stop{touch-action:none;-webkit-user-select:none}.stop-scroll{overscroll-behavior:contain;overflow-anchor:none}
+.itinerary-stop{touch-action:pan-y;-webkit-user-select:none}.stop-scroll{touch-action:pan-y;overscroll-behavior:auto;overflow-anchor:none}.stop-scroll.dragging .itinerary-stop,.stop-dragging{touch-action:none}
+.drag-handle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:38px;height:40px;margin:0 0 0 2px;padding:0;flex-shrink:0;background:transparent;color:#9a8cbb;touch-action:none;border-radius:8px}
+.drag-handle .drag-line{display:block;width:16px;height:2px;border-radius:2px;background:currentColor;opacity:.8}
+.drag-handle:active,.drag-handle.dragging{color:#7a67b8;background:rgba(99,102,241,.12)}
+.drag-handle:after{display:none}
 
 .route-sheet-mask{align-items:center;justify-content:center;padding:calc(var(--status-bar-height) + 12px) 16px calc(env(safe-area-inset-bottom) + 12px);box-sizing:border-box}
 .route-sheet{width:100%;max-width:560px;height:82vh;max-height:100%;border-radius:28px;padding:20px 16px 16px;animation:routeWindowEnter 380ms cubic-bezier(.2,1.12,.3,1)}
@@ -108,4 +132,10 @@ export default {
 .itinerary-update-status{display:block;height:20px;line-height:20px;font-size:12px;color:var(--ng-secondary);opacity:0;transition:opacity 180ms;pointer-events:none}.itinerary-update-status.updating{opacity:1}.metric-value{font-variant-numeric:tabular-nums}
 .itinerary-totals{padding:4px 0 8px;align-items:center;gap:12px}.itinerary-totals .total-stations{flex:0 0 auto;min-width:48px}.itinerary-totals .total-stations .metric-value{margin:0;font-size:30rpx}.itinerary-totals .metric-value{font-size:31rpx;margin-top:2rpx}.itinerary-totals text{font-size:23rpx}
 .itinerary-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;align-items:center;text-align:center}.itinerary-totals>view,.itinerary-totals .total-stations{min-width:0;width:100%}
+
+/* 数字跟在文字右侧 */
+.itinerary-totals{display:grid;grid-template-columns:auto 1fr 1fr;gap:10rpx;align-items:center;text-align:center;padding:14rpx 0 8rpx}
+.itinerary-totals>view,.itinerary-totals .total-stations{min-width:0;width:auto;display:flex;flex-direction:row;align-items:baseline;justify-content:center;gap:6rpx;white-space:nowrap}
+.itinerary-totals text,.itinerary-totals .metric-value{display:inline;font-size:22rpx;margin:0;color:var(--ng-secondary)}
+.itinerary-totals .metric-value{font-size:29rpx;font-weight:600;line-height:1.2;color:var(--ng-text);font-variant-numeric:tabular-nums}
 </style>

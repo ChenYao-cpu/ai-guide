@@ -14,64 +14,12 @@ from ..modules import motion_provider
 from ..modules.avatar_runtime import local_asset
 from pydantic import BaseModel, Field as InputField
 from ..models.tour_models import DigitalGuideInfo
-from ..modules.avatar_runtime import capability, cartoon_model, CARTOON_ROOT
+from ..modules.avatar_runtime import capability
 from ..utils import ResultCode, make_return_data
 from .users import get_current_user_info
 
 router = APIRouter(prefix='/avatar', tags=['avatar'])
 _motion_refresh_lock = asyncio.Lock()
-
-
-class ThreeDConfig(BaseModel):
-    filename: str
-
-
-@router.get('/3d-models')
-async def three_d_models(user_id: int = Depends(get_current_user_info)):
-    from ..modules.avatar3d import MODEL_SOURCE
-    return make_return_data(True, ResultCode.SUCCESS, '本地3D模型', [{'filename':p.name,'label':p.stem} for p in MODEL_SOURCE.glob('*.glb')])
-
-
-@router.post('/3d/{guide_id}')
-async def configure_three_d(guide_id: int, data: ThreeDConfig, user_id: int = Depends(get_current_user_info)):
-    from ..modules.avatar3d import install_model
-    with Session(DB_ENGINE) as db:
-        guide = owned_guide(db, guide_id, user_id)
-    try:
-        path = await asyncio.to_thread(install_model, data.filename)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    with Session(DB_ENGINE) as db:
-        guide = owned_guide(db, guide_id, user_id)
-        guide.model3d_path = path
-        guide.render_mode = '3d'
-        db.add(guide); db.commit()
-    return make_return_data(True, ResultCode.SUCCESS, '已配置真实3D模型', {'path':path})
-
-
-@router.get('/cartoon-models')
-async def cartoon_models():
-    models = []
-    for source in CARTOON_ROOT.rglob('*.model.json'):
-        path = '/live2d/' + source.relative_to(CARTOON_ROOT).as_posix()
-        if cartoon_model(path):
-            models.append({'label': source.stem.replace('.model', '') + '（Live2D 样例）', 'path': path})
-    return make_return_data(True, ResultCode.SUCCESS, '本地模型清单', models)
-
-
-@router.post('/cartoon/{guide_id}')
-async def configure_cartoon(guide_id: int, user_id: int = Depends(get_current_user_info)):
-    path = '/live2d/shizuku/shizuku.model.json'
-    if not cartoon_model(path):
-        raise HTTPException(503, '本地 Live2D 样例模型不完整')
-    with Session(DB_ENGINE) as db:
-        guide = db.exec(select(DigitalGuideInfo).where(DigitalGuideInfo.guide_id == guide_id, DigitalGuideInfo.user_id == user_id, DigitalGuideInfo.delete == False)).first()
-        if not guide:
-            raise HTTPException(404, '导游不存在或无权修改')
-        guide.live2d_model_path = path
-        db.add(guide)
-        db.commit()
-    return make_return_data(True, ResultCode.SUCCESS, '已配置 Shizuku 样例模型', {'path': path})
 
 
 @router.get('/capabilities/{guide_id}')

@@ -114,6 +114,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from fastapi.middleware.cors import CORSMiddleware
+
+# 浏览器端预览（App H5 / 独立前端）从其他端口访问本服务时需要 CORS 放行
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 注册路由（原有路由 + 新增景区导览路由）
 app.include_router(users.router)
 app.include_router(products.router)

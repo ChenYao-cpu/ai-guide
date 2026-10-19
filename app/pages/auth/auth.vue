@@ -7,8 +7,6 @@
     <view class="auth-brand"><BrandLogo stacked animated /></view>
     <view class="welcome-card">
       <text class="welcome-title">{{ t('让每一程，都有故事') }}</text>
-      <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
-      <view class="welcome-tags"><text>{{ t('行程规划') }}</text><text>{{ t('景点讲解') }}</text><text>{{ t('沿途问答') }}</text></view>
     <view class="login-area">
       <view v-if="appLogin">
         <input v-if="registering" class="nickname-input" style="margin-bottom:20rpx" v-model="nickname" :placeholder="t('昵称（用于登录）')" maxlength="40" :disabled="logining" />
@@ -21,6 +19,8 @@
         </view>
       </view>
       <button class="primary" :disabled="logining" @tap="beginLogin">{{ t(logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录') }}</button>
+      <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
+      <view class="welcome-tags"><text>{{ t('行程规划') }}</text><text>{{ t('景点讲解') }}</text><text>{{ t('沿途问答') }}</text></view>
       <button v-if="appLogin" class="dialog-cancel" style="margin-top:20rpx" :disabled="logining" @tap="toggleRegistration">{{ t(registering ? '已有账号，去登录' : '没有账号？邮箱注册') }}</button>
       <text v-if="appLogin && registering && codeNotice" class="notice">{{ t(codeNotice) }}</text>
       <text v-if="error && !showProfileDialog" class="error">{{ t(error) }}</text>

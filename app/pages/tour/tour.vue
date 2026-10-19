@@ -9,13 +9,12 @@
       <view class="nav-back" @tap="goBack"><text>‹</text></view>
     <!-- 游览进度时间轴 -->
     <view class="tour-progress nav-progress" v-if="spotCards.length > 1">
-      <scroll-view scroll-x class="tp-track" :scroll-into-view="progressScrollTarget" scroll-with-animation>
+      <scroll-view scroll-x enable-flex scroll-with-animation class="tp-track" :class="{'fade-left':fadeLeft,'fade-right':fadeRight}" :scroll-left="progressScrollLeft" :show-scrollbar="false" @scroll="onProgressScroll" @touchend="onProgressRelease">
         <view class="tp-nodes">
-          <view v-for="(s, i) in progressSpots" :key="s.spot_id" :id="'tpn-' + i" class="tp-node" :class="{done: i < spotIdx, active: i === spotIdx}" @tap="onProgressLastTap(i)">
+          <view v-for="(s, idx) in spotCards" :key="s.spot_id" :id="'tpn-'+idx" class="tp-node" :class="{done:idx<spotIdx, active:idx===progressActive}" @tap="selectProgressSpot(idx)">
             <view class="tp-dot"></view>
             <text class="tp-label">{{ t(s.spot_name) }}</text>
           </view>
-          <view v-if="progressHasMore" id="tpn-more" class="tp-node tp-more" :aria-label="t('更多景点')" @tap="showNextProgress"><text>· · ·</text></view>
         </view>
       </scroll-view>
 
@@ -46,11 +45,7 @@
         </view>
       </view>
       <template v-if="tourVisible && !leavingTour && !(appXingyun && guideProvider==='xingyun' && (xingyunConnected || xingyunActive))">
-      <view v-if="avatarMode==='3d'&&threeDModelUrl&&!threeDError" class="native-3d-stage">
-        <tour-avatar-3d v-if="avatarWidth>0&&avatarHeight>0" id="guide-avatar-3d" :motion-url="threeDModelUrl" :motion-started-at="motionStartedAt" :portrait="true" :width="Math.round(avatarWidth*avatarPixelRatio)" :height="Math.round(avatarHeight*avatarPixelRatio)" :key="threeDSceneUrl||threeDModelUrl" :scene-url="threeDSceneUrl||threeDModelUrl" :animation="threeDAnimation" :progress="threeDProgress" :duration="threeDDuration" :speaking="speaking" :style="{width:avatarWidth+'px',height:avatarHeight+'px',display:'block'}" @ready="threeDReady" @error="threeDFailed" />
-      </view>
-      <video v-else-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
-      <image v-else-if="guideAvatar" :src="fixImg(guideAvatar)" class="selected-guide-image" mode="widthFix" @error="guideAvatar=''" />
+      <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
       <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text class="avatar-notice">{{ t('形象未配置') }}</text></view>
       </template>
       <view class="stage-status" :class="{on:speaking}">
@@ -173,11 +168,10 @@ export default {
     return {
 
       keyboardHeight:0,showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
-      motionStartedAt:0,sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressShown: 3, avatarWidth:0, avatarHeight:0, avatarPixelRatio:1,
-      guideName: '', guideNameEn: '', guideAvatar: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
+      sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressActive: -1, progressScrollLeft: 0, fadeLeft: false, fadeRight: false, progressTrackW: 0, progressContentW: 0, progressNodeW: 100,
+      guideName: '', guideNameEn: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
       voiceMuted: false,
-      threeDSceneUrl:'',threeDAnimation:'idle',threeDProgress:0,threeDDuration:0,threeDError:false,
       avatarMode:'audio',avatarMessage:'语音导览',videoUrl:'',avatarCapability:null,guideId:0,
       lastMsgId: 'bottom', _voiceManager: null,
       quick: ['这里有什么历史故事？','最佳拍照点在哪里？','附近有哪些服务设施？','请介绍景点特色','下一站推荐去哪里？'],
@@ -189,16 +183,12 @@ export default {
     }
   },
   watch: {
-    spotIdx: function() { if(this.gpsTracking) { this.distanceStatus='正在更新目标景点距离…'; this.checkNearby() } },
+    spotIdx: function() { if(this.gpsTracking) { this.distanceStatus='正在更新目标景点距离…'; this.checkNearby() } this.progressActive=this.spotIdx },
+    'spotCards.length': function() { this._progressPos=0; this.progressScrollLeft=0; this.fadeLeft=false; this.fadeRight=false; this.progressContentW=0; this.progressActive=this.spotIdx; this.measureProgress() },
   },
   computed: {
-    progressSpots:function(){var n=this.spotCards.length;if(n<=3)return this.spotCards;var k=Math.max(3,this.progressShown);if(k>=n)return this.spotCards;return this.spotCards.slice(0,k)},
-    progressHasMore:function(){var n=this.spotCards.length;if(n<=3)return false;var k=Math.max(3,this.progressShown);return k<n},
-    progressScrollTarget:function(){if(this.progressHasMore&&this.spotIdx>=this.progressSpots.length)return 'tpn-more';return 'tpn-'+this.spotIdx},
     languageBusy: function() { return this.loading || this.recording || this.voicePressing || this.transcribing },
     guideDisplayName: function() { if (this.tourLanguage === 'en' && this.guideNameEn) return this.guideNameEn; return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
-    threeDModelUrl:function(){return assetUrl(this.avatarCapability&&this.avatarCapability.threeD&&this.avatarCapability.threeD.modelUrl||'')},
-    cartoonPreviewUrl:function(){return assetUrl(this.avatarCapability && this.avatarCapability.cartoon.previewUrl || '')},
     spotName: function() {
       var c = this.spotCards[this.spotIdx]
       return c ? c.spot_name : '景区导览中'
@@ -313,15 +303,10 @@ export default {
       return this._xingyunClosePromise
     },
     openXingyun: function() { uni.navigateTo({url:'/pages/xingyun/xingyun?sessionId='+this.sid}) },
-    measureAvatar:function(){this.avatarPixelRatio=Math.min(uni.getSystemInfoSync().pixelRatio||1,3);var self=this;uni.createSelectorQuery().in(this).select('.guide-stage').boundingClientRect(function(rect){if(rect&&rect.width&&rect.height){self.avatarWidth=rect.width;self.avatarHeight=rect.height}}).exec()},
-    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}if(this._threeDTimer){clearInterval(this._threeDTimer);this._threeDTimer=null}if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}this._pending3DAudio=null;this.threeDSceneUrl='';this.threeDAnimation='idle';this.threeDProgress=0;this.threeDDuration=0;this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
-    switchMode:function(mode){if(this.loading)return;this.stopPlayback();this.avatarMode=mode;this.updateAvatarMessage()},
-    updateAvatarMessage:function(){if(this.avatarMode==='audio'){this.avatarMessage='语音导览';return}var capability=this.avatarCapability&&this.avatarCapability[this.avatarMode==='3d'?'threeD':this.avatarMode];this.avatarMessage=capability?capability.message:'正在查询数字人服务状态'},
-    threeDReady:function(){if(!this.motionStartedAt)this.motionStartedAt=Date.now();if(this._threeDLoadTimer){clearTimeout(this._threeDLoadTimer);this._threeDLoadTimer=null}var p=this._pending3DAudio;if(p&&p.version===this._playbackVersion){this._pending3DAudio=null;this.playAudio(p.url);this.avatarMessage='3D导览'}},
-    threeDFailed:function(e){this.threeDError=true;this.threeDReady();this.avatarMessage=(e&&e.detail&&e.detail.message||'3D模型加载失败')+'，本轮使用语音讲解'},
-    prepare3D:function(p,audio,version){var self=this;self.threeDError=false;self.threeDProgress=0;self.threeDDuration=p.duration;self.threeDAnimation=p.animation;self._pending3DAudio={url:audio,version:version};self.avatarMessage='正在加载3D讲解动作';self.threeDSceneUrl=assetUrl(p.scene_url);self._threeDLoadTimer=setTimeout(function(){if(version===self._playbackVersion){self.threeDError=true;self.threeDReady();self.avatarMessage='3D加载超时，本轮先播放语音'}},30000)},
+    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
+    updateAvatarMessage:function(){if(this.avatarMode==='audio'){this.avatarMessage='语音导览';return}var capability=this.avatarCapability&&this.avatarCapability[this.avatarMode];this.avatarMessage=capability?capability.message:'正在查询数字人服务状态'},
     videoError:function(){this.speaking=false;this.videoUrl='';this.avatarMessage='视频播放失败，请检查视频地址与网络'},
-    playAudio:function(value){this._audio=uni.createInnerAudioContext();var self=this,a=this._audio;a.src=assetUrl(value);a.onPlay(function(){self.speaking=true;if(self.avatarMode==='3d'&&self.threeDDuration){self._threeDTimer=setInterval(function(){self.threeDProgress=Math.min(1,(a.currentTime||0)/self.threeDDuration)},100)}});function finish(){if(self._audio!==a){a.destroy();return}self.speaking=false;if(self._threeDTimer){clearInterval(self._threeDTimer);self._threeDTimer=null}self.threeDSceneUrl='';self.threeDAnimation='idle';self.threeDProgress=0;a.destroy();if(self._audio===a)self._audio=null}a.onEnded(finish);a.onError(function(){finish();uni.showToast({title:'语音播放失败',icon:'none'})});a.play()},
+    playAudio:function(value){this._audio=uni.createInnerAudioContext();var self=this,a=this._audio;a.src=assetUrl(value);a.onPlay(function(){self.speaking=true});function finish(){if(self._audio!==a){a.destroy();return}self.speaking=false;a.destroy();if(self._audio===a)self._audio=null}a.onEnded(finish);a.onError(function(){finish();uni.showToast({title:'语音播放失败',icon:'none'})});a.play()},
     startSpeechVideo:function(value){var self=this;if(self._audio){self._audio.destroy();self._audio=null}self.videoUrl=assetUrl(value);self.$nextTick(function(){if(self.videoUrl)uni.createVideoContext('guide-speech-video',self).play()})},
     pollAvatar:function(job,version){var self=this;if(version!==self._playbackVersion)return;request({url:'/avatar/jobs/'+job.job_id+'?token='+encodeURIComponent(job.access_token)}).then(function(r){if(version!==self._playbackVersion)return;var d=r.data&&r.data.data;if(!d)throw new Error('任务状态缺失');if(d.status==='completed'){self.startSpeechVideo(d.video_url);self.avatarMessage='讲解视频已生成，若未自动播放请点播放';return}if(d.status==='failed'){self.avatarMessage=d.message||'视频生成失败';return}self.avatarMessage=d.status==='processing'?'正在生成口型视频…':'视频生成排队中';self._avatarTimer=setTimeout(function(){self.pollAvatar(job,version)},1500)}).catch(function(){if(version===self._playbackVersion)self.avatarMessage='获取视频状态失败，请重新提问'})},
     fixImg:function(u){if(!u)return'';return assetUrl(u)},
@@ -333,8 +318,48 @@ export default {
     prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
     nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
     jumpSpot: function(i){ if(i===this.spotIdx||this.loading) return; this.spotIdx=i; this.mediaExpanded=false },
-    showNextProgress: function(){ var n=this.spotCards.length; var k=Math.max(3,this.progressShown); if(k>=n) return; this.progressShown = Math.min(k+1,n) },
-    onProgressLastTap: function(i){ var n=this.spotCards.length; if(n<=3) return; if(this.progressHasMore) return; if(i!==this.progressSpots.length-1) return; this.progressShown = 3 },
+    selectProgressSpot:function(i){
+      if(uni.vibrateShort)uni.vibrateShort({type:'light'})
+      if(i===this.progressActive){this.progressActive=-1;return}
+      this.progressActive=i
+      if(i!==this.spotIdx){this.spotIdx=i;this.mediaExpanded=false}
+      this.$nextTick(this.snapToActive)
+    },
+    measureProgress:function(){
+      var info=uni.getSystemInfoSync()
+      var rpx=(info.windowWidth||375)/750
+      this.progressNodeW=144*rpx
+      this.progressTrackW=Math.max(0,(info.windowWidth||375)-176*rpx)
+      this.progressContentW=this.spotCards.length*this.progressNodeW
+      this.updateProgressFade()
+    },
+    updateProgressFade:function(){
+      var max=Math.max(0,this.progressContentW-this.progressTrackW)
+      var scrollable=max>4
+      var pos=this._progressPos||0
+      var left=scrollable&&pos>4
+      var right=scrollable&&pos<max-4
+      if(left!==this.fadeLeft)this.fadeLeft=left
+      if(right!==this.fadeRight)this.fadeRight=right
+    },
+    onProgressScroll:function(e){
+      this._progressPos=e.detail.scrollLeft||0
+      if(this.progressScrollLeft!==this._progressPos)this.progressScrollLeft=this._progressPos
+      if(!this.progressContentW||!this.progressTrackW)this.measureProgress()
+      this.updateProgressFade()
+    },
+    onProgressRelease:function(){
+      this._progressReleaseTimer&&clearTimeout(this._progressReleaseTimer)
+      this._progressReleaseTimer=setTimeout(this.snapToActive,220)
+    },
+    snapToActive:function(){
+      var max=Math.max(0,this.progressContentW-this.progressTrackW)
+      var per=Math.max(1,this.progressNodeW)
+      var target=this.spotIdx*per-(this.progressTrackW-per)/2
+      this.progressScrollLeft=Math.max(0,Math.min(max,target))
+      var self=this
+      setTimeout(function(){self.updateProgressFade()},380)
+    },
     send: function(msg) {
       var self = this; var t = (msg||'').trim()
       if (!t || self.loading||self.repairOpen||self.repairOpening) return
@@ -367,9 +392,7 @@ export default {
             if(self.guideProvider==='xingyun')self.speakAnswer(d.data&&d.data.message)
             // #endif
             var job=d.data&&d.data.avatarJob
-            var performance=d.data&&d.data.avatarPerformance
-            if(performance&&performance.scene_url){self.prepare3D(performance,d.data.ttsAudioUrl,playbackVersion)}
-            else if(job&&job.job_id){self.pollAvatar(job,playbackVersion)}
+            if(job&&job.job_id){self.pollAvatar(job,playbackVersion)}
             else{if(job)self.avatarMessage=job.message;if(d.data&&d.data.ttsAudioUrl)self.playAudio(d.data.ttsAudioUrl)}
           }
 
@@ -406,8 +429,7 @@ export default {
             self.guideName = data.guide_info.name || ''
             self.guideNameEn = data.guide_info.name_en || ''
             var gid=data.guide_info.guide_id
-            self.guideAvatar=data.guide_info.avatar||data.guide_info.poster_image||''
-            self.guideSourceVideo=assetUrl(data.guide_info.base_mp4_path||'')
+              self.guideSourceVideo=assetUrl(data.guide_info.base_mp4_path||'')
             if(self.guideProvider==='xingyun'){self.guideId=gid;self.avatarMode='audio';
               // #ifdef APP-PLUS
               self.avatarMode='xingyun';self.connectXingyun()
@@ -415,7 +437,7 @@ export default {
               // #ifndef APP-PLUS
               self.avatarMessage='星云未连接 · 可使用语音导览'
               // #endif
-            }else if(gid&&gid!==self.guideId){self.guideId=gid;self._capabilityPromise=request({url:'/avatar/capabilities/'+gid}).then(function(r){self.avatarCapability=r.data.data;self.avatarMode=self.avatarCapability.preferredMode==='3d'&&self.avatarCapability.threeD&&self.avatarCapability.threeD.ready?'3d':self.avatarCapability.realistic.ready?'realistic':(self.avatarCapability.cartoon.ready?'cartoon':'audio');self.updateAvatarMessage();if(!self.guideAvatar&&self.avatarCapability.cartoon.previewUrl)self.guideAvatar=self.avatarCapability.cartoon.previewUrl}).catch(function(){self.avatarMessage='数字人服务状态查询失败'})}
+            }else if(gid&&gid!==self.guideId){self.guideId=gid;self._capabilityPromise=request({url:'/avatar/capabilities/'+gid}).then(function(r){self.avatarCapability=r.data.data;self.avatarMode=self.avatarCapability.realistic.ready?'realistic':'audio';self.updateAvatarMessage()}).catch(function(){self.avatarMessage='数字人服务状态查询失败'})}
           }
           var selectedIds=[];try{selectedIds=JSON.parse(data.visitor_preferences||'{}').spot_ids||[]}catch(e){}
           if(!selectedIds.length&&data.route_info)selectedIds=data.route_info.spot_ids||[]
@@ -569,9 +591,7 @@ export default {
     stopRecord: function() {this.voicePressing=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
     cancelRecord: function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
   },
-  onReady:function(){this.measureAvatar()},
   onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
-  onResize:function(){this.$nextTick(this.measureAvatar)},
   onUnload:function(){this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
   onHide:function(){this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
     // #ifdef MP-WEIXIN
@@ -588,6 +608,9 @@ export default {
     var s = uni.getSystemInfoSync()
     this.statusH = (s.statusBarHeight || 20) + 6
     this.refresh()
+    var self=this
+    setTimeout(function(){self.measureProgress()},700)
+    setTimeout(function(){self.measureProgress()},2200)
   },
 }
 </script>
@@ -595,17 +618,16 @@ export default {
 <style scoped>
 .route-tools{display:flex;gap:14rpx;padding:12rpx 24rpx;flex-shrink:0}.route-tools button{flex:1;min-width:0;margin:0;font-size:26rpx;line-height:2.5;border:1rpx solid var(--ng-border);border-radius:14rpx;color:#614b9a;background:#f0ecf8}.tour-route-mask{position:fixed;inset:0;z-index:1500;background:rgba(25,30,50,.35);display:flex;align-items:flex-end}.tour-route-sheet{width:100%;height:88vh;padding:28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));box-sizing:border-box;background:var(--ng-surface,#fff);border-radius:30rpx 30rpx 0 0;display:flex;flex-direction:column}.tour-route-heading{display:flex;align-items:center;justify-content:space-between;font-size:34rpx;padding-bottom:24rpx}.tour-route-heading button{margin:0;padding:0 20rpx;font-size:36rpx;line-height:1.7;background:#f5f1fa;color:#655574}.tour-route-body{flex:1;height:0;min-height:0}
 .xingyun-open{margin:8rpx 24rpx;padding:8rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:14rpx;color:var(--ng-secondary);background:var(--ng-surface);font-size:26rpx;flex-shrink:0}
-.native-3d-stage{width:100%;height:100%;overflow:hidden;border-radius:24rpx;}
 .stage-footer{position:relative;z-index:1;display:flex;align-items:center;gap:12rpx;padding:10rpx 24rpx;flex-shrink:0}
 .stage-footer .avatar-runtime-status{flex:1;min-width:0;padding:0;color:var(--ng-secondary);font-size:22rpx;line-height:1.6}
 .stage-location{display:flex;align-items:center;justify-content:flex-end;gap:10rpx;max-width:70%;margin-left:auto}
-.selected-guide-image{position:absolute;top:0;left:0;width:100%;height:auto}.guide-stage{flex-shrink:0}
-.avatar-modes{display:flex;margin:18rpx 24rpx;gap:12rpx;flex-shrink:0}.avatar-mode{padding:14rpx 28rpx;border-radius:14rpx;background:var(--ng-surface);color:var(--ng-secondary);font-size:24rpx;border:1rpx solid var(--ng-border)}.avatar-mode.selected{background:var(--ng-surface);border-color:rgba(99,102,241,0.25);color:var(--ng-secondary)}.avatar-video{width:100%;height:100%}.avatar-notice{font-size:24rpx;line-height:1.7;color:var(--ng-secondary);padding:0 28rpx;text-align:center;max-width:560rpx}
+.guide-stage{flex-shrink:0}
+.avatar-video{width:100%;height:100%}.avatar-notice{font-size:24rpx;line-height:1.7;color:var(--ng-secondary);padding:0 28rpx;text-align:center;max-width:560rpx}
 .page{height:100vh;display:flex;flex-direction:column;background-color:var(--ng-surface);position:relative;overflow:hidden}
 .avatar-runtime-status,.xingyun-open,.tour-progress,.spot-media{position:relative;z-index:1}
 .nav-spacer{flex:1;min-width:0}
 .nav .nav-progress{flex:1;min-width:0;padding:4rpx 0}
-.nav-progress .tp-nodes{min-width:100%;justify-content:center}
+.nav-progress .tp-nodes{min-width:0;justify-content:flex-start}
 .nav-progress .tp-stats{justify-content:center;flex-wrap:wrap;gap:4rpx 12rpx}
 .nav-progress .tp-stat{font-size:18rpx}
 .nav-distance{max-width:56vw;font-size:20rpx;line-height:1.4;color:var(--ng-accent-text)}
@@ -708,14 +730,14 @@ export default {
 .tp-track{white-space:nowrap}
 .tp-nodes{display:inline-flex;align-items:center;gap:0;padding:4rpx 0}
 .tp-node{display:inline-flex;flex-direction:column;align-items:center;min-width:100rpx;position:relative;padding:0 8rpx}
-.tp-node::after{content:'';position:absolute;top:14rpx;right:-40rpx;width:40rpx;height:2rpx;background:var(--ng-border)}
+.tp-node::after{content:'';position:absolute;top:15rpx;left:calc(50% + 16rpx);right:calc(-50% + 16rpx);width:auto;height:2rpx;background:var(--ng-border)}
 .tp-node:last-child::after{display:none}
 .tp-dot{width:28rpx;height:28rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ng-surface);border:2rpx solid var(--ng-border);z-index:1}
-.tp-node.active .tp-dot{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.15);box-shadow:0 0 0 6rpx rgba(99,102,241,0.08)}
-.tp-node.done .tp-dot{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.2)}
+.tp-node.active .tp-dot{border-color:rgba(99,102,241,0.6);background:rgba(99,102,241,0.38);box-shadow:0 0 0 6rpx rgba(99,102,241,0.12)}
+.tp-node.done .tp-dot{border-color:var(--ng-border);background:var(--ng-surface)}
 .tp-check{font-size:18rpx;color:var(--ng-secondary);font-weight:700}
 .tp-now{font-size:14rpx;color:var(--ng-text)}
-.tp-label{font-size:18rpx;color:var(--ng-secondary);margin-top:6rpx;max-width:100rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tp-label{font-size:18rpx;color:var(--ng-secondary);margin-top:6rpx;max-width:100rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .3s ease}
 .tp-node.active .tp-label{color:var(--ng-text);font-weight:600}
 .tp-node.done .tp-label{color:var(--ng-secondary)}
 .guide-stage .stage-progress{position:absolute;top:16rpx;right:20rpx;left:auto;z-index:5;box-sizing:border-box;max-width:58%;padding:8rpx 0;background:transparent;pointer-events:none;justify-content:flex-end;text-align:right;gap:0}
@@ -752,9 +774,12 @@ export default {
 .voice-mute-btn{display:none}
 
 .page .guide-stage{background:transparent}
-.nav-progress .tp-nodes{display:flex;align-items:stretch}
-.nav-progress .tp-more{justify-content:center;padding-top:0;padding-bottom:0}
-.tp-more text{display:block;font-size:32rpx;line-height:1;letter-spacing:2rpx;color:var(--ng-secondary)}
-.tp-dot{transition:background .25s ease,border-color .25s ease,box-shadow .25s ease}
+.nav-progress .tp-nodes{display:inline-flex;align-items:stretch;width:max-content;min-width:100%}
+.nav-progress .tp-node{width:144rpx;min-width:144rpx;flex:0 0 144rpx;padding:0;box-sizing:border-box}
+.nav-progress .tp-node>.tp-dot{margin:0 auto}
+.tp-track.fade-left.fade-right{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%)}
+.tp-track.fade-left:not(.fade-right){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%)}
+.tp-track.fade-right:not(.fade-left){-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%)}
+.tp-dot{transition:background .3s ease,border-color .3s ease,box-shadow .3s ease}
 .bottom-bar.keyboard-open{position:fixed!important;left:0;right:0;z-index:10001;padding-bottom:0!important}
 </style>

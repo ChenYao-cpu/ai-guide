@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { request_handler } from '@/api/base'
 import { header_authorization } from '@/api/user'
 const props = defineProps<{ guideId: number }>()
-type Capability = { realistic: { ready: boolean; message: string; sourceConfigured: boolean }; cartoon: { ready: boolean; message: string } }
+type Capability = { realistic: { ready: boolean; message: string; sourceConfigured: boolean } }
 const state = ref<Capability | null>(null)
 const error = ref('')
 const uploading = ref(false)
@@ -67,12 +67,6 @@ async function applyMotion() {
   finally {motionBusy.value=false}
 }
 const statusText:Record<string,string>={submitting:'正在提交',pending:'服务排队中',running:'正在生成',completed:'已生成，待预览应用',applied:'已应用',failed:'生成失败',unknown:'提交结果不确定，请核对百炼控制台'}
-async function configureCartoon() {
-  uploading.value = true
-  try { await request_handler.post('/avatar/cartoon/' + props.guideId, null, { headers: { Authorization: header_authorization.value } }); ElMessage.success(t("已启用 Live2D 样例")); await refresh() }
-  catch { ElMessage.error(t("卡通配置失败，请检查登录权限和模型文件")) }
-  finally { uploading.value = false }
-}
 async function refresh() {
   error.value = ''
   try { const response = await request_handler.get('/avatar/capabilities/' + props.guideId); state.value = response.data.data }
@@ -98,10 +92,9 @@ watch(()=>props.guideId,()=>{motion.value=null;prompt.value='';if(pollTimer)clea
     <p v-if="error" class="error">{{ $t(error) }}</p>
     <template v-else-if="state">
       <p><span :class="{ready:state.realistic.ready}">{{ $t("真人") }}</span>{{ state.realistic.message }}</p>
-      <p><span :class="{ready:state.cartoon.ready}">{{ $t("卡通") }}</span>{{ state.cartoon.message }}</p>
     </template>
     <p v-else>{{ $t("正在查询后端状态…") }}</p>
-    <div class="actions"><label class="upload"><input type="file" accept="video/mp4,.mp4" :disabled="uploading" @change="upload" />{{ $t(uploading ? '正在上传…' : '上传动作视频') }}</label><el-button :disabled="uploading" @click="configureCartoon">{{ $t("启用卡通样例") }}</el-button><el-button text @click="refresh">{{ $t("刷新状态") }}</el-button></div>
+    <div class="actions"><label class="upload"><input type="file" accept="video/mp4,.mp4" :disabled="uploading" @change="upload" />{{ $t(uploading ? '正在上传…' : '上传动作视频') }}</label><el-button text @click="refresh">{{ $t("刷新状态") }}</el-button></div>
     <small>{{ $t("上传3至30秒的MP4：全身完整入镜、头部朝前、动作小幅自然、固定镜头。系统会检查视频解码和画面变化，动作质量需预览确认。") }}</small>
     <div class="motion-panel">
       <strong>{{ $t("海报生成全身动作") }}</strong>

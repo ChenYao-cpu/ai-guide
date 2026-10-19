@@ -22,7 +22,7 @@ from ..models.tour_models import (
     TourSessionStatus,
     VisitorInteraction,
 )
-from ..modules.guide_identity import SHOWCASE_GUIDE_NAME, resolve_model_path, resolve_guide_voice
+from ..modules.guide_identity import SHOWCASE_GUIDE_NAME, resolve_guide_voice
 from .digital_guide_db import _asset_url
 from .init_db import DB_ENGINE
 
@@ -271,14 +271,8 @@ async def get_session_live_info(session_id: int):
             if current_spot_index + 1 < len(spots):
                 next_spot = spots[current_spot_index + 1]
 
-        guide_model_path = resolve_model_path(
-            guide_info.voice_style if guide_info else "female_wenrou",
-            guide_info.live2d_model_path if guide_info else "",
-        )
         guide_voice_style = resolve_guide_voice(
             guide_info.voice_style if guide_info else "female_wenrou",
-            guide_model_path,
-            guide_info.render_mode if guide_info else "",
         )
 
         from ..modules.route_presentation import route_overview
@@ -303,7 +297,6 @@ async def get_session_live_info(session_id: int):
                 "avatar": _asset_url(guide_info.avatar) if guide_info and guide_info.avatar else "",
                 "poster_image": _asset_url(guide_info.poster_image) if guide_info and guide_info.poster_image else "",
                 "base_mp4_path": _asset_url(guide_info.base_mp4_path) if guide_info and guide_info.base_mp4_path else "",
-                "live2d_model_path": guide_model_path,
                 "voice_style": guide_voice_style,
                 "voice_speed": guide_info.voice_speed if guide_info else 1.0,
             } if guide_info else None,

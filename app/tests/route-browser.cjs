@@ -21,7 +21,7 @@ try{
   else if(endpoint==='/tour-session/guides')body=ok({guide_list:[guide]})
   else if(endpoint==='/tour-session/routes')body=ok({route_list:[]})
   else if(endpoint==='/tour-routes/recommend')body=ok({spot_ids:[12,11,3],spot_count:3,estimated_time_minutes:100,visit_time_minutes:60,walking_time_minutes:35,rest_time_minutes:5,score_details:spots,planning_note:'Mock recommendation',data_basis:'Mock data'})
-  else if(endpoint.startsWith('/avatar/capabilities/'))body=ok({preferredMode:'audio',threeD:{ready:false},realistic:{ready:false,message:''},cartoon:{ready:false,message:''}})
+  else if(endpoint.startsWith('/avatar/capabilities/'))body=ok({preferredMode:'audio',realistic:{ready:false,message:''},cartoon:{ready:false,message:''}})
   else if(endpoint==='/tour-experience/route-preview'){const data=req.postDataJSON();requests.at(-1).ids=data.spot_ids;body=ok(overview(data.spot_ids))}
   else if(endpoint==='/tour-session/visitor-create'){ids=JSON.parse(url.searchParams.get('spot_ids'));requests.at(-1).ids=ids.slice();body=ok({session_id:77,avatar_access_token:'mock-tour-capability'})}
   else if(endpoint==='/tour-session/start/77')body=ok({})

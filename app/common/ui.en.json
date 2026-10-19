@@ -261,9 +261,18 @@
   "查看识别依据（原文）": "View identification evidence (original)",
   "识别到的景点已不可用，请重新选择": "The identified place is no longer available. Please choose another place.",
   "照片附言请控制在1000字以内": "Keep photo questions within 1,000 characters.",
-  "暂时无法确认照片中的景点。请补拍全景、标志建筑或名称标识，或手动选择景点继续提问。": "I cannot confirm the place in this photo. Try a wider view, a landmark or a name sign, or choose a place manually to continue.",
-  "照片可能是「{spot}」。识别结果尚未确认，请以现场标识为准。": "This photo may show {spot}. The identification is not confirmed; please check the signs at the site.",
-  "这个景点在哪里？有哪些拍照建议？": "Where is this place, and what photo spots or tips are recorded for it?",
+  "照片里没有匹配到已收录的景点，请补拍全景、标志建筑或名称标识，或手动选择景点继续提问。": "No matching place in the catalog. Try a wider view, a landmark or a name sign, or choose a place manually to continue.",
+  "已识别为「{spot}」。": "Identified as {spot}.",
+  "介绍「{spot}」的历史、典故和看点。": "Introduce the history, stories and highlights of {spot}.",
   "已得到候选景点，但问答服务暂不可用。请稍后重试提问。": "A possible place was identified, but guide answers are temporarily unavailable. Please try asking again later.",
   "照片识别失败，请稍后重试或联系管理员。": "Photo identification failed. Please try again later or contact the administrator."
+,
+  "问答历史": "Q&A history",
+  "还没有问答记录": "No Q&A history yet.",
+  "照片": "Photo",
+  "关闭": "Close"
+,
+  "清除": "Clear"
+,
+  "清除历史记录": "Clear history"
 }

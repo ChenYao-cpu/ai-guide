@@ -180,10 +180,8 @@ class DigitalGuideInfo(SQLModel, table=True):
     poster_image: str = ""
     base_mp4_path: str = ""  # 数字人基础循环视频
     base_video_metadata: str = ""  # 服务端校验后的素材信息 JSON
-    model3d_path: str = ""  # 已校验骨骼和口型的原生 glTF 模型
     render_mode: str = "realistic"
     is_enabled: bool = True  # 管理员上架后才对游客开放
-    live2d_model_path: str = ""  # Live2D 模型路径（如 /live2d/haru/haru_greeter_t05.model3.json）
 
     delete: bool = False
 
