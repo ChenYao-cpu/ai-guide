@@ -19,8 +19,8 @@
       </scroll-view>
 
     </view>
-      <view v-if="!spotCards.length" class="nav-spacer"></view>
-      <view class="nav-end" @tap="endTour"><text>✕</text></view>
+      <view v-if="spotCards.length <= 1" class="nav-spacer"></view>
+      <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
     </view>
 
     <view v-if="showRouteInfo" class="tour-route-mask" @tap="showRouteInfo=false"><view class="tour-route-sheet" @tap.stop><view class="tour-route-heading"><text>{{ t('剩余游览路线') }}</text><button @tap="showRouteInfo=false" :aria-label="t('关闭')">×</button></view><scroll-view scroll-y class="tour-route-body"><RouteOverview v-if="routeOverview" :overview="routeOverview" :current-id="liveCurrentId" /><text v-else>{{ t('路线详情暂时无法加载') }}</text></scroll-view></view></view>
@@ -471,10 +471,11 @@ export default {
       if(this.endingTour||this.leavingTour)return
       this.endingTour=true
       this.showEndConfirm=false
-      api.endSession(this.sid).then(function(result){
+      var self=this
+      return api.endSession(this.sid).then(function(result){
         if(!result.data||!result.data.success)throw new Error(result.data&&result.data.message||'结束记录保存失败')
-      }).catch(function(){uni.showToast({title:'已退出，结束状态未保存，请在导览记录中检查',icon:'none'})})
-      this.leaveTour('/pages/tour-summary/tour-summary?sessionId='+this.sid)
+        self.leaveTour('/pages/tour-summary/tour-summary?sessionId='+self.sid)
+      }).catch(function(){self.endingTour=false;uni.showToast({title:self.t('结束导览保存失败，请重试'),icon:'none'})})
     },
     toggleGps: function() {
       if (this.gpsTracking) { this.stopGps() }
@@ -707,7 +708,7 @@ export default {
 .loading-tip{text-align:center;padding:16rpx;color:var(--ng-secondary);font-size:24rpx}
 
 /* 底部输入 */
-.bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface)}
+.bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:calc(64rpx + env(safe-area-inset-bottom))}
 .input-row{display:flex;align-items:center;gap:10rpx;padding:10rpx 16rpx}
 .voice-btn{width:68rpx;height:68rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
 .voice-btn .iconfont{font-size:32rpx;color:var(--ng-secondary)}
@@ -778,5 +779,5 @@ export default {
 .tp-track.fade-left:not(.fade-right){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%)}
 .tp-track.fade-right:not(.fade-left){-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%)}
 .tp-dot{transition:background .3s ease,border-color .3s ease,box-shadow .3s ease}
-.bottom-bar.keyboard-open{position:fixed!important;left:0;right:0;z-index:10001;padding-bottom:0!important}
+.bottom-bar.keyboard-open{position:fixed!important;left:0;right:0;z-index:10001;padding-bottom:12rpx!important}
 </style>
