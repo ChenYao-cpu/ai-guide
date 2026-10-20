@@ -1,11 +1,11 @@
 <template>
-  <view v-if="ready" class="tour-orb" :class="{dragging,snapping}" :style="{left:x+'px',top:y+'px'}" role="button" :aria-label="t('开始导览')" @touchstart.stop="start" @touchmove.stop.prevent="move" @touchend.stop="end" @touchcancel.stop="cancel" @tap.stop="activate">
-    <view class="orb-rim"></view><text class="orb-flag">▶</text>
+  <view v-if="ready" class="tour-orb" :class="{dragging,snapping}" :style="{left:x+'px',top:y+'px'}" role="button" :aria-label="label || t('开始导览')" @touchstart.stop="start" @touchmove.stop.prevent="move" @touchend.stop="end" @touchcancel.stop="cancel" @tap.stop="activate">
+    <image class="orb-pin" src="/static/tour-orb-pin.svg" mode="aspectFit" aria-hidden="true" />
   </view>
 </template>
 <script>
 export default {
-  props:{count:Number},emits:['activate','dragging'],
+  props:{count:Number,label:{type:String,default:''},icon:{type:String,default:'▶'},variant:{type:String,default:'light'}},emits:['activate','dragging'],
   data(){return{ready:false,snapping:false,x:12,y:400,width:375,height:750,top:20,bottom:0,side:'right',dragging:false}},
   mounted(){this.layout();this.ready=true;this._resize=()=>{this.cancel();this.layout()};uni.onWindowResize?.(this._resize)},
   beforeUnmount(){clearTimeout(this._snapTimer);clearTimeout(this._hold);uni.offWindowResize?.(this._resize);this.$emit('dragging',false)},
@@ -21,7 +21,9 @@ export default {
 }
 </script>
 <style scoped>
-.tour-orb{position:fixed!important;width:74px;height:74px;box-sizing:border-box;border-radius:50%;z-index:990!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(145deg,#f3efff,#dbd5ff);border:1px solid rgba(255,255,255,.92);box-shadow:0 8px 25px rgba(89,70,165,.22),inset 0 2px 5px #fff;touch-action:none;user-select:none;transition:transform 180ms,box-shadow 180ms}
-.orb-rim{position:absolute;inset:4px;border-radius:50%;border:1px solid rgba(255,255,255,.65);pointer-events:none}.orb-flag{font-size:26px;line-height:1;color:#6551af}.orb-number{font-size:16px;line-height:1.2;color:#534091;font-weight:600}.tour-orb:active{transform:scale(.95)}.tour-orb.dragging{transition:none;transform:scale(1.06);box-shadow:0 14px 36px rgba(89,70,165,.32),inset 0 2px 5px #fff}
+.tour-orb{position:fixed!important;width:74px;height:74px;box-sizing:border-box;border-radius:50%;z-index:990!important;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.48);box-shadow:0 0 20px rgba(139,92,246,.15),0 5px 16px rgba(121,82,213,.12);touch-action:none;user-select:none;transition:transform 180ms,box-shadow 180ms}
+.orb-pin{width:36px;height:36px;pointer-events:none}
+.tour-orb:active{transform:scale(.95)}
+.tour-orb.dragging{transition:none;transform:scale(1.06);box-shadow:0 0 24px rgba(139,92,246,.22),0 9px 22px rgba(121,82,213,.16)}
 .tour-orb.snapping{transition:left 360ms cubic-bezier(.2,1.25,.35,1),top 360ms cubic-bezier(.2,1.25,.35,1),transform 180ms,box-shadow 180ms}
 </style>

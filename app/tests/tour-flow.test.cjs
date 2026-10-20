@@ -1,0 +1,57 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm')
+const root=path.resolve(__dirname,'..')
+function component(file){
+ const storage={user_id:17,token:'test'},toasts=[],calls=[],navigation=[]
+ const c={getCurrentPages:()=>[{route:"pages/mine/history"},{route:"pages/tour-summary/tour-summary"}],console,Date,Promise,setTimeout,clearTimeout,setInterval,clearInterval,BASE_URL:'http://local/api/v1',LANGUAGE_STORAGE_KEY:'language',assetUrl:x=>x,isBeijingCity:()=>true,selectedOrder:(order,ids)=>order.filter(id=>ids[id]),previewOptions:ids=>({spot_ids:ids}),roadMap:()=>null,FloatingTourButton:{},RouteTiming:{},ScenicSheet:{},TabBarNav:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},RouteOverview:{},TourRouteRepair:{},uni:{getStorageSync:k=>storage[k],setStorageSync:(k,v)=>{storage[k]=v},showToast:o=>toasts.push(o),getSystemInfoSync:()=>({}),request:o=>{calls.push(o)},reLaunch:o=>navigation.push(o),navigateTo:o=>navigation.push(o),navigateBack:()=>navigation.push({back:true})}}
+ vm.createContext(c)
+ const source=fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
+ vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.options='),c)
+ const o=c.options,s={t:x=>x,$nextTick:fn=>fn?.()};Object.assign(s,o.data.call(s));for(const [k,f] of Object.entries(o.methods))s[k]=f.bind(s);for(const [k,f] of Object.entries(o.computed||{}))Object.defineProperty(s,k,{get:()=>f.call(s)})
+ return{s,o,storage,toasts,calls,navigation,uni:c.uni}
+}
+test('view itinerary is the only forward step; returning preserves stops, order, guide and route scroll',()=>{
+ const {s,o}=component('pages/tour-guide/tour-guide.vue');s.pickedIds={12:true,3:true};s.orderedIds=[12,3];s.pickedGuide={guide_id:2};s.pickedRouteId=8;s.onPlanningScroll({detail:{scrollTop:840}})
+ s.goSelectGuide();assert.equal(s.tab,'personal');assert.equal(s.planningScrollTop,0);assert.deepEqual(Array.from(s.selectedIds),[12,3]);s.onPlanningScroll({detail:{scrollTop:200}})
+ assert.equal(o.onBackPress.call(s),true);assert.equal(s.tab,'route');assert.equal(s.planningScrollTop,840);assert.equal(s.pickedGuide.guide_id,2);assert.equal(s.pickedRouteId,8)
+ s.goSelectGuide();assert.equal(s.tab,'personal');s.showItinerary=true;o.onBackPress.call(s);assert.equal(s.tab,'personal');assert.equal(s.showItinerary,false)
+})
+test('empty selection and in-flight tour creation cannot enter another planning step',()=>{
+ const {s}=component('pages/tour-guide/tour-guide.vue');s.goSelectGuide();assert.equal(s.tab,'route');s.pickedIds={3:true};s.orderedIds=[3];s.starting=true;s.goSelectGuide();assert.equal(s.tab,'route')
+})
+test('local ratings persist per signed-in account and per tour and can be updated',()=>{
+ const {s,storage}=component('pages/tour-summary/tour-summary.vue');s.sid=71;s.ratingOwner=s.ratingAccount();s.sessionData={status:{live_status:2}};s.ratingScore=4;s.saveRating();assert.equal(s.savedRating,4);s.loadRating();assert.equal(s.ratingScore,4)
+ s.ratingScore=5;s.saveRating();s.loadRating();assert.equal(s.savedRating,5)
+ s.sid=72;s.loadRating();assert.equal(s.ratingScore,0);s.sid=71;storage.user_id=18;s.ratingOwner=s.ratingAccount();s.loadRating();assert.equal(s.ratingScore,0)
+ storage.user_id=17;s.ratingOwner=s.ratingAccount();s.loadRating();assert.equal(s.ratingScore,5)
+})
+test('active tours, invalid ratings, account switches and failed storage never claim a saved rating',()=>{
+ const {s,storage,uni,toasts}=component('pages/tour-summary/tour-summary.vue');s.sid=71;s.ratingOwner=s.ratingAccount();s.sessionData={status:{live_status:1}};s.ratingScore=5;s.saveRating();assert.equal(s.savedRating,0)
+ s.sessionData.status.live_status=2;for(const value of [0,6,2.5,'5']){s.ratingScore=value;s.saveRating();assert.equal(s.savedRating,0)}
+ s.ratingScore=5;storage.user_id=18;s.saveRating();assert.equal(s.savedRating,0);assert.match(toasts.at(-1).title,/账号已变化/)
+ storage.user_id=17;uni.setStorageSync=()=>{throw Error('full')};s.saveRating();assert.equal(s.savedRating,0);assert.match(toasts.at(-1).title,/保存失败/)
+})
+test('ending a tour opens summary only after server confirmation, deduplicates and allows retry on failure',async()=>{
+ const {s,calls}=component('pages/tour/tour.vue');s.sid=71;const left=[];s.leaveTour=url=>left.push(url)
+ const first=s.endTour();s.endTour();assert.equal(calls.length,1);assert.equal(left.length,0);calls[0].success({statusCode:200,data:{success:false}});await first;assert.equal(left.length,0);assert.equal(s.endingTour,false)
+ const retry=s.endTour();calls[1].success({statusCode:200,data:{success:true}});await retry;assert.equal(left[0],'/pages/tour-summary/tour-summary?sessionId=71')
+})
+
+test('real live-info contract exposes ended status at the root, without nested status or end_time',()=>{
+ const {s}=component('pages/tour-summary/tour-summary.vue');s.sessionData={session_id:147,live_status:2,start_time:'2026-10-20T12:00:00',current_spot_index:0};s.sid=147;s.ratingOwner=s.ratingAccount();assert.equal(s.tourEnded,true);s.ratingScore=4;s.saveRating();assert.equal(s.savedRating,4)
+ s.sessionData={live_status:1,status:{live_status:2}};assert.equal(s.tourEnded,false)
+ s.sessionData={live_status:0};assert.equal(s.tourEnded,false)
+})
+
+test('tour history shows existing ratings by account and tour, and refreshes updated scores',()=>{
+ const {s,storage,navigation}=component('pages/mine/history.vue');storage['tour_rating:v1:id%3A17:71']={score:3};storage['tour_rating:v1:id%3A17:72']={score:5};s.list=[{session_id:71,live_status:2},{session_id:72,live_status:2},{session_id:73,live_status:2},{session_id:74,live_status:1}];s.refreshRatings();assert.equal(s.ratings[71],3);assert.equal(s.ratings[72],5);assert.equal(s.ratings[73],undefined);assert.equal(s.ratings[74],undefined)
+ s.openRating(s.list[0]);assert.equal(navigation[0].url,'/pages/tour-summary/tour-summary?sessionId=71');storage['tour_rating:v1:id%3A17:71']={score:4};s.refreshRatings();assert.equal(s.ratings[71],4)
+ storage.user_id=18;s.refreshRatings();assert.equal(Object.keys(s.ratings).length,0)
+ storage.user_id=17;storage['tour_rating:v1:id%3A17:71']={score:6};s.refreshRatings();assert.equal(s.ratings[71],undefined)
+})
+test('history reload joins the saved rating after the authenticated tour response arrives',async()=>{
+ const {s,storage,calls}=component('pages/mine/history.vue');storage['tour_rating:v1:id%3A17:71']={score:3};const loading=s.loadData();calls.find(c=>c.url.endsWith('/tour-session/my-history')).success({statusCode:200,data:{success:true,data:{session_list:[{session_id:71,live_status:2,city:'北京'}]}}});calls.find(c=>c.url.endsWith('/spot-favorites/history')).success({statusCode:200,data:{success:true,data:{spot_list:[]}}});await loading;assert.equal(s.ratings[71],3);assert.equal(s.loading,false)
+})
+
+test('a rating opened from history returns to that history instead of replacing it with the home page',()=>{
+ const {s,navigation}=component('pages/tour-summary/tour-summary.vue');s.goBack();assert.equal(navigation.length,1);assert.equal(navigation[0].back,true)
+})

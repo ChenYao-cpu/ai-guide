@@ -105,12 +105,24 @@ export default {
     },
     // 切换语言时，把本地保存的 AI 小导游问答一起转换成新语言。
     translateAiChatHistory: function (target) {
+      var ownerId = uni.getStorageSync('user_id')
+      var ownerName = uni.getStorageSync('username')
+      var owner = ownerId ? 'id:' + ownerId : ownerName ? 'name:' + ownerName : 'guest'
+      var storageKey = 'ai_chat_state:' + encodeURIComponent(owner)
       var raw = ''
-      try { raw = uni.getStorageSync('ai_chat_msgs') || '' } catch (e) { raw = '' }
+      try { raw = uni.getStorageSync(storageKey) || uni.getStorageSync('ai_chat_msgs') || '' } catch (e) { raw = '' }
       if (!raw) return
-      var list
-      try { list = JSON.parse(raw) } catch (e) { return }
-      if (!Array.isArray(list) || !list.length) return
+      var state
+      try { state = JSON.parse(raw) } catch (e) { return }
+      var legacyList = Array.isArray(state)
+      var list = legacyList ? state : (state && Array.isArray(state.messages) ? state.messages : null)
+      if (!list || !list.length) return
+      var saveHistory = function () {
+        try {
+          if (legacyList) uni.setStorageSync('ai_chat_msgs', JSON.stringify(list))
+          else { state.messages = list; uni.setStorageSync(storageKey, JSON.stringify(state)) }
+        } catch (e) {}
+      }
       var guess = function (text) {
         var value = String(text || '')
         var cjk = (value.match(/[\u4e00-\u9fff]/g) || []).length
@@ -135,7 +147,7 @@ export default {
         }
         pending.push({ index: index, text: body, from: m.lang })
       })
-      if (!pending.length) { try { uni.setStorageSync('ai_chat_msgs', JSON.stringify(list)) } catch (e) {} return }
+      if (!pending.length) { saveHistory(); return }
       uni.request({
         url: BASE_URL + '/tour-session/translate-texts', method: 'POST',
         header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (uni.getStorageSync('token') || '') },
@@ -161,7 +173,7 @@ export default {
                 m.lang = target
               }
             })
-            uni.setStorageSync('ai_chat_msgs', JSON.stringify(list))
+            saveHistory()
           } catch (e) {}
         }
       })

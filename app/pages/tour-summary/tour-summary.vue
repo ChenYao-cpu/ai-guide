@@ -4,7 +4,7 @@
     <view class="ink-bg"><view class="ink-mt ink-mt-1"></view><view class="ink-mt ink-mt-2"></view></view>
 
     <view class="nav" :style="{paddingTop:statusH+'px'}">
-      <view class="nav-back" @tap="goHome"><text class="nav-back-icon">‹</text></view>
+      <view class="nav-back" @tap="goBack"><text class="nav-back-icon">‹</text></view>
       <text class="nav-title">{{ t("导览记录") }}</text>
       <view class="nav-side"></view>
     </view>
@@ -17,6 +17,15 @@
     </view>
 
     <scroll-view scroll-y class="main" v-else>
+      <view v-if="tourEnded" class="rating-card">
+        <text class="rating-title">{{ t('这次导览体验怎么样？') }}</text>
+        <text class="rating-hint">{{ t('点击星星，为本次导览打分') }}</text>
+        <view class="rating-stars" role="group" :aria-label="t('导览评分')">
+          <button v-for="star in 5" :key="star" class="rating-star" :class="{selected:star<=ratingScore}" :aria-label="t('{score}星',{score:star})" :aria-pressed="star===ratingScore" @tap="ratingScore=star">{{ star<=ratingScore ? '★' : '☆' }}</button>
+        </view>
+        <text class="rating-description">{{ ratingScore ? t(ratingLabels[ratingScore-1]) : t('请选择1至5星') }}</text>
+        <button class="rating-save" :disabled="!ratingScore||ratingScore===savedRating" @tap="saveRating">{{ t(savedRating ? (ratingScore===savedRating ? '评分已保存' : '更新评分') : '保存评分') }}</button>
+      </view>
       <!-- 游记封面 -->
       <view class="hero" :style="heroImg ? 'background-image:url('+heroImg+')' : ''">
         <view class="hero-shade"></view>
@@ -193,9 +202,16 @@ export default {
       sessionData: null, conversation: [], spots: [],
       currentSpotIdx: 0, aiSummary: '',
       quizQuestions: [], quizAnswers: {}, quizChecked: false, quizScore: 0,
+      ratingScore:0,savedRating:0,ratingOwner:'',ratingLabels:['很不满意','不太满意','一般','满意','非常满意'],
     }
   },
   computed: {
+    tourEnded:function(){
+      var data=this.sessionData;if(!data)return false
+      // live-info returns live_status at the root; retain older nested responses.
+      var state=data.live_status??data.status?.live_status
+      return state!=null?Number(state)===2:!!(data.end_time||data.status?.end_time)
+    },
     guideDisplayName: function() {
       var g = this.sessionData && this.sessionData.guide_info
       if (!g) return this.t('AI导游')
@@ -248,10 +264,31 @@ export default {
     },
   },
   methods: {
+    ratingAccount:function(){var id=uni.getStorageSync('user_id'),name=uni.getStorageSync('username');return id?'id:'+id:name?'name:'+name:''},
+    ratingKey:function(){return 'tour_rating:v1:'+encodeURIComponent(this.ratingOwner)+':'+this.sid},
+    loadRating:function(){
+      this.ratingScore=0;this.savedRating=0
+      if(!this.ratingOwner||!this.sid)return
+      try{var saved=uni.getStorageSync(this.ratingKey());if(saved&&Number.isInteger(saved.score)&&saved.score>=1&&saved.score<=5){this.ratingScore=saved.score;this.savedRating=saved.score}}catch(_){}
+    },
+    saveRating:function(){
+      if(!this.ratingOwner||this.ratingAccount()!==this.ratingOwner){uni.showToast({title:this.t('账号已变化，请重新打开导览记录'),icon:'none'});return}
+      if(!this.tourEnded||!Number.isInteger(this.ratingScore)||this.ratingScore<1||this.ratingScore>5||this.ratingScore===this.savedRating)return
+      try{
+        uni.setStorageSync(this.ratingKey(),{score:this.ratingScore,savedAt:Date.now()})
+        this.savedRating=this.ratingScore
+        uni.showToast({title:this.t('评分已保存'),icon:'success'})
+      }catch(_){uni.showToast({title:this.t('评分保存失败，请重试'),icon:'none'})}
+    },
     catLabel: function (c) { var m = { historical: '历史', natural: '自然', cultural: '文化' }; return this.t(m[c] || c) },
     fixImg: function(u) { if (!u) return ''; return assetUrl(u) },
     goHome: function() {
       uni.reLaunch({ url: '/pages/tour-guide/tour-guide' })
+    },
+    goBack:function(){
+      const pages=getCurrentPages(),previous=pages[pages.length-2]
+      if(previous&&previous.route==='pages/mine/history'){uni.navigateBack();return}
+      this.goHome()
     },
     shareTour: function() {
       var spots = this.spots.map(function(s) { return s.spot_name }).join('、')
@@ -320,6 +357,7 @@ export default {
     var s = uni.getSystemInfoSync()
     this.statusH = (s.statusBarHeight || 20) + 6
     this.sid = Number(opts.sessionId || 0)
+    this.ratingOwner=this.ratingAccount();this.loadRating()
     if (!this.sid) { this.loading = false; uni.showToast({ title: '参数无效', icon: 'none' }); return }
     this.loadData()
   },
@@ -327,6 +365,14 @@ export default {
 </script>
 
 <style scoped>
+.rating-card{margin:12rpx 16rpx 20rpx;padding:30rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:24rpx;background:var(--ng-surface);display:flex;flex-direction:column;align-items:center;gap:14rpx}
+.rating-title{font-size:32rpx;font-weight:700;color:var(--ng-text)}
+.rating-hint{font-size:24rpx;line-height:1.5;color:var(--ng-secondary);text-align:center}
+.rating-stars{display:flex;gap:8rpx;justify-content:center;width:100%}
+.rating-star{margin:0;padding:0;width:92rpx;height:92rpx;line-height:92rpx;font-size:64rpx;color:var(--ng-secondary);background:transparent;flex-shrink:0}.rating-star::after,.rating-save::after{border:0}
+.rating-star.selected{color:#b77916}
+.rating-description{min-height:38rpx;font-size:26rpx;color:var(--ng-text)}
+.rating-save{margin:4rpx 0;padding:0 40rpx;line-height:2.6;font-size:28rpx;border-radius:18rpx;color:#fff;background:#5545b7}.rating-save[disabled]{color:var(--ng-secondary);background:var(--ng-raised,#f0edf8)}
 .page{height:100vh;display:flex;flex-direction:column;background:var(--ng-surface);position:relative;overflow:hidden}
 .page.aurora-page{padding-bottom:0!important;background:transparent!important}
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}
