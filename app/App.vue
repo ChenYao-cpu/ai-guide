@@ -40,7 +40,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .msg-bubble.user { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .aurora-page{background:transparent!important;color:var(--ng-text)}
 .aurora-background{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,var(--ng-surface) 0%,var(--ng-surface) 35%,var(--ng-surface) 70%,var(--ng-surface) 100%)}
-.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn){position:relative;z-index:1}
+.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay){position:relative;z-index:1}
 .aurora-page .nav{background:transparent!important;border-bottom-color:var(--ng-border)!important;gap:18rpx}
 .aurora-page .nav-title{color:var(--ng-text)}
 .aurora-page .tb-root{position:fixed!important;background:var(--ng-surface)!important;border-top-color:var(--ng-border)!important}
@@ -51,6 +51,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .aurora-shine{position:absolute;inset:-40%;background:linear-gradient(115deg,transparent 35%,var(--ng-surface) 47%,var(--ng-surface) 54%,transparent 66%);animation:auroraShimmer 12s ease-in-out infinite alternate;will-change:transform}
 .brand-ai{display:flex;align-items:center;justify-content:center;width:72rpx;height:72rpx;flex-shrink:0;border-radius:20rpx;background:var(--ng-night);color:var(--ng-text);font-size:26rpx;font-weight:700;box-shadow:0 10rpx 28rpx rgba(30,41,59,0.28)}
 .aurora-page{--tab-icon-size:24px;--tab-label-size:14px;--tab-touch-height:60px;padding-bottom:calc(72px + env(safe-area-inset-bottom))!important}
+.aurora-page.no-tabbar{padding-bottom:0!important}
 .aurora-page .tb-root{--tab-label-size:13px}
 .aurora-page .tb-inner{display:flex;align-items:center;justify-content:space-around;padding:6px 6px!important;min-height:var(--tab-touch-height);box-sizing:border-box}
 .aurora-page .tb-item{flex:1;min-width:0;min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}

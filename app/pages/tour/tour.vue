@@ -8,9 +8,9 @@
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <view class="nav-back" @tap="goBack"><text>‹</text></view>
     <!-- 游览进度时间轴 -->
-    <view class="tour-progress nav-progress" v-if="spotCards.length > 1">
+    <view class="tour-progress nav-progress" v-if="spotCards.length">
       <scroll-view scroll-x enable-flex scroll-with-animation class="tp-track" :class="{'fade-left':fadeLeft,'fade-right':fadeRight}" :scroll-left="progressScrollLeft" :show-scrollbar="false" @scroll="onProgressScroll" @touchend="onProgressRelease">
-        <view class="tp-nodes">
+        <view class="tp-nodes" :class="{'tp-centered': spotCards.length <= 4}">
           <view v-for="(s, idx) in spotCards" :key="s.spot_id" :id="'tpn-'+idx" class="tp-node" :class="{done:idx<spotIdx, active:idx===progressActive}" @tap="selectProgressSpot(idx)">
             <view class="tp-dot"></view>
             <text class="tp-label">{{ t(s.spot_name) }}</text>
@@ -19,7 +19,7 @@
       </scroll-view>
 
     </view>
-      <view v-if="spotCards.length <= 1" class="nav-spacer"></view>
+      <view v-if="!spotCards.length" class="nav-spacer"></view>
       <view class="nav-end" @tap="endTour"><text>✕</text></view>
     </view>
 
@@ -82,11 +82,7 @@
 
     <!-- 对话区 -->
     <scroll-view scroll-y class="chat-area" :scroll-into-view="lastMsgId">
-      <view v-if="!msgs.length && !loading" class="chat-empty">
-
-        <text class="ce-title">{{ t('选择问题或直接提问') }}</text>
-
-      </view>
+      <view v-if="!msgs.length && !loading" class="chat-empty"></view>
       <view v-for="(m,i) in msgs" :key="i" :id="'msg-'+i" class="msg-row" :class="m.role==='guide'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <text class="msg-text">{{ m.message }}</text>
@@ -328,7 +324,7 @@ export default {
     measureProgress:function(){
       var info=uni.getSystemInfoSync()
       var rpx=(info.windowWidth||375)/750
-      this.progressNodeW=144*rpx
+      this.progressNodeW=130*rpx
       this.progressTrackW=Math.max(0,(info.windowWidth||375)-176*rpx)
       this.progressContentW=this.spotCards.length*this.progressNodeW
       this.updateProgressFade()
@@ -775,7 +771,8 @@ export default {
 
 .page .guide-stage{background:transparent}
 .nav-progress .tp-nodes{display:inline-flex;align-items:stretch;width:max-content;min-width:100%}
-.nav-progress .tp-node{width:144rpx;min-width:144rpx;flex:0 0 144rpx;padding:0;box-sizing:border-box}
+.nav-progress .tp-node{width:130rpx;min-width:130rpx;flex:0 0 130rpx;padding:0;box-sizing:border-box}
+.nav-progress .tp-nodes.tp-centered{justify-content:center}
 .nav-progress .tp-node>.tp-dot{margin:0 auto}
 .tp-track.fade-left.fade-right{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%)}
 .tp-track.fade-left:not(.fade-right){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%)}
