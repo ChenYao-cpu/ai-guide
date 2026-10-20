@@ -119,16 +119,25 @@
     <FloatingTourButton v-if="!showItinerary&&canStart" :count="pickedCount" @activate="startTour" @dragging="tourButtonDragging=$event" />
 
     <!-- 景点详情 -->
-    <ScenicSheet v-if="detailSpot" ref="spotSheet" fit-content @closed="detailSpot=null">
-      <view class="sheet-content spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path&&!failedImages[detailSpot.image_path]}" @tap.stop="">
+    <ScenicSheet v-if="detailSpot" ref="spotSheet" @closed="detailSpot=null">
+      <view class="sheet-content spot-detail-panel" :class="{'has-photo': !!detailSpot.image_path&&!failedImages[detailSpot.image_path], scrolled: detailScrolled}" @tap.stop="">
         <view class="dp-hd"><text class="dp-title">{{ t("景点详情") }}</text></view>
-        <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="$refs.spotSheet.setScroll($event)">
+        <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="onSpotScroll($event)">
           <view v-if="detailSpot.image_path&&!failedImages[detailSpot.image_path]" class="spot-hero"><image :src="fixImg(detailSpot.image_path)" mode="aspectFill" @error="failedImages[detailSpot.image_path]=true" /><view class="spot-hero-wash"></view></view>
           <view v-else class="spot-hero-empty"></view>
           <view class="dp-content">
           <text class="dp-name">{{ t(detailSpot.spot_name) }}</text>
           <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
-          <view class="dp-row"><text>{{ t("位置") }}</text><text>{{ t(detailSpot.city) ? t(detailSpot.city)+' · ' : '' }}{{ t(detailSpot.location)||t('暂无') }}</text></view>
+          <view class="dp-stats">
+            <view class="dp-stat"><text class="dp-stat-label">{{ t('建议游览') }}</text><text class="dp-stat-value">{{ detailSpot.visit_duration||20 }}{{ t('分钟') }}</text></view>
+            <view class="dp-stat"><text class="dp-stat-label">{{ t('自动播报') }}</text><text class="dp-stat-value">{{ Math.round(detailSpot.trigger_radius||50) }}{{ t('米内') }}</text></view>
+          </view>
+          <view class="dp-row"><text>{{ t("景点位置") }}</text><text>{{ t(detailSpot.city) ? t(detailSpot.city)+' · ' : '' }}{{ t(detailSpot.location)||t('暂无') }}</text></view>
+          <view v-if="detailSpot.history_detail" class="dp-section"><text class="dp-sec-title">{{ t('历史与文化') }}</text><text class="dp-sec-text">{{ t(detailSpot.history_detail) }}</text></view>
+          <view v-if="detailSpot.best_season" class="dp-section"><text class="dp-sec-title">{{ t('最佳季节') }}</text><text class="dp-sec-text">{{ t(detailSpot.best_season) }}</text></view>
+          <view v-if="detailSpot.photo_tips" class="dp-section"><text class="dp-sec-title">{{ t('推荐取景') }}</text><text class="dp-sec-text">{{ t(detailSpot.photo_tips) }}</text></view>
+          <view v-if="detailSpot.tour_tips" class="dp-section"><text class="dp-sec-title">{{ t('游览提示') }}</text><text class="dp-sec-text">{{ t(detailSpot.tour_tips) }}</text></view>
+          <view v-if="detailSpot.service_facilities" class="dp-section"><text class="dp-sec-title">{{ t('周边服务') }}</text><text class="dp-sec-text">{{ t(detailSpot.service_facilities) }}</text></view>
         </view>
         <view class="dp-btn" :class="{added:isPicked(detailSpot.spot_id)}" @tap="toggleSpot(detailSpot.spot_id);closeSpotSheet()">
           <text>{{ isPicked(detailSpot.spot_id)?t('✓ 取消选择'):t('加入选择') }}</text>
@@ -216,7 +225,7 @@ export default {
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
+  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
@@ -295,7 +304,8 @@ export default {
       }catch(_){uni.showToast({title:this.t('规划失败，请检查服务'),icon:'none'})}
       finally{this.recommending=false}
     },
-    openDetail:function(s){this.detailSpot=s;this.saveHistory(s)},
+    openDetail:function(s){this.detailScrolled=false;this.detailSpot=s;this.saveHistory(s)},
+    onSpotScroll:function(e){this.detailScrolled=(e.detail.scrollTop||0)>24;if(this.$refs.spotSheet)this.$refs.spotSheet.setScroll(e)},
     saveHistory:function(s){req({url:'/spot-favorites/history/'+s.spot_id,method:'PUT'}).then(function(r){if(!r.data.success)throw new Error('Save failed')}).catch(function(){uni.showToast({title:'浏览记录保存失败，请检查网络',icon:'none'})})},
     themeIcon:function(t){var m={comprehensive:'icon-youlan',history:'icon-lishiwenhua',nature:'icon-ziranfengguang',family:'icon-qinzi',photography:'icon-cam-3'};return m[t]||'icon-youlan'},
     switchRoute:function(direction){if(this.routes.length>1)this.routeIndex=(this.routeIndex+direction+this.routes.length)%this.routes.length},
@@ -508,8 +518,16 @@ export default {
 .spot-detail-panel .dp-desc{margin-bottom:12rpx;line-height:1.7}
 .spot-detail-panel .dp-btn{margin:0;padding:12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));background:#fff;border-top:1rpx solid var(--ng-border)}
 .spot-detail-panel .dp-btn text{padding:18rpx;font-size:30rpx}
-.spot-detail-panel{height:auto;max-height:none}
-.spot-detail-panel>.dp-body{height:auto;max-height:none;flex:none}
+.spot-detail-panel{height:50vh;max-height:50vh}
+.spot-detail-panel>.dp-body{height:0;max-height:none;flex:1;min-height:0}
+.spot-detail-panel.scrolled>.dp-hd{opacity:0;transition:opacity .2s ease}
+.dp-stats{display:flex;gap:16rpx;margin:10rpx 0 14rpx}
+.dp-stat{flex:1;min-width:0;padding:16rpx 18rpx;border-radius:18rpx;background:rgba(99,102,241,.06);display:flex;flex-direction:column;gap:6rpx}
+.dp-stat-label{font-size:22rpx;color:var(--ng-secondary)}
+.dp-stat-value{font-size:30rpx;font-weight:600;color:var(--ng-text)}
+.dp-section{margin-top:18rpx;padding-top:16rpx;border-top:1rpx solid var(--ng-border)}
+.dp-sec-title{display:block;font-size:28rpx;font-weight:600;color:var(--ng-text);margin-bottom:8rpx}
+.dp-sec-text{display:block;font-size:25rpx;line-height:1.75;color:var(--ng-text);white-space:pre-line;overflow-wrap:anywhere}
 .route-detail-panel>.dp-hd{padding-top:28px;z-index:6;pointer-events:none}
 .route-detail-panel .dp-actions{background:#fff;padding-bottom:calc(12rpx + env(safe-area-inset-bottom))}
 

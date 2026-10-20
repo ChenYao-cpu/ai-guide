@@ -12,7 +12,7 @@ function collect(text){
 }
 function dir(folder){for(const entry of fs.readdirSync(folder,{withFileTypes:true})){
  const file=path.join(folder,entry.name)
- if(entry.isDirectory()){if(!['live2d_fw','live2d_demo','__tests__','style','assets','i18n'].includes(entry.name))dir(file);continue}
+ if(entry.isDirectory()){if(!['__tests__','style','assets','i18n'].includes(entry.name))dir(file);continue}
  if(!/\.(vue|ts)$/.test(file))continue
  const text=fs.readFileSync(file,'utf8')
  if(file.endsWith('.ts')){collect(text);continue}
