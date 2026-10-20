@@ -89,7 +89,7 @@
             <view v-else class="rp-img rp-img-df"></view>
             <view class="rp-info">
               <text class="rp-name">{{ $t(s.spot_name) }}</text>
-              <text class="rp-cat">{{ $t(s.category || $t("景点")) }} {{ $t("· 预计") }} {{ $t(s.visit_duration || 20) }}{{ $t("分钟") }}</text>
+              <text class="rp-cat">{{ $t(s.category || $t("景点")) }} {{ $t("· 预计") }} {{ $t(s.visit_duration ||10) }}{{ $t("分钟") }}</text>
               <text v-if="i < recommendSpots.length - 1" class="rp-walk">{{ $t('步行至下一站：') }}{{ walkText(s, recommendSpots[i + 1]) }}</text>
             </view>
           </view>
@@ -159,6 +159,8 @@
             <view class="hp-close" @tap="closeHistory" :aria-label="$t('关闭')"><text>×</text></view>
           </view>
         </view>
+        <view v-if="historyTranslating" class="hp-translating">{{ $t('正在翻译…') }}</view>
+        <view v-if="historyTranslationFailed && !historyTranslating" class="hp-translating" @tap="localizeHistory">{{ tourLanguage==='en' ? 'Translation unavailable. Tap to retry.' : '翻译失败，点击重试' }}</view>
         <view class="hp-body">
           <view v-if="!historyPairs.length" class="hp-empty">{{ $t('还没有问答记录') }}</view>
           <view v-for="(pair, i) in historyPairs" :key="i" class="hp-item">
@@ -210,7 +212,7 @@ export default {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,photoClosing:false,scrollAnim:false,
-      showHistory:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
+      showHistory:false, historyTranslating:false, historyTranslationFailed:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
@@ -237,6 +239,7 @@ export default {
       var self=this,out=[],cur=null
       this.historyMsgs.forEach(function(m){
         var text=m.content||''
+        if(self.tourLanguage==='en'&&/[\u3400-\u9fff]/.test(text))text=self.historyTranslating?'Translating…':'Translation unavailable. Tap to retry.'
         if(m.image&&!text)text=self.$t('照片')
         if(!text)return
         if(m.role==='user'){cur={q:text,a:''};out.push(cur)}
@@ -258,9 +261,16 @@ export default {
       if(stack&&stack.length>1){uni.navigateBack({delta:1});return}
       uni.reLaunch({url:'/pages/tour-guide/tour-guide'})
     },
-    openHistory:function(){this.showHistory=true},
+    openHistory:function(){this.showHistory=true;this.localizeHistory()},
     closeHistory:function(){this.showHistory=false},
-    clearHistoryFromPanel:function(){this.clearHistory();this.showHistory=false},
+    clearHistoryFromPanel:function(){
+      // 历史清理不重置当前聊天、请求版本、语音或数字人会话。
+      const pending=this.loading?this.msgs.slice().reverse().find(m=>m.role==='user'):null
+      this.historyMsgs=pending?[{...pending}]:[]
+      this.historyTranslationFailed=false
+      this.saveHistory()
+      this.showHistory=false
+    },
     pushMsg:function(msg){this.msgs.push(msg);this.historyMsgs.push(msg);this.saveHistory()},
     splitReveal:function(text){
       const out=[];let buf=''
@@ -305,9 +315,9 @@ export default {
           this.jumpBottom()
           return
         }
-        msg.segments.push({t:chunks[i]})
-        i++
-        this._revealTimer=setTimeout(step,55)
+        msg.segments.push({t:chunks.slice(i,i+4).join('')})
+        i+=4
+        this._revealTimer=setTimeout(step,16)
         this.jumpBottomThrottled()
       }
       step()
@@ -337,6 +347,60 @@ export default {
     },
     storageOwner:function(){const id=uni.getStorageSync('user_id');return id?'id:'+id:uni.getStorageSync('username')?'name:'+uni.getStorageSync('username'):'guest'},
     historyKey:function(){return 'ai_chat_state:'+encodeURIComponent(this.storageOwner())},
+    // 历史问答按当前界面语言自动转换；接口失败时保留原文。
+    guessHistoryLanguage:function(text){
+      const value=String(text||'')
+      const cjk=(value.match(/[\u4e00-\u9fff]/g)||[]).length
+      const latin=(value.match(/[A-Za-z]/g)||[]).length
+      if(latin>=5&&latin>=cjk*2)return 'en'
+      if(cjk>0)return 'zh'
+      return latin>0?'en':''
+    },
+    localizeHistory:async function(){
+      if(this.historyTranslating)return
+      this.historyTranslationFailed=false
+      const owner=this.storageOwner()
+      const target=this.tourLanguage==='en'?'en':'zh'
+      const list=this.historyMsgs
+      const self=this
+      const pending=[]
+      list.forEach(function(m,index){
+        if(!m||typeof m.content!=='string'||!m.content.trim())return
+        const body=String(m.content||'')
+        const lang=m.lang||self.guessHistoryLanguage(body)
+        if(lang)m.lang=lang
+        const mixedForEnglish=target==='en'&&/[\u4e00-\u9fff]/.test(body)
+        const englishForChinese=target==='zh'&&!/[\u4e00-\u9fff]/.test(body)&&/[A-Za-z]/.test(body)
+        if(lang===target&&!mixedForEnglish&&!englishForChinese)return
+        if(m.translations&&typeof m.translations[target]==='string'&&m.translations[target].trim()){
+          m.content=m.translations[target];m.lang=target;return
+        }
+        pending.push({index:index,text:body,from:lang})
+      })
+      if(!pending.length){this.saveHistory();return}
+      this.historyTranslating=true
+      try{
+        for(let offset=0;offset<pending.length;offset+=4){
+          const batch=pending.slice(offset,offset+4)
+          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>p.text),target}})
+          if(this.storageOwner()!==owner||this.historyMsgs!==list)return
+          const translations=res.data&&res.data.data&&res.data.data.translations
+          if(!Array.isArray(translations))throw new Error('Invalid translation response')
+          batch.forEach(function(p,k){
+            const m=list[p.index],translated=translations[k]
+            if(!m||typeof translated!=='string'||!translated.trim()||(target==='en'&&/[\u3400-\u9fff]/.test(translated))){self.historyTranslationFailed=true;return}
+            if(!m.translations)m.translations={}
+            m.translations[p.from||m.lang||'zh']=p.text
+            m.translations[target]=translated.trim()
+            m.content=translated.trim()
+            m.lang=target
+          })
+          this.saveHistory()
+        }
+      }catch(e){this.historyTranslationFailed=true}
+      finally{this.historyTranslating=false}
+
+    },
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
     loadQACatalog:async function(){
       if(this.qaSpots.length&&this.qaGuides.length)return
@@ -521,16 +585,12 @@ export default {
     },
     loadHistory:function(){
       this.requestEpoch++;this.historyOwner=this.storageOwner();this.loading=false;this.recognizing=false;this.qaCatalogLoading=false
-      this.msgs=[];this.qaSession=null;this.qaSpotId=null;this.recommendedPlan=null;this.lastSpotIds=[];this.recommendSpots=[]
+      this.msgs=[];this.chatMode='guide';this.qaSession=null;this.qaSpotId=null;this.recommendedPlan=null;this.lastSpotIds=[];this.recommendSpots=[]
       uni.removeStorageSync('ai_chat_msgs') // Old shared history has no reliable account owner.
       try{
         const raw=uni.getStorageSync(this.historyKey()),state=raw?JSON.parse(raw):{}
+        // 重新进入账号时页面清空，上一轮的问答只保留在右上角的问答历史里。
         this.historyMsgs=Array.isArray(state.messages)?state.messages.filter(item=>item&&['ai','user'].includes(item.role)&&typeof item.content==='string').slice(-200):[]
-      this.msgs=[]
-        this.chatMode='guide'
-        if(Number.isInteger(state.session?.session_id)&&state.session.session_id>0)this.qaSession=state.session
-        this.qaSpotId=Number.isInteger(state.spotId)?state.spotId:null
-        if(state.plan&&Array.isArray(state.plan.spot_ids)){this.recommendedPlan=state.plan;this.lastSpotIds=state.plan.spot_ids;this.fetchRecommendSpots(this.lastSpotIds)}
       }catch(e){this.historyMsgs=[];this.msgs=[]}
     },
     clearRoutePreview:function(){this.lastSpotIds=[];this.recommendSpots=[];this.recommendedPlan=null;this.recommendLoading=false;uni.removeStorageSync('ai_spot_ids');uni.removeStorageSync('ai_route_plan')},
@@ -757,6 +817,7 @@ export default {
 .hp-close{width:60rpx;height:60rpx;border-radius:16rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.08);font-size:34rpx;line-height:1;color:var(--ng-secondary)}
 .hp-body{max-height:calc(74vh - 110rpx);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:auto;touch-action:pan-y;padding:0 24rpx 24rpx;box-sizing:border-box}
 .hp-empty{padding:60rpx 0;text-align:center;color:var(--ng-secondary);font-size:26rpx}
+.hp-translating{padding:4rpx 4rpx 14rpx;color:var(--ng-secondary);font-size:23rpx}
 .hp-item{margin-top:18rpx;padding:18rpx;border-radius:20rpx;background:rgba(99,102,241,0.05);border:1rpx solid rgba(99,102,241,0.12)}
 .hp-q{display:flex;gap:12rpx;align-items:flex-start}
 .hp-a{display:flex;gap:12rpx;align-items:flex-start;margin-top:12rpx;padding-top:12rpx;border-top:1rpx dashed var(--ng-border)}

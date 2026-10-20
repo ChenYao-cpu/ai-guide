@@ -67,7 +67,6 @@
         </view>
       </view>
 
-      <button v-if="tab==='route'&&pickedCount>0" class="selection-next" :disabled="starting||recommending" @tap="goSelectGuide">{{ t("查看行程") }}</button>
       <!-- ===== 个性化 ===== -->
       <view v-show="tab==='personal'">
         <view class="block">
@@ -108,8 +107,8 @@
       </view>
     </view>
     <view v-if="guidePicker" class="drawer-overlay" @tap="guidePicker=false"><view class="drawer-mask"></view><view class="drawer-panel" @tap.stop=""><view class="dp-hd"><text class="dp-title">{{ t("选择数字人") }}</text><text @tap="guidePicker=false">{{ t("关闭") }}</text></view><view class="guide-grid"><view v-for="g in guides" :key="g.guide_id" class="guide-card" @tap="pickedGuide=g;guidePicker=false"><image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" /><view class="gc-name">{{ t(g.name) }}</view></view></view></view></view>
-    <!-- 悬浮开始按钮 -->
-    <FloatingTourButton v-if="tab==='personal'&&!showItinerary&&canStart" :count="pickedCount" @activate="startTour" @dragging="tourButtonDragging=$event" />
+    <!-- 悬浮球：游览路线→查看行程（3D 主操作球）；个性化→开始导览 -->
+    <FloatingTourButton v-if="!showItinerary && ((tab==='route'&&pickedCount>0) || (tab==='personal'&&canStart))" :variant="tab==='route'?'primary':'light'" :label="t(tab==='route'?'查看行程':'开始导览')" :icon="tab==='route'?'→':'▶'" @activate="tab==='route'?goSelectGuide():startTour()" @dragging="tourButtonDragging=$event" />
 
     <!-- 景点详情 -->
     <ScenicSheet v-if="detailSpot" ref="spotSheet" @closed="detailSpot=null">
@@ -122,7 +121,7 @@
           <text class="dp-name">{{ t(detailSpot.spot_name) }}</text>
           <text class="dp-desc">{{ t(detailSpot.description)||t('暂无简介') }}</text>
           <view class="dp-stats">
-            <view class="dp-stat"><text class="dp-stat-label">{{ t('建议游览') }}</text><text class="dp-stat-value">{{ detailSpot.visit_duration||20 }}{{ t('分钟') }}</text></view>
+            <view class="dp-stat"><text class="dp-stat-label">{{ t('建议游览') }}</text><text class="dp-stat-value">{{ detailSpot.visit_duration||10 }}{{ t('分钟') }}</text></view>
             <view class="dp-stat"><text class="dp-stat-label">{{ t('自动播报') }}</text><text class="dp-stat-value">{{ Math.round(detailSpot.trigger_radius||50) }}{{ t('米内') }}</text></view>
           </view>
           <view class="dp-row"><text>{{ t("景点位置") }}</text><text>{{ t(detailSpot.city) ? t(detailSpot.city)+' · ' : '' }}{{ t(detailSpot.location)||t('暂无') }}</text></view>
@@ -142,7 +141,7 @@
     <!-- 路线时间轴抽屉 -->
     <ScenicSheet v-if="routeDetail" ref="routeSheet" @closed="routeDetail=null">
       <view class="sheet-content route-detail-panel" @tap.stop="">
-        <view v-if="routeDetail.cover_image" class="route-detail-background"><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo" mode="aspectFill" /><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo route-detail-blur" mode="aspectFill" /><view class="route-detail-wash"></view></view>
+        <view v-if="routeDetail.cover_image" class="route-detail-background"><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo" mode="aspectFill" /><view class="route-detail-wash"></view></view>
         
         <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.city) ? t(routeDetail.city)+' · ' : '' }}{{ t(routeDetail.name) }}</text></view>
         <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="$refs.routeSheet.setScroll($event)"><view class="dp-content">
@@ -208,14 +207,12 @@ export default {
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,planningInkReady:true,planningInkMotion:0,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
-  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
+  data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
   }},
   computed:{
-    planningInkStyle:function(){return {left:this.tab==='route'?'calc(25% - 2em + 12rpx)':'calc(75% - 2em + 12rpx)',width:this.tab==='route'?'4em':'3em'}},
     canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending&&!this.starting&&this.itineraryState.key===this.itineraryKey&&!this.itineraryState.busy&&!this.itineraryState.error&&!!this.itineraryState.data?.complete},
     selectedIds:function(){return selectedOrder(this.orderedIds,this.pickedIds)},
     itineraryOptions:function(){return previewOptions(this.selectedIds,this.personalPlan,this.personalPlan?.pace||'standard')},
@@ -361,10 +358,10 @@ export default {
 </script>
 
 <style scoped>
-.planning-header{position:relative;z-index:1;padding:16rpx 28rpx 28rpx;display:flex;flex-direction:column;align-items:flex-start;gap:12rpx}
-.planning-title{font-size:40rpx;font-weight:700;color:var(--ng-text)}
-.planning-subtitle{font-size:25rpx;line-height:1.5;color:var(--ng-secondary)}
-.planning-back{margin:0 0 6rpx;padding:6rpx 16rpx;font-size:26rpx;line-height:1.8;color:var(--ng-accent-text,#5141ad);background:var(--ng-surface);border-radius:14rpx}.planning-back::after,.selection-next::after{border:0}
+.planning-header{position:relative;z-index:1;padding:16rpx 120rpx 28rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12rpx}
+.planning-title{text-align:center;font-size:40rpx;font-weight:700;color:var(--ng-text)}
+.planning-subtitle{text-align:center;font-size:25rpx;line-height:1.5;color:var(--ng-secondary)}
+.planning-back{position:absolute;left:16rpx;top:4rpx;margin:0;padding:6rpx 16rpx;font-size:26rpx;line-height:1.8;color:var(--ng-accent-text,#5141ad);background:var(--ng-surface);border-radius:14rpx}.planning-back::after,.selection-next::after{border:0}
 .main.itinerary-active{z-index:2200}
 .header-spacer{padding:0!important;border-bottom:0!important;pointer-events:none}
 .map-preview{margin:0 0 0 auto;padding:8rpx 24rpx;line-height:1.6;min-height:0;font-size:25rpx;color:#6840c2;background:#f1eaff;border-radius:14rpx}
@@ -383,15 +380,7 @@ export default {
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mountain{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:50% 70% 0 0}.ink-mt-1{bottom:20%;height:200rpx;opacity:.03;transform:scaleX(1.4)}.ink-mt-2{bottom:25%;height:150rpx;opacity:.02;transform:scaleX(1.2) translateX(10%)}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 
-/* 双按钮 */
 .nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;padding:16rpx 24rpx;background:var(--ng-surface)}.nav-title{font-size:39.1rpx;font-weight:600;color:var(--ng-text);letter-spacing:0;font-family:var(--app-font-family);text-align:center}
-/* 【修改】padding-top 8rpx → 0 向上移动 */
-.top-tabs{position:relative;z-index:1;display:flex;gap:16rpx;padding:0 20rpx 16rpx}
-.tt-item{flex:1;display:flex;align-items:center;justify-content:center;gap:10rpx;padding:22rpx 0;border-radius:16rpx;font-size:var(--tab-label-size);font-weight:600;color:var(--ng-secondary);background:var(--ng-surface);border:1rpx solid var(--ng-border);transition:all .15s}
-.tt-label{font-size:var(--tab-label-size);line-height:1.3;font-weight:600}
-.tt-text{position:relative}.tt-underline{position:absolute;bottom:-12rpx;left:0;right:0;height:4rpx;border-radius:2rpx;background:currentColor;opacity:0}.tt-item.on .tt-underline{opacity:1}
-.tt-item.on{color:var(--ng-text);background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));border-color:transparent}
-.tt-icon{font-size:30rpx}
 
 .main{position:relative;z-index:1;padding:0 20rpx;min-height:0;box-sizing:border-box;width:100%}.load{text-align:center;padding:80rpx;color:var(--ng-secondary)}.err{text-align:center;padding:32rpx;background:var(--ng-surface);border-radius:14rpx;border:1rpx solid rgba(99,102,241,0.25)}.err text{display:block;color:var(--ng-secondary);font-size:27.6rpx;margin-bottom:12rpx}.retry{display:inline-block;padding:10rpx 28rpx;background:rgba(99,102,241,0.18);color:var(--ng-text);border-radius:10rpx;font-size:27.6rpx}
 
@@ -471,13 +460,12 @@ export default {
 .empty-title{font-size:28rpx;font-weight:600;color:var(--ng-text);margin-bottom:8rpx}
 .empty-hint{font-size:24rpx;color:var(--ng-secondary);line-height:1.7}.route-cover-note{font-size:20.7rpx;color:var(--ng-secondary)}.scenic-fade{position:relative;height:360rpx;overflow:hidden}.scenic-clear,.scenic-blur{position:absolute;width:100%;height:100%;top:0;left:0}.scenic-blur{filter:blur(10px);mask-image:linear-gradient(to bottom,transparent 30%,black 70%,transparent 100%)}.scenic-veil{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 35%,var(--ng-surface) 60%,var(--ng-surface) 100%)}
 
-.route-detail-background{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.route-detail-background{position:absolute;top:0;left:0;right:0;height:560rpx;max-height:60%;pointer-events:none;z-index:0;overflow:hidden}
 .page.aurora-page{height:100vh;overflow:hidden;padding-bottom:0!important}
 .page-scroll{display:block;height:100vh;box-sizing:border-box}
 .page-bottom-space{height:calc(110px + env(safe-area-inset-bottom))}
-.route-detail-photo{position:absolute;inset:0;width:100%;height:100%;opacity:1;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%);mask-image:linear-gradient(to bottom,#000 0%,#000 18%,transparent 68%)}
-.route-detail-blur{filter:blur(12px);transform:scale(1.06);-webkit-mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%);mask-image:linear-gradient(to bottom,transparent 8%,#000 48%,#000 100%)}
-.route-detail-wash{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.22) 0%,rgba(255,255,255,.38) 28%,rgba(255,255,255,.76) 70%,#fff 100%)}
+.route-detail-photo{position:absolute;inset:0;width:100%;height:100%;opacity:1}
+.route-detail-wash{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.08) 0%,rgba(255,255,255,.24) 20%,rgba(255,255,255,.58) 45%,rgba(255,255,255,.86) 70%,#fff 100%)}
 .route-detail-panel>.dp-handle,.route-detail-panel>.dp-hd,.route-detail-panel>.dp-body,.route-detail-panel>.dp-start,.route-detail-panel>.dp-actions{position:relative;z-index:1}
 .route-detail-panel .dp-title{font-size:40.25rpx;line-height:1.4}
 .route-detail-panel .dp-desc,.route-detail-panel .rd-desc{font-size:31.05rpx;color:var(--ng-secondary)}
@@ -521,14 +509,6 @@ export default {
 .dp-sec-text{display:block;font-size:25rpx;line-height:1.75;color:var(--ng-text);white-space:pre-line;overflow-wrap:anywhere}
 .route-detail-panel>.dp-hd{padding-top:28px;z-index:6;pointer-events:none}
 .route-detail-panel .dp-actions{background:#fff;padding-bottom:calc(12rpx + env(safe-area-inset-bottom))}
-
-.top-tabs.planning-ink-ready .tt-underline{opacity:0!important}
-.planning-liquid-ink{position:absolute;z-index:2;bottom:26rpx;height:4rpx;font-size:var(--tab-label-size);border-radius:4rpx;background:var(--ng-accent-text);pointer-events:none;transform-origin:center;transition:left 520ms cubic-bezier(.22,1.35,.36,1),width 520ms cubic-bezier(.22,1.35,.36,1);will-change:left,width,transform}
-.top-tabs.planning-ink-ready .tt-item{position:relative;z-index:1;background:transparent;border-color:transparent}
-.top-tabs.planning-ink-ready .tt-item.on{background:transparent}
-
-.planning-ink-moving{animation:planningInkRipple 520ms both}
-@keyframes planningInkRipple{0%,100%{transform:scale(1)}25%{transform:scale(1.16,.75)}65%{transform:scale(.93,1.14)}84%{transform:scale(1.04,.96)}}
 
 .sheet-content.route-detail-panel>.dp-body{background:transparent}
 .route-detail-panel .dp-title{text-shadow:0 1px 8px rgba(255,255,255,.85)}

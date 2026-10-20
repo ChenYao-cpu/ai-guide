@@ -63,7 +63,29 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(DB_ENGINE)
     logger.info("  → 检查字段迁移...")
     _migrate_add_missing_columns()
+    _shorten_legacy_visit_durations()
     logger.info("  → 数据库初始化完成")
+
+
+def _shorten_legacy_visit_durations():
+    """一次性缩短旧停留估算；保留原值，重启不重复缩短。"""
+    from sqlalchemy import text
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(20261021, 10)"))
+        conn.execute(text("""CREATE TABLE IF NOT EXISTS tour_duration_migration (
+            migration_key TEXT PRIMARY KEY, original_values JSONB NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""))
+        applied = conn.execute(text("SELECT 1 FROM tour_duration_migration WHERE migration_key='shorter_visits_v1'")).first()
+        if applied:
+            return
+        conn.execute(text("""INSERT INTO tour_duration_migration (migration_key, original_values)
+            SELECT 'shorter_visits_v1', COALESCE(jsonb_object_agg(spot_id::text, visit_duration), '{}'::jsonb)
+            FROM scenic_spot_info WHERE delete=FALSE AND visit_duration>10"""))
+        result = conn.execute(text("""UPDATE scenic_spot_info
+            SET visit_duration=LEAST(15, GREATEST(5, CEIL(visit_duration / 2.0)::integer))
+            WHERE delete=FALSE AND visit_duration>10"""))
+        conn.execute(text("ALTER TABLE scenic_spot_info ALTER COLUMN visit_duration SET DEFAULT 10"))
+        logger.info("Shortened legacy visit estimates for {} spots", result.rowcount)
 
 
 def _migrate_add_missing_columns():
@@ -94,7 +116,7 @@ def _migrate_add_missing_columns():
         {
             "table": "scenic_spot_info",
             "columns": [
-                ("visit_duration", "INTEGER DEFAULT 20"),
+                ("visit_duration", "INTEGER DEFAULT 10"),
             ],
         },
         # ScenicSpotInfo: 面向推荐问题的结构化知识字段

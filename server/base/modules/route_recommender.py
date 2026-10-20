@@ -94,7 +94,7 @@ async def recommend_route(preferences,spot_list,time_budget_minutes=None,city=''
     avoid_steps = pace=='relaxed'
     speed=55 if pace=='relaxed' else 75
     def totals(route):
-        visit=sum(int(_get_value(i['spot'],'visit_duration',20) or 20) for i in route)
+        visit=sum(int(_get_value(i['spot'],'visit_duration',10) or 10) for i in route)
         legs=[_distance(a['spot'],b['spot'],avoid_steps) for a,b in zip(route,route[1:])]
         if origin and route:legs.insert(0,gate_distance(route[0]['spot'],start_area,avoid_steps))
         exit_meters=gate_distance(route[-1]['spot'],end_area,avoid_steps) if destination and route else 0
