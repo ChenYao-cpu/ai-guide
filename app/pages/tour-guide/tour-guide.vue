@@ -8,19 +8,12 @@
     <view class="ink-bg"><view class="ink-mountain ink-mt-1"></view><view class="ink-mountain ink-mt-2"></view></view>
 
     <!-- 毛体标题 -->
-    <scroll-view scroll-y class="page-scroll" :style="viewportH?{height:viewportH+'px'}:null" :show-scrollbar="false">
+    <scroll-view scroll-y class="page-scroll" :scroll-top="planningScrollTop" @scroll="onPlanningScroll" :style="viewportH?{height:viewportH+'px'}:null" :show-scrollbar="false">
     <view class="nav header-spacer" aria-hidden="true" :style="{height:statusH+'px'}"></view>
-    <!-- 双按钮切换 -->
-    <view class="top-tabs" :class="{'planning-ink-ready':planningInkReady}">
-      <view class="tt-item" :class="{on:tab==='route'}" @tap="switchPlanningTab('route')">
-        <text class="iconfont icon-zuobiao tt-icon"></text>
-        <view class="tt-text"><text class="tt-label">{{ t("游览路线") }}</text><view class="tt-underline"></view></view>
-      </view>
-      <view class="tt-item" :class="{on:tab==='personal'}" @tap="switchPlanningTab('personal')">
-        <text class="iconfont icon-xueshengdenglu tt-icon"></text>
-        <view class="tt-text"><text class="tt-label">{{ t("个性化") }}</text><view class="tt-underline"></view></view>
-      </view>
-      <view v-if="planningInkReady" class="planning-liquid-ink" :class="{'planning-ink-moving':planningInkMotion!==0}" :style="planningInkStyle"></view>
+    <view class="planning-header">
+      <button v-if="tab==='personal'" class="planning-back" :disabled="starting||recommending" @tap="switchPlanningTab('route')">‹ {{ t('返回选路线') }}</button>
+      <text class="planning-title">{{ t(tab==='route' ? '游览路线' : '个性化行程') }}</text>
+      <text class="planning-subtitle">{{ t(tab==='route' ? '选择想去的景点，查看行程后选择数字人' : '确认行程，选择数字人后开始导览') }}</text>
     </view>
 
     <view class="main" :class="{'itinerary-active':showItinerary}">
@@ -74,7 +67,7 @@
         </view>
       </view>
 
-      <view v-if="tab==='route'&&pickedCount>0&&!pickedGuide" class="selection-next" @tap="goSelectGuide">{{ t("查看行程") }}</view>
+      <button v-if="tab==='route'&&pickedCount>0" class="selection-next" :disabled="starting||recommending" @tap="goSelectGuide">{{ t("查看行程") }}</button>
       <!-- ===== 个性化 ===== -->
       <view v-show="tab==='personal'">
         <view class="block">
@@ -116,7 +109,7 @@
     </view>
     <view v-if="guidePicker" class="drawer-overlay" @tap="guidePicker=false"><view class="drawer-mask"></view><view class="drawer-panel" @tap.stop=""><view class="dp-hd"><text class="dp-title">{{ t("选择数字人") }}</text><text @tap="guidePicker=false">{{ t("关闭") }}</text></view><view class="guide-grid"><view v-for="g in guides" :key="g.guide_id" class="guide-card" @tap="pickedGuide=g;guidePicker=false"><image v-if="guideImage(g)" :src="guideImage(g)" class="gc-image" mode="aspectFit" /><view class="gc-name">{{ t(g.name) }}</view></view></view></view></view>
     <!-- 悬浮开始按钮 -->
-    <FloatingTourButton v-if="!showItinerary&&canStart" :count="pickedCount" @activate="startTour" @dragging="tourButtonDragging=$event" />
+    <FloatingTourButton v-if="tab==='personal'&&!showItinerary&&canStart" :count="pickedCount" @activate="startTour" @dragging="tourButtonDragging=$event" />
 
     <!-- 景点详情 -->
     <ScenicSheet v-if="detailSpot" ref="spotSheet" fit-content @closed="detailSpot=null">
@@ -171,17 +164,7 @@
           <view class="dpa-btn pick" :class="{on:pickedRouteId===routeDetail.route_id}" @tap="pickRoute(routeDetail)">
             <text>{{ pickedRouteId===routeDetail.route_id ? t('✓ 已选此路线') : t('选择此路线') }}</text>
           </view>
-          <!-- #ifdef APP-PLUS -->
-          <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id"><text>{{ t("去选数字人") }}</text></view>
-          <!-- #endif -->
-          <!-- #ifndef APP-PLUS -->
-          <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id&&!canStart">
-            <text>{{ t("去选数字人形象") }}</text>
-          </view>
-          <view class="dpa-btn start" @tap="startTour()" v-if="pickedRouteId===routeDetail.route_id&&canStart">
-            <text>{{ t("开始导览") }}</text>
-          </view>
-          <!-- #endif -->
+          <view class="dpa-btn start" @tap="goSelectGuide" v-if="pickedRouteId===routeDetail.route_id"><text>{{ t("查看行程") }}</text></view>
         </view>
       </view>
     </ScenicSheet>
@@ -216,7 +199,7 @@ export default {
     if(wx.hideHomeButton)wx.hideHomeButton()
     // #endif
   },
-  data:function(){return{failedImages:{},planningInkReady:true,planningInkMotion:0,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
+  data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,planningInkReady:true,planningInkMotion:0,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
@@ -275,7 +258,13 @@ export default {
       this.orderedIds=ids.slice();this.pickedRouteId=null;this.personalPlan=null
     },
     moveSelectedSpot:function(id,direction){if(this.starting||this.recommending)return;this.orderedIds=moveStop(this.selectedIds,id,direction);this.pickedRouteId=null;this.personalPlan=null},
-    switchPlanningTab:function(next){if(this.starting||this.recommending||next===this.tab)return;this.tab=next;this.planningInkMotion=0;this.$nextTick(()=>{this.planningInkMotion=1})},
+    onPlanningScroll:function(event){this._planningScrollTop=event.detail.scrollTop;if(this.tab==='route')this.routeScrollTop=event.detail.scrollTop},
+    switchPlanningTab:function(next){
+      if(this.starting||this.recommending||next===this.tab)return
+      this.planningScrollTop=this._planningScrollTop||0
+      this.tab=next;this.showItinerary=false
+      this.$nextTick(()=>{this.planningScrollTop=next==='route'?this.routeScrollTop:0})
+    },
     preferenceCount:function(v){return this.spots.filter(function(s){var p=s.preference_profile;return v==='comprehensive'||p&&p.affinities[v]>=3&&(v!=='family'||!p.stairs)}).length},
     changeBudget:function(e){if(this.recommending)return;this.budgetIndex=Number(e.detail.value)},
     changePace:function(e){if(this.recommending)return;this.paceIndex=Number(e.detail.value)},
@@ -300,13 +289,10 @@ export default {
     themeIcon:function(t){var m={comprehensive:'icon-youlan',history:'icon-lishiwenhua',nature:'icon-ziranfengguang',family:'icon-qinzi',photography:'icon-cam-3'};return m[t]||'icon-youlan'},
     switchRoute:function(direction){if(this.routes.length>1)this.routeIndex=(this.routeIndex+direction+this.routes.length)%this.routes.length},
     openRoute:function(r){this.routeDetail=r},
-    goSelectGuide:function(){this.routeDetail=null;
-      // #ifdef APP-PLUS
-      var ids=this.pickedIds,order=this.selectedIds.slice(),routeId=this.pickedRouteId,guide=this.pickedGuide;
-      this.switchPlanningTab('personal');this.pickedIds=ids;this.orderedIds=order;this.pickedRouteId=routeId;this.pickedGuide=guide||this.pickedGuide;
-      this.$nextTick(function(){uni.pageScrollTo({scrollTop:0,duration:200})});return;
-      // #endif
-      this.guidePicker=true},
+    goSelectGuide:function(){
+      if(!this.pickedCount||this.starting||this.recommending)return
+      this.routeDetail=null;this.switchPlanningTab('personal')
+    },
     startTour:function(){var s=this;if(!s.pickedCount){uni.showToast({title:'请选择景点',icon:'none'});return}
       if(s.recommending||s.starting)return
       if(s.itineraryState.key!==s.itineraryKey||s.itineraryState.busy||s.itineraryState.error||!s.itineraryState.data?.complete){uni.showToast({title:s.t('请等待可用的路线与用时结果'),icon:'none'});return}
@@ -356,7 +342,7 @@ export default {
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },
-  onBackPress:function(){if(this.showItinerary){this.showItinerary=false;return true}if(this.showMapPreview){this.showMapPreview=false;return true}},
+  onBackPress:function(){if(this.showItinerary){this.showItinerary=false;return true}if(this.showMapPreview){this.showMapPreview=false;return true}if(this.tab==='personal'){this.switchPlanningTab('route');return true}},
   onHide:function(){this.tourButtonDragging=false;this.itineraryDragging=false;this.showItinerary=false;this.pageVisible=false;this.showMapPreview=false},
   onUnload:function(){this.itineraryDragging=false;this.pageVisible=false;this.pageReady=false},
   onShow:function(){this.pageVisible=true;this.showMapPreview=false;if(this.checkAuth())this.loadData()},
@@ -364,6 +350,10 @@ export default {
 </script>
 
 <style scoped>
+.planning-header{position:relative;z-index:1;padding:16rpx 28rpx 28rpx;display:flex;flex-direction:column;align-items:flex-start;gap:12rpx}
+.planning-title{font-size:40rpx;font-weight:700;color:var(--ng-text)}
+.planning-subtitle{font-size:25rpx;line-height:1.5;color:var(--ng-secondary)}
+.planning-back{margin:0 0 6rpx;padding:6rpx 16rpx;font-size:26rpx;line-height:1.8;color:var(--ng-accent-text,#5141ad);background:var(--ng-surface);border-radius:14rpx}.planning-back::after,.selection-next::after{border:0}
 .main.itinerary-active{z-index:2200}
 .header-spacer{padding:0!important;border-bottom:0!important;pointer-events:none}
 .map-preview{margin:0 0 0 auto;padding:8rpx 24rpx;line-height:1.6;min-height:0;font-size:25rpx;color:#6840c2;background:#f1eaff;border-radius:14rpx}

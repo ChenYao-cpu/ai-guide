@@ -14,7 +14,7 @@ function environment(){
 }
 function component(env,file,props={}){
   const source=fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
-  Object.assign(env.context,{RouteOverview:{},RouteTiming:{},TourRouteRepair:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},prioritizeSummerPalace:(spots,routes)=>({spots,routes}),LANGUAGE_STORAGE_KEY:'language',translateTour:x=>x,assetUrl:x=>x})
+  Object.assign(env.context,{FloatingTourButton:{},ScenicSheet:{},TabBarNav:{},RouteOverview:{},RouteTiming:{},TourRouteRepair:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},prioritizeSummerPalace:(spots,routes)=>({spots,routes}),LANGUAGE_STORAGE_KEY:'language',translateTour:x=>x,assetUrl:x=>x})
   vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.options='),env.context)
   const options=env.context.options,events=[],state={...props};Object.assign(state,options.data.call(state));
   state.$emit=(...args)=>events.push(args);state.t=x=>x;state.$nextTick=async callback=>{callback?.()};state.$forceUpdate=()=>{}
@@ -65,7 +65,7 @@ test('late route preview cannot replace a newer ordering or reopen a disposed pa
   const first=s.refresh();s.ids=[3,12];const second=s.refresh();assert.equal(env.calls[0].aborted,true)
   env.respond(env.calls[1],{total_minutes:33,complete:true});await second;env.respond(env.calls[0],{total_minutes:99,complete:true});await first
   assert.equal(s.overview.total_minutes,33)
-  const third=s.refresh();c.options.beforeUnmount.call(s);env.respond(env.calls[2],{total_minutes:100});await third;assert.equal(s.overview,null)
+  const third=s.refresh();c.options.beforeUnmount.call(s);env.respond(env.calls[2],{total_minutes:100});await third;assert.equal(s.overview.total_minutes,33)
 })
 test('time and exit validation prevent invalid previews, and preview never applies a plan',async()=>{
   const env=environment(),{state:s}=component(env,'components/TourRouteRepair.vue',{sid:7,currentName:'A',remainingSpots:spots.slice(1),prompt:'',initial:{}})

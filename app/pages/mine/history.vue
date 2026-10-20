@@ -15,6 +15,15 @@
           <text class="c-name">{{ t(s.city) ? t(s.city)+' · ' : '' }}{{ t(s.name) }}</text>
           <text class="c-desc">{{ (s.spot_names || []).map(function(n){ return t(n) }).join(' → ') }}</text>
           <text class="c-desc">{{ s.live_status===2 ? t('已结束') : s.live_status===1 ? t('进行中') : t('未开始') }}</text>
+          <view v-if="s.live_status===2" class="history-rating-row">
+            <view v-if="ratings[s.session_id]" class="history-rating" :aria-label="t('我的评分：{score}分',{score:ratings[s.session_id]})">
+              <text>{{ t('我的评分') }}</text>
+              <text class="history-rating-stars">{{ '★'.repeat(ratings[s.session_id]) }}{{ '☆'.repeat(5-ratings[s.session_id]) }}</text>
+              <text>{{ ratings[s.session_id] }}/5</text>
+            </view>
+            <text v-else class="history-unrated">{{ t('未评分') }}</text>
+            <button class="history-rating-link" @tap.stop="openRating(s)">{{ t(ratings[s.session_id] ? '查看评分' : '去评分') }}</button>
+          </view>
           <text class="c-time">{{ t('开始：') }}{{ s.start_time }}</text><text v-if="s.end_time" class="c-time">{{ t('结束：') }}{{ s.end_time }}</text>
         </view>
       </view>
@@ -38,27 +47,45 @@
 <script>
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 export default {
-  data:function(){return{headerTop:48,list:[],browseList:[],browseError:'',loading:false,error:'',selected:null,messages:[],messagesLoading:false,messagesError:''}},
+  data:function(){return{headerTop:48,list:[],ratings:{},ratingOwner:'',browseList:[],browseError:'',loading:false,error:'',selected:null,messages:[],messagesLoading:false,messagesError:''}},
   onLoad:function(){var info=uni.getSystemInfoSync();this.headerTop=Math.max(info.statusBarHeight||0,info.safeArea&&info.safeArea.top||0)+16},
   methods:{
+    ratingAccount:function(){var id=uni.getStorageSync('user_id'),name=uni.getStorageSync('username');return id?'id:'+id:name?'name:'+name:''},
+    refreshRatings:function(){
+      const owner=this.ratingAccount(),ratings={};this.ratingOwner=owner
+      if(owner)this.list.forEach(s=>{
+        if(s.live_status!==2)return
+        try{const saved=uni.getStorageSync('tour_rating:v1:'+encodeURIComponent(owner)+':'+s.session_id);if(saved&&Number.isInteger(saved.score)&&saved.score>=1&&saved.score<=5)ratings[s.session_id]=saved.score}catch(_){}
+      })
+      this.ratings=ratings
+    },
+    openRating:function(s){
+      if(this.ratingAccount()!==this.ratingOwner){this.loadData();return}
+      if(s.live_status===2)uni.navigateTo({url:'/pages/tour-summary/tour-summary?sessionId='+s.session_id})
+    },
     fixImg:function(value){return assetUrl(value)},
     formatViewTime:function(value){var date=new Date(value);return isNaN(date.getTime())?value:date.toLocaleString()},
     goBack:function(){uni.navigateBack()},
     openSession:function(s){this.selected=s;this.messages=[];this.messagesLoading=true;this.messagesError='';uni.request({url:BASE_URL+'/tour-session/my-history/'+s.session_id+'/messages',header:{Authorization:'Bearer '+uni.getStorageSync('token')},success:r=>{if(!this.selected||this.selected.session_id!==s.session_id)return;if(r.statusCode===200&&r.data.success)this.messages=r.data.data.messages;else this.messagesError='对话加载失败'},fail:()=>{if(this.selected&&this.selected.session_id===s.session_id)this.messagesError='对话加载失败'},complete:()=>{if(this.selected&&this.selected.session_id===s.session_id)this.messagesLoading=false}})},
     loadData:function(){
-      this.loading=true;this.error='';this.browseError='';this.list=[];this.browseList=[];this.selected=null
+      this.loading=true;this.error='';this.browseError='';this.list=[];this.ratings={};this.ratingOwner=this.ratingAccount();this.browseList=[];this.selected=null
       const token=uni.getStorageSync('token'),owner=uni.getStorageSync('user_id')
       const read=url=>new Promise((resolve,reject)=>uni.request({url:BASE_URL+url,header:{Authorization:'Bearer '+token},success:r=>{if(r.statusCode===200&&r.data.success)resolve(r.data.data);else reject(new Error(r.statusCode===401?'请重新登录':'记录加载失败'))},fail:()=>reject(new Error('记录加载失败'))}))
       const isCurrent=()=>uni.getStorageSync('token')===token&&uni.getStorageSync('user_id')===owner
-      const tours=read('/tour-session/my-history').then(data=>{if(isCurrent())this.list=(data.session_list||[]).filter(function(x){return isBeijingCity(x.city)})}).catch(error=>{if(isCurrent())this.error=error.message})
+      const tours=read('/tour-session/my-history').then(data=>{if(isCurrent()){this.list=(data.session_list||[]).filter(function(x){return isBeijingCity(x.city)});this.refreshRatings()}}).catch(error=>{if(isCurrent())this.error=error.message})
       const views=read('/spot-favorites/history').then(data=>{if(isCurrent())this.browseList=(data.spot_list||[]).filter(function(sp){return isBeijingCity(sp.city)})}).catch(error=>{if(isCurrent())this.browseError=error.message})
-      Promise.all([tours,views]).finally(()=>{if(isCurrent())this.loading=false})
+      return Promise.all([tours,views]).finally(()=>{if(isCurrent())this.loading=false})
     },
   },
   onShow:function(){this.loadData()},
 }
 </script>
 <style scoped>
+.history-rating-row{display:flex;align-items:center;justify-content:space-between;gap:12rpx;flex-wrap:wrap;margin-top:12rpx}
+.history-rating{display:flex;align-items:center;gap:12rpx;flex-wrap:wrap;font-size:24rpx;color:var(--ng-text)}
+.history-rating-stars{color:#a66b0c;font-size:30rpx;letter-spacing:2rpx;line-height:1.4}
+.history-unrated{font-size:24rpx;color:var(--ng-secondary)}
+.history-rating-link{margin:0;padding:4rpx 16rpx;font-size:24rpx;line-height:1.8;border-radius:12rpx;background:var(--ng-raised,#f0edf8);color:var(--ng-accent-text,#5141ad)}.history-rating-link::after{border:0}
 .page{height:100vh;display:flex;flex-direction:column;background-color:var(--ng-surface);position:relative;overflow:hidden}
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mt{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:55% 75% 0 0}.ink-mt-1{bottom:20%;height:220rpx;opacity:.04;transform:scaleX(1.3)}.ink-mt-2{bottom:25%;height:160rpx;opacity:.025;transform:scaleX(1.5) translateX(-8%)}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
