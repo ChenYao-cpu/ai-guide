@@ -4,7 +4,7 @@ function harness(){
  const calls=[],uploads=[],feedback=[],navigations=[],storage=new Map([['user_id',17],['token','mock-17']]),handlers={}
  const uni={getStorageSync:k=>storage.get(k),setStorageSync:(k,v)=>storage.set(k,v),removeStorageSync:k=>storage.delete(k),request:o=>{calls.push(o);return{abort(){}}},uploadFile:o=>{uploads.push(o);return{abort(){}}},showToast:o=>feedback.push(o),reLaunch:o=>navigations.push(o),getRecorderManager:()=>({onStart:fn=>handlers.start=fn,onStop:fn=>handlers.stop=fn,onError:fn=>handlers.error=fn,stop(){},start(){}})}
  const translateTour=(s,language,params={})=>String(s??'').replace(/\{(\w+)\}/g,(m,k)=>params[k]??m)
- const c={uni,console,Promise,Date,Set,Number,Math,JSON,Array,Object,String,setTimeout,clearTimeout,BASE_URL:'http://local/api/v1',ChatVoice:{},NocturneSelect:{},translateTour,LANGUAGE_STORAGE_KEY:'zhiyou.app-language',assetUrl:x=>x,uiToast:o=>feedback.push(o)}
+ const c={uni,console,Promise,Date,Set,Number,Math,JSON,Array,Object,String,setTimeout,clearTimeout,BASE_URL:'http://local/api/v1',ChatVoice:{},NocturneSelect:{},TabBarNav:{},translateTour,LANGUAGE_STORAGE_KEY:'zhiyou.app-language',assetUrl:x=>x,uiToast:o=>feedback.push(o)}
  vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(root,'common/planning-language.js'),'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),c)
  const source=fs.readFileSync(path.join(root,'pages/ai-chat/ai-chat.vue'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
  vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.component='),c)

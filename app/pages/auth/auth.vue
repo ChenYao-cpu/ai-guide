@@ -19,9 +19,9 @@
         </view>
       </view>
       <button class="primary" :disabled="logining" @tap="beginLogin">{{ t(logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录') }}</button>
-      <view class="welcome-landscape" aria-hidden="true"><view class="landscape-hill hill-back"></view><view class="landscape-hill hill-front"></view><view class="landscape-lake"></view><view class="landscape-sun"></view></view>
-      <view class="welcome-tags"><text>{{ t('行程规划') }}</text><text>{{ t('景点讲解') }}</text><text>{{ t('沿途问答') }}</text></view>
-      <button v-if="appLogin" class="dialog-cancel" style="margin-top:20rpx" :disabled="logining" @tap="toggleRegistration">{{ t(registering ? '已有账号，去登录' : '没有账号？邮箱注册') }}</button>
+      <view v-if="appLogin" class="register-row" @tap="toggleRegistration">
+        <text class="register-text">{{ t(registering ? '已有账号，去登录' : '没有账号？邮箱注册') }}</text>
+      </view>
       <text v-if="appLogin && registering && codeNotice" class="notice">{{ t(codeNotice) }}</text>
       <text v-if="error && !showProfileDialog" class="error">{{ t(error) }}</text>
       <text v-if="developmentLogin" class="notice">{{ t('开发模式') }}</text>
@@ -212,8 +212,8 @@ export default {
 .auth-brand{display:flex;flex-direction:column;align-items:flex-start;gap:18rpx;margin-bottom:44rpx}.auth-eyebrow{font-size:24rpx;color:#64748b;letter-spacing:2rpx}
 .welcome-card{position:relative;overflow:hidden;padding:40rpx 32rpx 28rpx;border:1rpx solid #e2e8f0;border-radius:32rpx;background:#fff;box-shadow:0 20rpx 64rpx -24rpx rgba(30,41,59,.12)}
 .welcome-label{display:block;color:#4338ca;font-size:24rpx;margin-bottom:20rpx}.welcome-title{display:block;font-size:48rpx;line-height:1.45;font-weight:700;letter-spacing:-1rpx}.welcome-accent{display:block;color:#4f46e5}.welcome-copy{display:block;margin-top:20rpx;font-size:27rpx;line-height:1.8;color:#64748b}
-.welcome-landscape{position:relative;height:200rpx;margin:24rpx -32rpx 0;overflow:hidden;background:#f5f6ff}.landscape-hill{position:absolute;width:450rpx;height:220rpx;border-radius:50% 50% 0 0;transform:rotate(-12deg)}.hill-back{left:-60rpx;top:80rpx;background:#e0e7ff}.hill-front{right:-100rpx;top:95rpx;background:#c7d2fe;transform:rotate(15deg)}.landscape-lake{position:absolute;bottom:0;width:100%;height:44rpx;background:#eef2ff}.landscape-sun{position:absolute;right:90rpx;top:30rpx;width:44rpx;height:44rpx;background:#a5b4fc;border-radius:50%}
-.welcome-tags{display:flex;flex-wrap:wrap;gap:12rpx;padding-top:24rpx}.welcome-tags text{padding:10rpx 18rpx;border-radius:14rpx;background:#eef2ff;color:#4338ca;font-size:23rpx}
+.register-row{display:flex;justify-content:center;margin-top:32rpx}
+.register-text{font-size:24rpx;line-height:1.6;color:#64748b;text-decoration:underline;text-underline-offset:8rpx;text-decoration-thickness:1rpx}
 .login-area{margin-top:36rpx;padding:32rpx;border:1rpx solid #e2e8f0;border-radius:32rpx;background:#fff;box-shadow:0 16rpx 48rpx -24rpx rgba(30,41,59,.1)}.login-heading{display:block;font-size:32rpx;font-weight:600}.login-copy{display:block;font-size:25rpx;color:#64748b;margin:12rpx 0 28rpx}
 .primary{margin:0;padding:0;height:96rpx;line-height:96rpx;border-radius:20rpx;font-size:30rpx;font-weight:600;background:#4f46e5;color:#fff;box-shadow:0 12rpx 30rpx -12rpx rgba(79,70,229,.4)}.primary::after{border:0}.primary[disabled]{background:#e2e8f0;color:#64748b;box-shadow:none}.error{display:block;margin-top:20rpx;padding:20rpx;border-radius:16rpx;background:#fff1f2;color:#be123c;font-size:24rpx;line-height:1.7;word-break:break-all}.notice{display:block;margin-top:18rpx;font-size:24rpx;color:#64748b;text-align:center}
 .profile-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:36rpx;background:rgba(15,23,42,.35)}.profile-dialog{width:100%;max-width:640rpx;box-sizing:border-box;padding:36rpx 28rpx;border:1rpx solid #e2e8f0;border-radius:32rpx;background:#fff;box-shadow:0 32rpx 80rpx rgba(30,41,59,.15)}.dialog-title{display:block;font-size:34rpx;font-weight:600;margin-bottom:32rpx}.profile-fields{display:flex;align-items:center;gap:20rpx;margin-bottom:28rpx}.avatar-picker{margin:0;padding:0;width:120rpx;height:120rpx;border-radius:24rpx;background:#eef2ff;color:#4338ca;font-size:23rpx;display:flex;align-items:center;justify-content:center;flex-shrink:0}.profile-avatar{width:100%;height:100%}.nickname-input{flex:1;min-width:0;height:96rpx;padding:0 20rpx;border:1rpx solid #e2e8f0;border-radius:20rpx;background:#f8fafc;color:#1f2937;font-size:28rpx}.dialog-actions{display:flex;gap:20rpx}.dialog-actions button{flex:1}.dialog-cancel{margin:0;padding:0;height:96rpx;line-height:96rpx;border-radius:20rpx;background:#f1f5f9;color:#475569;font-size:28rpx}.dialog-cancel::after{border:0}
@@ -224,12 +224,12 @@ export default {
 .auth-brand{margin-bottom:48rpx;gap:12rpx;}.auth-eyebrow{font-size:22rpx;color:#8b84ac;letter-spacing:4rpx;}
 .welcome-card{border:0;border-radius:36rpx;padding:32rpx;background:rgba(255,255,255,.92);box-shadow:0 20rpx 60rpx -24rpx rgba(70,54,130,.12);}
 .welcome-label{font-size:23rpx;color:#8b74c9;margin-bottom:14rpx;display:block;text-align:center;}.welcome-title{font-size:36rpx;color:#30285e;line-height:1.5;display:block;text-align:center;}.welcome-copy{font-size:25rpx;margin-top:14rpx;color:#8a84a0;display:block;text-align:center;}
-.welcome-landscape{background:transparent;margin:20rpx 0 0;height:190rpx;}.hill-back{background:#d1cff2;width:250rpx;height:180rpx;left:auto;right:100rpx;top:40rpx;border-radius:28rpx;transform:rotate(45deg);}.hill-front{background:#bba6ee;width:190rpx;height:160rpx;left:100rpx;right:auto;top:65rpx;border-radius:24rpx;transform:rotate(45deg);}.landscape-lake{height:40rpx;border-bottom:2rpx solid #9edcf1;background:rgba(255,255,255,.6);border-radius:50%;}.landscape-sun{background:#7c4dea;width:32rpx;height:32rpx;right:60rpx;top:55rpx;}
-.welcome-tags{justify-content:space-around;padding-top:24rpx;}.welcome-tags text{background:transparent;color:#8b84a3;font-size:24rpx;padding:6rpx;}
+.register-row{margin-top:26rpx;}
+.register-text{color:#8b84a3;font-size:23rpx;letter-spacing:.5rpx;}
 .login-area{margin-top:26rpx;padding:0;border:0;box-shadow:none;background:transparent;}.primary{border-radius:22rpx;}
 .auth-page{position:relative;}
 .auth-language{position:absolute;right:36rpx;top:calc(32rpx + env(safe-area-inset-top));display:flex;padding:6rpx;border:1rpx solid rgba(139,116,201,.2);border-radius:40rpx;background:rgba(255,255,255,.75);}
 .auth-language button{margin:0;padding:0 24rpx;height:60rpx;line-height:60rpx;border-radius:32rpx;background:transparent;color:#79718f;font-size:24rpx;}
 .auth-language button::after{border:0;}.auth-language button.active{background:#6c4ce4;color:#fff;box-shadow:0 4rpx 14rpx rgba(108,76,228,.2);}
-.auth-english .auth-eyebrow{letter-spacing:1rpx;}.auth-english .welcome-title{font-size:36rpx;letter-spacing:0;}.auth-english .welcome-tags{gap:8rpx;}.auth-english .welcome-tags text{font-size:22rpx;}
+.auth-english .auth-eyebrow{letter-spacing:1rpx;}.auth-english .welcome-title{font-size:36rpx;letter-spacing:0;}.auth-english .register-text{font-size:22rpx;letter-spacing:0;}
 </style>

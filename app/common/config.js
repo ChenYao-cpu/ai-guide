@@ -13,7 +13,12 @@ let usbDevelopment = false
 usbDevelopment = import.meta.env.MODE === 'development' &&
   typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 // #endif
-export const SERVER_ORIGIN = runtimePlatform === 'devtools' || usbDevelopment
+// Android USB debug base: reach the PC backend through `adb reverse tcp:18000 tcp:18000`.
+let appUsbDevelopment = false
+// #ifdef APP-PLUS
+appUsbDevelopment = import.meta.env.MODE === 'development'
+// #endif
+export const SERVER_ORIGIN = runtimePlatform === 'devtools' || usbDevelopment || appUsbDevelopment
   ? 'http://127.0.0.1:18000'
   : LAN_SERVER_ORIGIN
 export const BASE_URL = SERVER_ORIGIN + '/api/v1'

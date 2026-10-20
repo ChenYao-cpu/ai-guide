@@ -1,5 +1,5 @@
 <template>
-  <view class="page aurora-page" :class="{'app-english':tourLanguage==='en'}">
+  <view class="page aurora-page no-tabbar" :class="{'app-english':tourLanguage==='en'}">
     <!-- #ifdef APP-PLUS -->
     <view class="app-status-bar-shield" aria-hidden="true"></view>
     <!-- #endif -->
@@ -17,6 +17,7 @@
 
     <!-- 标题 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
+      <view class="nav-back" @tap="goBack" :aria-label="$t('返回')"><text>‹</text></view>
       <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">{{ $t("清空") }}</text>
       <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
         <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
@@ -31,13 +32,17 @@
       <view class="qh-chip" @tap="quickSend('周末带朋友玩半天，喜欢美食和拍照')">{{ $t("周末美食拍照") }}</view>
     </view>
     <view class="quick-hints" v-if="msgs.length===0 && chatMode==='guide'">
-      <view class="qh-chip" @tap="quickSend('介绍这个景点')">{{ $t('介绍这个景点') }}</view>
-      <view class="qh-chip" @tap="quickSend('这里有什么历史故事？')">{{ $t('这里有什么历史故事？') }}</view>
-      <view class="qh-chip" @tap="quickSend('这里有什么拍照建议？')">{{ $t('这里有什么拍照建议？') }}</view>
+      <view class="qh-spot" @tap="pickSpot">
+        <text class="qh-spot-label">{{ $t('选择景点') }}：{{ guideSpotName ? $t(guideSpotName) : $t('未选择') }}</text>
+        <text class="qh-spot-action">›</text>
+      </view>
+      <view class="qh-chip" @tap="askGuide('intro')">{{ guideSpotName ? $t('介绍「{spot}」',{spot:$t(guideSpotName)}) : $t('介绍这个景点') }}</view>
+      <view class="qh-chip" @tap="askGuide('story')">{{ guideSpotName ? $t('「{spot}」有什么历史故事？',{spot:$t(guideSpotName)}) : $t('这里有什么历史故事？') }}</view>
+      <view class="qh-chip" @tap="askGuide('photo')">{{ guideSpotName ? $t('「{spot}」有什么拍照建议？',{spot:$t(guideSpotName)}) : $t('这里有什么拍照建议？') }}</view>
     </view>
 
     <!-- 对话区 -->
-    <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim">
+    <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim" @scroll="onChatScroll">
       <view v-if="msgs.length === 0 && !loading" class="chat-empty">
 
         <text class="ce-title">{{ $t(chatMode==='guide'?'想了解哪个景点？':'想去哪里？') }}</text>
@@ -46,17 +51,21 @@
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
-          <text v-if="m.content" class="msg-text">{{ m.content }}</text>
+          <block v-if="m.segments">
+            <text v-for="(seg, si) in m.segments" :key="si" class="msg-text msg-seg">{{ seg.t }}</text>
+            <text v-if="m.cursor" class="msg-caret">▍</text>
+          </block>
+          <text v-else-if="m.content" class="msg-text">{{ m.content }}</text>
           <button v-if="m.recognitionEvidence" class="photo-evidence-toggle" @tap="toggleEvidence(m)">{{ $t(m.showEvidence?'收起识别依据':'查看识别依据（原文）') }}</button>
           <text v-if="m.showEvidence&&m.recognitionEvidence" class="photo-evidence">{{ m.recognitionEvidence }}</text>
-          <view v-if="m.role==='ai' && m.content" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" @tap="replayTTS(m.content,i)">
+          <view v-if="m.role==='ai' && m.content && !m.cursor" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" @tap="replayTTS(m.content,i)">
             <text>{{ $t(speakingIndex===i ? (ttsLoading ? $t("正在生成语音…") : $t("停止播报")) : $t("语音播报")) }}</text>
           </view>
         </view>
       </view>
       <view v-if="loading" class="msg-row msg-l">
         <view class="msg-bubble ai typing">
-          <text class="msg-text">{{ $t("AI思考中...") }}</text>
+          <view class="typing-dots" :aria-label="$t('AI思考中...')"><view class="td"></view><view class="td"></view><view class="td"></view></view>
         </view>
       </view>
       <view id="bottom"></view>
@@ -107,9 +116,9 @@
       <text class="rh-text">{{ $t(recordingText) }}</text>
     </view>
 
-    <view v-if="showPhotoChoices" class="photo-popover-mask" @tap="showPhotoChoices=false"></view>
+    <view v-if="showPhotoChoices" class="photo-popover-mask" :class="{closing:photoClosing}" @tap="closePhotoChoices"></view>
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
-    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible}">
+    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}">
       <view v-if="pendingPhoto || recognitionError" class="photo-draft">
         <view v-if="pendingPhoto" class="draft-thumbnail"><image :src="pendingPhoto" mode="aspectFill" @tap="previewChatPhoto(pendingPhoto)" /><button class="draft-remove" @tap="pendingPhoto=''">×</button></view>
         <text v-if="pendingPhoto" class="draft-note">{{ $t("已选择图片，点击发送后识别") }}</text>
@@ -119,7 +128,7 @@
     <view class="input-bar">
       <view class="photo-entry-wrap">
         <button class="photo-add" :disabled="recognizing" :aria-label="$t(&quot;拍照或相册识景&quot;)" :aria-expanded="showPhotoChoices" @tap="chooseScenicPhoto">＋</button>
-        <view v-if="showPhotoChoices" class="photo-popover" role="menu">
+        <view v-if="showPhotoChoices" class="photo-popover" :class="{closing:photoClosing}" role="menu">
           <button class="photo-choice" @tap.stop="selectScenicSource(0)">{{ $t('拍照识景') }}</button>
           <button class="photo-choice" @tap.stop="selectScenicSource(1)">{{ $t('从相册选择') }}</button>
         </view>
@@ -136,9 +145,9 @@
       </view>
     </view>
 
-    <TabBarNav v-show="!keyboardVisible" current="ai" />
     </view>
-    <NocturneSelect v-if="showQASpots" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" @change="selectQuestionSpot" @close="showQASpots=false" />
+    <TabBarNav v-show="!keyboardVisible" current="ai" :leaving="tabLeaving" :hide-on-enter="true" />
+    <NocturneSelect v-if="showQASpots" ref="spotPicker" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" :anchor="spotAnchor" @change="selectQuestionSpot" @close="closeSpotPicker" />
 
     <!-- 问答历史记录 -->
     <view v-if="showHistory" class="history-mask" @tap="closeHistory">
@@ -199,14 +208,14 @@ export default {
   components:{ChatVoice,NocturneSelect,TabBarNav},
   data: function () {
     return {
-      chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
-      voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,scrollAnim:false,
-      showHistory:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
+      chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
+      voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,photoClosing:false,scrollAnim:false,
+      showHistory:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
   },
-  mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6},
+  mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
   watch:{
     pendingPhoto:function(){this.scrollChat()},
     recognitionError:function(){this.scrollChat()},
@@ -221,6 +230,7 @@ export default {
     if(uni.offKeyboardHeightChange&&this._keyboardListener)uni.offKeyboardHeightChange(this._keyboardListener)
     this.cancelRecord()
     this.stopTTS()
+    this.stopReveal()
   },
   computed: {
     historyPairs:function(){
@@ -235,6 +245,7 @@ export default {
       return out.slice().reverse()
     },
     qaOptions:function(){return this.qaSpots.map(spot=>[this.$t(spot.city),this.$t(spot.spot_name)].filter(Boolean).join(' · '))},
+    guideSpotName:function(){const spot=this.qaSpots.find(item=>item.spot_id===this.qaSpotId);return spot?spot.spot_name:''},
     totalDuration: function () {
       if(!this.recommendedPlan)return null
       const minutes=this.recommendedPlan.estimated_time_minutes ?? this.recommendedPlan.total_duration
@@ -242,10 +253,88 @@ export default {
     },
   },
   methods: {
+    goBack:function(){
+      const stack=(typeof getCurrentPages==='function')?getCurrentPages():[]
+      if(stack&&stack.length>1){uni.navigateBack({delta:1});return}
+      uni.reLaunch({url:'/pages/tour-guide/tour-guide'})
+    },
     openHistory:function(){this.showHistory=true},
     closeHistory:function(){this.showHistory=false},
     clearHistoryFromPanel:function(){this.clearHistory();this.showHistory=false},
     pushMsg:function(msg){this.msgs.push(msg);this.historyMsgs.push(msg);this.saveHistory()},
+    splitReveal:function(text){
+      const out=[];let buf=''
+      const flush=()=>{if(buf){out.push(buf);buf=''}}
+      const chars=Array.from(String(text||''))
+      const cjk=/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/
+      let cjkCount=0
+      for(let i=0;i<chars.length;i++){
+        const c=chars[i]
+        if(c==='\n'){buf+=c;flush();cjkCount=0;continue}
+        if(cjk.test(c)){buf+=c;cjkCount++;if(cjkCount>=3){flush();cjkCount=0}continue}
+        cjkCount=0
+        if(c===' '){buf+=c;flush();continue}
+        buf+=c
+        if(/[.,!?;:，。！？；：、）)]/.test(c))flush()
+      }
+      flush()
+      return out
+    },
+    stopReveal:function(){this._revealEpoch=(this._revealEpoch||0)+1;clearTimeout(this._revealTimer);this._revealTimer=null},
+    pushAIReply:function(content,extra){
+      if(!content)return null
+      const index=this.msgs.length
+      const reply={role:'ai',content:content,segments:[],cursor:true}
+      if(extra)Object.assign(reply,extra)
+      this.msgs.push(reply)
+      this.historyMsgs.push({role:'ai',content:content,image:extra&&extra.image||undefined})
+      this.saveHistory()
+      this.startReveal(reply,index,!(extra&&extra.silent))
+      return reply
+    },
+    startReveal:function(msg,index,speak){
+      this.stopReveal()
+      const chunks=this.splitReveal(msg.content)
+      const epoch=this._revealEpoch
+      let i=0
+      const step=()=>{
+        if(epoch!==this._revealEpoch)return
+        if(i>=chunks.length){
+          msg.cursor=false;this._revealTimer=null
+          if(speak&&msg.content)this.playTTS(msg.content,index)
+          this.jumpBottom()
+          return
+        }
+        msg.segments.push({t:chunks[i]})
+        i++
+        this._revealTimer=setTimeout(step,55)
+        this.jumpBottomThrottled()
+      }
+      step()
+    },
+    jumpBottomThrottled:function(){
+      if(!this.followBottom)return
+      const now=Date.now()
+      if(now-(this._softScrollAt||0)<140)return
+      this._softScrollAt=now
+      this.scrollAnim=false
+      this.chatScrollTop+=100000
+    },
+    jumpBottom:function(){
+      this.followBottom=true
+      this.scrollAnim=true
+      this.chatScrollTop+=100000
+      clearTimeout(this._jumpTimer)
+      this._jumpTimer=setTimeout(()=>{this.scrollAnim=false},320)
+    },
+    onChatScroll:function(event){
+      const d=(event&&event.detail)||{}
+      if(typeof d.scrollHeight!=='number')return
+      const viewH=this.chatViewH||uni.getSystemInfoSync().windowHeight*0.6
+      const gap=d.scrollHeight-d.scrollTop-viewH
+      if(gap>160){this.followBottom=false}
+      else if(gap<80){this.followBottom=true}
+    },
     storageOwner:function(){const id=uni.getStorageSync('user_id');return id?'id:'+id:uni.getStorageSync('username')?'name:'+uni.getStorageSync('username'):'guest'},
     historyKey:function(){return 'ai_chat_state:'+encodeURIComponent(this.storageOwner())},
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
@@ -260,7 +349,42 @@ export default {
         this.qaGuides=guides.data?.data?.guide_list||[]
       }finally{if(this.isCurrentRequest(epoch,owner))this.qaCatalogLoading=false}
     },
-    selectQuestionSpot:function(event){this.qaSpotId=this.qaSpots[Number(event.detail.value)]?.spot_id||null;this.showQASpots=false;this.saveHistory()},
+    selectQuestionSpot:function(event){
+      this.qaSpotId=this.qaSpots[Number(event.detail.value)]?.spot_id||null
+      this.saveHistory()
+      const kind=this._pendingGuideKind
+      if(kind){
+        this._pendingGuideKind=''
+        this.sendGuideKind(kind)
+        if(this.$refs.spotPicker)this.$refs.spotPicker.requestClose()
+        else this.showQASpots=false
+      }
+    },
+    pickSpot:function(){
+      this.loadQACatalog()
+      const self=this
+      const open=function(){self.showQASpots=true}
+      try{
+        uni.createSelectorQuery().in(this).select('.qh-spot').boundingClientRect(function(r){
+          if(r)self.spotAnchor={x:r.left+r.width/2,y:r.top+r.height/2}
+          open()
+        }).exec()
+      }catch(e){open()}
+    },
+    closeSpotPicker:function(){this.showQASpots=false;this._pendingGuideKind=''},
+    askGuide:function(kind){
+      this._pendingGuideKind=kind
+      if(this.qaSpotId&&this.guideSpotName){this.sendGuideKind(kind);return}
+      this.pickSpot()
+    },
+    sendGuideKind:function(kind){
+      const name=this.guideSpotName
+      if(!name)return
+      const spot=this.$t(name)
+      const msg=kind==='story'?this.$t('「{spot}」有什么历史故事？',{spot}):kind==='photo'?this.$t('「{spot}」有什么拍照建议？',{spot}):this.$t('介绍「{spot}」',{spot})
+      this.text=msg
+      this.sendText()
+    },
     sendGuideQuestion:async function(message,language,epoch,owner,contextSpotId){
       await this.loadQACatalog()
       if(!this.isCurrentRequest(epoch,owner))return null
@@ -300,9 +424,21 @@ export default {
       if(this.recognizing)return
       uni.hideKeyboard()
       this.recognitionError=''
-      this.showPhotoChoices=!this.showPhotoChoices
+      if(this.showPhotoChoices){this.closePhotoChoices();return}
+      this.photoClosing=false
+      this.showPhotoChoices=true
     },
-    selectScenicSource:function(index){this.showPhotoChoices=false;this.openScenicSource(Number(index)===0?'camera':'album')},
+    closePhotoChoices:function(){
+      if(!this.showPhotoChoices||this.photoClosing)return
+      this.photoClosing=true
+      clearTimeout(this._photoCloseTimer)
+      this._photoCloseTimer=setTimeout(()=>{this.showPhotoChoices=false;this.photoClosing=false},190)
+    },
+    selectScenicSource:function(index){
+      const source=Number(index)===0?'camera':'album'
+      this.closePhotoChoices()
+      setTimeout(()=>{this.openScenicSource(source)},200)
+    },
     openScenicSource:function(source){
       const epoch=this.requestEpoch,owner=this.storageOwner()
       // #ifdef APP-PLUS
@@ -362,7 +498,7 @@ export default {
           }
         }
         if(!this.isCurrentRequest(epoch,owner))return
-        this.pushMsg({role:'ai',content:reply,recognition_id:result.recognition_id,recognitionEvidence:result.evidence||''})
+        this.loading=false;this.pushAIReply(reply,{recognition_id:result.recognition_id,recognitionEvidence:result.evidence||'',silent:true})
       }catch(error){
         if(!this.isCurrentRequest(epoch,owner))return
         const translated=translateTour(error.message||'照片上传失败，请检查网络连接',language)
@@ -444,7 +580,7 @@ export default {
       try{
       if(self.chatMode==='guide'){
         const reply=await self.sendGuideQuestion(msg,requestLanguage,epoch,owner)
-        if(reply&&self.isCurrentRequest(epoch,owner)){self.pushMsg({role:'ai',content:reply});self.playTTS(reply,self.msgs.length-1)}
+        if(reply&&self.isCurrentRequest(epoch,owner)){self.loading=false;self.pushAIReply(reply)}
         return
       }
       self.clearRoutePreview()
@@ -457,13 +593,13 @@ export default {
         if (d && d.success && d.data) {
           var dd = d.data
           var reply = recommendationText(dd,requestLanguage)
-          self.pushMsg({ role: 'ai', content: reply })
+          self.loading=false
+          self.pushAIReply(reply)
           if (dd.spot_ids && dd.spot_ids.length) {
             self.recommendedPlan=dd
             self.lastSpotIds = dd.spot_ids
             self.fetchRecommendSpots(dd.spot_ids)
           }
-          self.playTTS(reply,self.msgs.length-1)
         } else { self.pushMsg({ role: 'ai', content: self.$t(d && d.message || '没有找到匹配路线，请调整需求。') }) }
       }catch(error){
         if(self.isCurrentRequest(epoch,owner))self.pushMsg({role:'ai',content:self.$t(error.message||error.errMsg||'无法连接推荐服务，请检查网络。')})
@@ -559,7 +695,7 @@ export default {
   },
   onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
   onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
-  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();this.scrollChat()},
+  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadQACatalog();this.scrollChat()},
 }
 </script>
 
@@ -577,10 +713,14 @@ export default {
 .photo-choice::after{border:0}
 .photo-choice:active{background:#f3effb}
 .photo-choice + .photo-choice{border-top:1rpx solid var(--ng-border,#eee)}
-.photo-popover-mask{position:fixed;inset:0;z-index:997;background:rgba(20,24,40,.06);animation:photoMaskIn 180ms ease both}
+.photo-popover-mask{position:fixed;inset:0;z-index:1200;background:rgba(20,24,40,.06);animation:photoMaskIn 180ms ease both}
+.photo-popover-mask.closing{animation:photoMaskOut 190ms ease both}
+@keyframes photoMaskOut{from{opacity:1}to{opacity:0}}
+.photo-popover.closing{animation:photoPopOut 190ms cubic-bezier(.4,0,.75,.45) both;pointer-events:none}
+@keyframes photoPopOut{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(20rpx) scale(.7)}}
 @keyframes photoPopIn{0%{opacity:0;transform:translateY(26rpx) scale(.82)}55%{opacity:1;transform:translateY(-6rpx) scale(1.04)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes photoMaskIn{from{opacity:0}to{opacity:1}}
-.photo-add{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:64rpx;height:64rpx;margin:0;padding:0;line-height:1;font-family:Arial,sans-serif;font-size:44rpx;font-weight:400;color:#6840c2;background:#f1eaff;border-radius:50%}.photo-add::after{border:0}.photo-add[disabled]{opacity:.45}
+.photo-add{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:84rpx;height:84rpx;margin:0;padding:0;line-height:1;font-family:Arial,sans-serif;font-size:52rpx;font-weight:400;color:#6840c2;background:#f1eaff;border-radius:50%}.photo-add::after{border:0}.photo-add[disabled]{opacity:.45}
 .bottom-fixed.keyboard-open{padding-bottom:0}.keyboard-open .input-bar{padding-bottom:10rpx}
 .input-bar .msg-input{min-width:0}.input-bar .voice-btn{flex-shrink:0}
 .photo-caption,.photo-error{display:block;font-size:23rpx;line-height:1.7;margin-top:10rpx;color:#817994}.photo-error{color:#9f3450}
@@ -598,7 +738,11 @@ export default {
 .nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;padding:12rpx 24rpx;min-height:88rpx;box-sizing:border-box}
 .nav-actions{display:flex;align-items:center;gap:16rpx;margin-left:auto}
 .nav-title { font-size:44rpx; font-weight:900; color:var(--ng-text); letter-spacing:8rpx; font-family:var(--app-font-family); }
-.nav-clear{position:absolute;left:28rpx;font-size:24rpx;color:var(--ng-secondary);padding:6rpx 14rpx;border-radius:8rpx;background:rgba(99,102,241,0.06)}
+.nav-back{display:flex;align-items:center;justify-content:center;width:108rpx;height:108rpx;margin:-22rpx 10rpx -22rpx -8rpx;border-radius:24rpx;background:transparent;border:0;box-shadow:none;color:var(--ng-text);font-size:60rpx;line-height:1;margin-right:auto}
+.nav-back:active{opacity:.5}
+.nav-back text{transform:translateY(-4rpx)}
+.nav-back text{transform:translateY(-3rpx)}
+.nav-clear{position:static;font-size:24rpx;color:var(--ng-secondary);padding:6rpx 14rpx;border-radius:8rpx;background:rgba(99,102,241,0.06)}
 .nav-history{position:relative;flex-shrink:0;width:68rpx;height:68rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.82);border:1rpx solid var(--ng-border);box-shadow:0 4rpx 14rpx rgba(99,102,241,0.14)}
 .hist-clock{position:relative;width:34rpx;height:34rpx;border:3rpx solid var(--ng-secondary);border-radius:50%;box-sizing:border-box}
 .hc-hour{position:absolute;left:50%;top:50%;width:2.5rpx;height:9rpx;background:var(--ng-secondary);border-radius:2rpx;transform:translate(-50%,-100%)}
@@ -610,7 +754,7 @@ export default {
 .hp-actions{display:flex;align-items:center;gap:14rpx}
 .hp-clear{font-size:24rpx;color:var(--ng-secondary);padding:8rpx 18rpx;border-radius:12rpx;background:rgba(99,102,241,0.08)}
 .hp-title{font-size:30rpx;font-weight:700;color:var(--ng-text)}
-.hp-close{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.08);font-size:34rpx;color:var(--ng-secondary)}
+.hp-close{width:60rpx;height:60rpx;border-radius:16rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.08);font-size:34rpx;line-height:1;color:var(--ng-secondary)}
 .hp-body{max-height:calc(74vh - 110rpx);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:auto;touch-action:pan-y;padding:0 24rpx 24rpx;box-sizing:border-box}
 .hp-empty{padding:60rpx 0;text-align:center;color:var(--ng-secondary);font-size:26rpx}
 .hp-item{margin-top:18rpx;padding:18rpx;border-radius:20rpx;background:rgba(99,102,241,0.05);border:1rpx solid rgba(99,102,241,0.12)}
@@ -621,12 +765,15 @@ export default {
 .hp-qtext,.hp-atext{font-size:24rpx;line-height:1.6;color:var(--ng-text);word-break:break-word}
 .hp-atext{color:var(--ng-secondary)}
 
-.quick-hints { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:10rpx; padding:8rpx 24rpx 16rpx; }
+.quick-hints { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:10rpx; padding:2rpx 24rpx 14rpx; }
+.qh-spot{display:flex;align-items:center;justify-content:space-between;width:100%;box-sizing:border-box;padding:12rpx 20rpx;margin-bottom:6rpx;border-radius:18rpx;background:rgba(255,255,255,.66);border:1rpx dashed rgba(108,76,228,.32)}
+.qh-spot-label{font-size:23rpx;color:#5b527a}
+.qh-spot-action{font-size:22rpx;color:#7c4dea}
 .qh-chip { padding:12rpx 20rpx; border-radius:22rpx; background:rgba(99,102,241,0.12); border:1rpx solid rgba(99,102,241,0.25); font-size:22rpx; color:var(--ng-secondary); }
 .qh-chip:active { background:rgba(99,102,241,0.18); }
 
 .chat-area { position:relative; z-index:1; flex:1; height:0; min-height:0; box-sizing:border-box; padding:16rpx 24rpx; }
-.chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:300rpx; }
+.chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; min-height:0; padding-top:34rpx; }
 .ce-icon { font-size:72rpx; margin-bottom:18rpx; display:inline-block; animation:bounceBall 2.4s ease-in-out infinite; }
 @keyframes bounceBall { 0%,100%{transform:translateY(0)} 4%{transform:translateY(-36rpx)} 8%{transform:translateY(0)} 12%{transform:translateY(-24rpx)} 16%{transform:translateY(0)} 20%{transform:translateY(-14rpx)} 24%{transform:translateY(0)} 28%{transform:translateY(-6rpx)} 32%{transform:translateY(0)} }
 .ce-title { font-size:32rpx; font-weight:800; color:var(--ng-text); margin-bottom:10rpx; }
@@ -642,6 +789,15 @@ export default {
 .msg-bubble.ai .msg-text { color:var(--ng-text); }
 .msg-text { font-size:28rpx; line-height:1.8; word-break:break-word; white-space:pre-wrap; }
 .typing .msg-text { color:var(--ng-secondary); font-size:24rpx; }
+.typing-dots{display:flex;align-items:center;gap:9rpx;height:34rpx;padding:2rpx 0}
+.typing-dots .td{width:13rpx;height:13rpx;border-radius:50%;background:var(--ng-secondary,#8b84a3);opacity:.3;animation:tdBreath 1.15s ease-in-out infinite}
+.typing-dots .td:nth-child(2){animation-delay:.16s}
+.typing-dots .td:nth-child(3){animation-delay:.32s}
+@keyframes tdBreath{0%,100%{opacity:.22;transform:scale(.85)}45%{opacity:1;transform:scale(1.15)}}
+.msg-seg{animation:segIn 320ms cubic-bezier(.25,.8,.35,1) both}
+@keyframes segIn{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur(0)}}
+.msg-caret{display:inline-block;width:3rpx;height:26rpx;margin-left:6rpx;border-radius:2rpx;background:var(--ng-accent-text,#6840c2);vertical-align:-4rpx;animation:caretBlink .92s steps(1,end) infinite}
+@keyframes caretBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
 .msg-speaker{margin-top:16rpx;padding:10rpx 16rpx;text-align:right;font-size:24rpx;color:var(--ng-accent-text,#6840c2);border-top:1rpx solid var(--ng-border)}
 .msg-speaker.on{animation:spkPulse .6s ease-in-out infinite}
 @keyframes spkPulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -655,13 +811,14 @@ export default {
 @keyframes waveAnim { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(3); } }
 .rh-text { font-size:26rpx; color:var(--ng-secondary); font-weight:700; }
 
-.bottom-fixed{position:relative;flex-shrink:0;z-index:998;display:flex;flex-direction:column;background:var(--ng-surface);backdrop-filter: none}.input-bar{display:flex;gap:10rpx;align-items:center;padding:10rpx 16rpx;background:var(--ng-surface);border-top:1rpx solid var(--ng-border);margin:0}
-.voice-btn { width:68rpx; height:68rpx; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(99,102,241,0.15); font-size:28rpx; }
+.bottom-fixed{position:relative;flex-shrink:0;z-index:998;display:flex;flex-direction:column;background:var(--ng-surface);backdrop-filter: none}
+.bottom-fixed.photo-open{z-index:1300}.input-bar{display:flex;gap:12rpx;align-items:center;padding:16rpx 18rpx 18rpx;background:var(--ng-surface);border-top:1rpx solid var(--ng-border);margin:0}
+.voice-btn { width:84rpx; height:84rpx; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(99,102,241,0.15); font-size:32rpx; }
 .voice-btn.active { background:rgba(99,102,241,0.18); color:var(--ng-text); }
-.msg-input { flex:1; height:68rpx; padding:0 18rpx; border:1rpx solid var(--ng-border); border-radius:34rpx; background:var(--ng-surface); font-size:26rpx; color:var(--ng-text); }
-.voice-hold-btn { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none; flex:1; height:68rpx; display:flex; align-items:center; justify-content:center; border:1rpx dashed rgba(99,102,241,0.25); border-radius:34rpx; background:rgba(99,102,241,0.08); font-size:26rpx; color:var(--ng-secondary); font-weight:600; }
+.msg-input { flex:1; height:88rpx; padding:0 24rpx; border:1rpx solid var(--ng-border); border-radius:44rpx; background:var(--ng-surface); font-size:28rpx; color:var(--ng-text); }
+.voice-hold-btn { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none; flex:1; height:88rpx; display:flex; align-items:center; justify-content:center; border:1rpx dashed rgba(99,102,241,0.25); border-radius:44rpx; background:rgba(99,102,241,0.08); font-size:28rpx; color:var(--ng-secondary); font-weight:600; }
 .voice-hold-btn.pressing { background:linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.18)); color:var(--ng-text); border-style:solid; }
-.send-btn { height:68rpx; padding:0 26rpx; line-height:68rpx; border-radius:34rpx; background:linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.18)); color:var(--ng-text); font-size:26rpx; font-weight:700; }
+.send-btn { height:88rpx; padding:0 32rpx; line-height:88rpx; border-radius:44rpx; background:linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.18)); color:var(--ng-text); font-size:28rpx; font-weight:700; }
 .send-btn.disabled { opacity:0.35; }
 
 .tb-root{background:transparent}
