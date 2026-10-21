@@ -63,8 +63,22 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(DB_ENGINE)
     logger.info("  → 检查字段迁移...")
     _migrate_add_missing_columns()
+    _migrate_user_numbers()
     _shorten_legacy_visit_durations()
     logger.info("  → 数据库初始化完成")
+
+
+def _migrate_user_numbers():
+    """为历史账号补发展示编号；已有编号的账号保持不变。"""
+    from ..modules.user_number import backfill_user_numbers
+
+    try:
+        count = backfill_user_numbers(DB_ENGINE)
+    except Exception as exc:
+        logger.warning("用户编号补发失败，注册时会继续尝试自动取号: {}", exc)
+        return
+    if count:
+        logger.info("Assigned display user numbers to {} legacy accounts", count)
 
 
 def _shorten_legacy_visit_durations():
@@ -135,6 +149,13 @@ def _migrate_add_missing_columns():
                 ("openid", "VARCHAR(255) DEFAULT NULL"),
             ],
         },
+        # UserInfo: 对外展示的用户编号（年月 + 4 位注册顺序，如 2026100001）
+        {
+            "table": "user_info",
+            "columns": [
+                ("user_no", "VARCHAR(10)"),
+            ],
+        },
     ]
     with DB_ENGINE.connect() as conn:
         for m in migrations:
@@ -151,3 +172,10 @@ def _migrate_add_missing_columns():
                         conn.commit()
                     except Exception:
                         conn.rollback()  # 列已存在则跳过
+        # 展示编号必须唯一；历史库刚补列，统一在补号前建唯一索引。
+        try:
+            conn.execute(sa_text("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_info_user_no ON user_info(user_no)"))
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            logger.warning("创建用户编号唯一索引失败: {}", exc)

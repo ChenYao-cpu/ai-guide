@@ -40,9 +40,10 @@
       <view class="menu-group">
         <view class="menu-item">
           <view class="mi-left"><text class="mi-icon iconfont icon-pianhao"></text><text class="mi-label">{{ t('界面语言') }}</text></view>
-          <view class="lang-switch" role="group" :aria-label="t('界面语言')">
-            <button class="lang-btn" :class="{active:tourLanguage==='zh'}" :aria-pressed="tourLanguage==='zh'" @tap="setTourLanguage('zh')">中文</button>
-            <button class="lang-btn" :class="{active:tourLanguage==='en'}" :aria-pressed="tourLanguage==='en'" @tap="setTourLanguage('en')">English</button>
+          <view class="lang-switch" :class="{ en: tourLanguage === 'en' }" role="group" :aria-label="t('界面语言')">
+            <view class="lang-thumb" aria-hidden="true"></view>
+            <button class="lang-btn" :class="{active:tourLanguage==='zh'}" :aria-pressed="tourLanguage==='zh'" hover-class="lang-press" :hover-stay-time="70" @tap="setTourLanguage('zh')">中文</button>
+            <button class="lang-btn" :class="{active:tourLanguage==='en'}" :aria-pressed="tourLanguage==='en'" hover-class="lang-press" :hover-stay-time="70" @tap="setTourLanguage('en')">English</button>
           </view>
         </view>
         <view class="menu-item" @tap="showAbout=true">
@@ -72,26 +73,28 @@
 
     <NocturneConfirm v-if="showLogout" :title="t('退出登录')" :content="t('确定要退出登录吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showLogout=false" @confirm="confirmLogout" />
 
-    <TabBarNav current="mine" />
+    <!-- 退出登录：登录页从「退出登录」这一行弹性展开，再切到真实登录页，避免生硬换页 -->
+    <view v-if="loginRevealOpen" class="login-reveal" :style="revealStyle" aria-hidden="true"><AuthPage /></view>
   </view>
 </template>
 
 <script>
-import TabBarNav from '../../components/TabBarNav.vue'
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
+import AuthPage from '../auth/auth.vue'
 import { BASE_URL, assetUrl } from '../../common/config.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 export default {
-  components:{TabBarNav,NocturneConfirm},
+  components:{NocturneConfirm,AuthPage},
   data: function () {
     return {
       // 与 pages/tour/tour.vue 共用同一个 storage key，切换后全 App 一致。
 
       username: '', userId: '', avatarUrl: '', statusH: 20,
-      showAbout: false, showLogout: false,
+      showAbout: false, showLogout: false, loginRevealOpen: false, revealOriginX: 206, revealOriginY: 640,
     }
   },
   computed: {
+    revealStyle: function () { return { transformOrigin: this.revealOriginX + 'px ' + this.revealOriginY + 'px' } },
     avatarText: function () { var name = (this.username || '').trim(); return name ? name.charAt(0).toUpperCase() : '游' },
   },
   methods: {
@@ -185,8 +188,27 @@ export default {
     goTab:function(p){uni.reLaunch({url:p})},
     goHistory:function(){uni.navigateTo({url:'/pages/mine/history'})},
     handleLogout: function () { this.showLogout=true },
+    // 退出登录：清完会话后让登录页从「退出登录」这一行弹性展开，动画结束再切真实登录页，避免生硬换页。
     confirmLogout: function () {
       this.showLogout=false
+      if (this.loginRevealOpen) return
+      this.clearSession()
+      var started=false
+      var start=()=>{
+        if (started) return
+        started=true
+        this.loginRevealOpen=true
+        this._revealTimer=setTimeout(function(){uni.reLaunch({url:'/pages/auth/auth'})},1050)
+      }
+      try {
+        uni.createSelectorQuery().in(this).select('.logout-item').boundingClientRect(function(rect){
+          if(rect&&rect.width){ this.revealOriginX=rect.left+rect.width/2; this.revealOriginY=rect.top+rect.height/2 }
+          start()
+        }.bind(this)).exec()
+      } catch (e) {}
+      this._revealFallback=setTimeout(start,140)
+    },
+    clearSession: function () {
       uni.setStorageSync('login_auto_disabled',true)
       uni.removeStorageSync('token')
       uni.removeStorageSync('avatar')
@@ -196,13 +218,13 @@ export default {
       uni.removeStorageSync('wx_nickName')
       uni.removeStorageSync('wx_avatarUrl')
       uni.removeStorageSync('login_time')
-      uni.reLaunch({ url: '/pages/auth/auth' })
     },
   },
   mounted:function(){
     this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6
   },
   onHide:function(){this.showAbout=false;this.showLogout=false},
+  onUnload:function(){clearTimeout(this._revealTimer);clearTimeout(this._revealFallback)},
   onShow: function () {
     this.showAbout=false
     var token = uni.getStorageSync('token')
@@ -213,7 +235,7 @@ export default {
         if(r.statusCode===401){uni.removeStorageSync('token');uni.reLaunch({url:'/pages/auth/auth'});return}
         if(r.statusCode!==200||!d.success||!d.data){uni.showToast({title:this.t('个人资料加载失败'),icon:'none'});return}
         this.username=d.data.username||''
-        this.userId=d.data.user_id
+        this.userId=d.data.user_no||d.data.user_id||''
         this.avatarUrl=assetUrl(d.data.avatar||'')
         uni.setStorageSync('username',this.username)
         uni.setStorageSync('avatar',d.data.avatar||'')
@@ -253,10 +275,15 @@ export default {
 .mi-arrow { font-size:32rpx; color:var(--ng-secondary); }
 
 /* 中英文切换（与「我的」菜单同排，样式沿用主题变量） */
-.lang-switch { display:flex; align-items:center; gap:6rpx; padding:8rpx; border-radius:28rpx; background:var(--ng-raised); border:1rpx solid var(--ng-border); }
-.lang-btn { border:0; background:transparent; color:var(--ng-secondary); font-size:26rpx; line-height:1.2; padding:14rpx 20rpx; border-radius:20rpx; margin:0; }
-.lang-btn.active { background:var(--ng-surface); color:var(--ng-accent-text); font-weight:700; box-shadow:0 4rpx 14rpx rgba(30,41,59,.10); }
+/* 界面语言：白色滑块在两个选项间弹性滑动，按下时按钮回弹。 */
+.lang-switch { position:relative; display:flex; align-items:center; padding:8rpx; border-radius:28rpx; background:var(--ng-raised); border:1rpx solid var(--ng-border); }
+.lang-thumb { position:absolute; top:8rpx; left:8rpx; width:115rpx; height:59rpx; border-radius:20rpx; background:var(--ng-surface); box-shadow:0 4rpx 14rpx rgba(30,41,59,.10); transition:transform 460ms cubic-bezier(.34,1.56,.64,1); will-change:transform; }
+.lang-switch.en .lang-thumb { transform:translateX(115rpx); }
+.lang-btn { position:relative; z-index:1; width:115rpx; height:59rpx; display:flex; align-items:center; justify-content:center; padding:0; border:0; margin:0; background:transparent; color:var(--ng-secondary); font-size:26rpx; line-height:1.2; transition:color .26s ease, transform .24s cubic-bezier(.34,1.56,.64,1); }
+.lang-btn.active { color:var(--ng-accent-text); font-weight:700; }
+.lang-btn.lang-press { transform:scale(.88); }
 .lang-btn::after { border:0; }
+@media (prefers-reduced-motion: reduce) { .lang-thumb, .lang-btn { transition:none; } }
 .logout-item:active { background:rgba(228,155,168,0.04); }
 .footer-tag { position:relative; z-index:1; text-align:center; padding:40rpx 0 20rpx; }
 .footer-tag text { font-size:20rpx; color:var(--ng-secondary); letter-spacing:2rpx; }
@@ -290,4 +317,10 @@ export default {
 .about-row{display:flex;padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}
 .about-row text:first-child{font-size:22rpx;color:var(--ng-secondary);width:80rpx;flex-shrink:0}
 .about-row text:last-child{font-size:22rpx;color:var(--ng-text)}
+
+/* 退出登录：登录页弹性展开（与引导页「开始体验」同一套动效），避免生硬换页 */
+.login-reveal{position:fixed!important;top:0;right:0;bottom:0;left:0;z-index:9999!important;overflow:hidden;background:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%);animation:loginSpring 850ms linear both;will-change:transform,opacity,border-radius}
+@keyframes loginSpring{0%{opacity:0;transform:scale(.1,.045);border-radius:180px}12%{opacity:1}45%{transform:scale(1.045,1.025);border-radius:32px}64%{transform:scale(.985,.99);border-radius:12px}82%{transform:scale(1.007,1.004);border-radius:4px}100%{opacity:1;transform:scale(1);border-radius:0}}
+@media(prefers-reduced-motion:reduce){.login-reveal{animation:loginFade 120ms ease both}}
+@keyframes loginFade{from{opacity:0}to{opacity:1}}
 </style>

@@ -146,7 +146,6 @@
     </view>
 
     </view>
-    <TabBarNav v-show="!keyboardVisible" current="ai" :leaving="tabLeaving" :hide-on-enter="true" />
     <NocturneSelect v-if="showQASpots" ref="spotPicker" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" :anchor="spotAnchor" @change="selectQuestionSpot" @close="closeSpotPicker" />
 
     <!-- 问答历史记录 -->
@@ -174,7 +173,6 @@
 </template>
 
 <script>
-import TabBarNav from '../../components/TabBarNav.vue'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import ChatVoice from '../../components/chat-voice.vue'
 import NocturneSelect from '../../components/NocturneSelect.vue'
@@ -207,7 +205,7 @@ function request(options) {
 }
 
 export default {
-  components:{ChatVoice,NocturneSelect,TabBarNav},
+  components:{ChatVoice,NocturneSelect},
   data: function () {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
@@ -259,7 +257,7 @@ export default {
     goBack:function(){
       const stack=(typeof getCurrentPages==='function')?getCurrentPages():[]
       if(stack&&stack.length>1){uni.navigateBack({delta:1});return}
-      uni.reLaunch({url:'/pages/tour-guide/tour-guide'})
+      uni.$emit('tabs:select','tour')
     },
     openHistory:function(){this.showHistory=true;this.localizeHistory()},
     closeHistory:function(){this.showHistory=false},
@@ -673,7 +671,7 @@ export default {
       if(this.recommendedPlan)uni.setStorageSync('ai_route_plan',JSON.stringify(this.recommendedPlan))
       uni.setStorageSync('ai_route_owner',this.storageOwner())
       uiToast({ title: '已选中' + this.lastSpotIds.length + '个景点', icon: 'success' })
-      setTimeout(function () { if(self.isCurrentRequest(epoch,owner))uni.reLaunch({ url: '/pages/tour-guide/tour-guide' }) }, 500)
+      setTimeout(function () { if(self.isCurrentRequest(epoch,owner))uni.$emit('tabs:select','tour') }, 500)
     },
     toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;if(this.voiceMode)uni.hideKeyboard() },
     stopTTS:function(){this._ttsRequestId=(this._ttsRequestId||0)+1;this.voicePayload={id:this._ttsRequestId};if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}this.speaking=false;this.ttsLoading=false;this.speakingIndex=-1},

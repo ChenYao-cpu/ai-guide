@@ -49,7 +49,7 @@ try{
   await screenshot(label);await scroll.evaluate(el=>el.scrollTop=0)
  }
  try{
-  await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});await page.getByText('English',{exact:true}).click();const fields=page.locator('.nickname-input input');await fields.nth(0).fill('app-qa');await fields.nth(1).fill('mock-password');await page.locator('.primary').click();await page.locator('.spot-card').first().waitFor()
+  await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});await page.locator('.auth-lang, .auth-language button:last-child').first().click();const fields=page.locator('.nickname-input input');await fields.nth(0).fill('app-qa');await fields.nth(1).fill('mock-password');await page.locator('.primary').click();await page.locator('.spot-card').first().waitFor()
   for(const name of ['Jade Belt Bridge','Kunming Lake','Marble Boat']){const english=page.locator('.spot-card').filter({hasText:name});if(await english.count())await english.locator('.sc-body').click();else await page.locator('.spot-card').nth(['Jade Belt Bridge','Kunming Lake','Marble Boat'].indexOf(name)).locator('.sc-body').click()}
   await page.waitForFunction(()=>!document.querySelector('.itinerary-block')?.textContent.includes('Calculating'))
   await page.locator('.itinerary-stop').nth(2).locator('.itinerary-actions uni-button').nth(0).click();await page.waitForFunction(()=>document.querySelectorAll('.itinerary-stop')[1]?.textContent.includes('Marble Boat'))
