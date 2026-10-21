@@ -279,8 +279,11 @@ async def get_session_live_info(session_id: int):
         preferences = _answer_metadata(tour_session.visitor_preferences)
         plan = preferences.get('last_replan') or preferences.get('planning') or {}
         if not isinstance(plan,dict): plan={}
+        station_origin = preferences.get('station_origin') if preferences.get('station_plan') else None
+        station_end = station_origin if plan.get('end_area') == 'return' else None
         overview = route_overview([s.model_dump() for s in spots], plan.get('pace', 'standard'),
-            end_area=plan.get('end_area', 'auto'), avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'))
+            end_area=plan.get('end_area', 'auto'), avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'),
+            start_anchor=station_origin, end_anchor=station_end)
 
         result = {
             "session_id": tour_session.session_id,
@@ -318,9 +321,9 @@ async def get_session_live_info(session_id: int):
         result["next_spot_info"] = _route_spot_data(next_spot)
         result["route_spots"] = [_route_spot_data(spot) for spot in spots]
         result["route_overview"] = overview
-        result["remaining_route_overview"] = route_overview([s.model_dump() for s in spots[current_spot_index:]],
+        result["remaining_route_overview"] = overview if station_origin and current_spot_index == 0 else route_overview([s.model_dump() for s in spots[current_spot_index:]],
             plan.get('pace', 'standard'), include_first_visit=False, end_area=plan.get('end_area', 'auto'),
-            avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'), reserve=plan.get('reserve_minutes', plan.get('queue_reserve_minutes', 0)))
+            avoid_steps=plan.get('avoid_steps', plan.get('pace') == 'relaxed'), reserve=plan.get('reserve_minutes', plan.get('queue_reserve_minutes', 0)), end_anchor=station_end)
         result["route_error"] = route_error
         result["final_spot"] = bool(spots) and current_spot_index >= len(spots) - 1
 

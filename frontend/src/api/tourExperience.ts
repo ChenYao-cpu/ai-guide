@@ -9,6 +9,7 @@ export interface VisualContext {
 }
 export interface WalkingLeg {
   from_id: number; to_id: number; from_name: string; to_name: string
+  from_name_en?:string; to_name_en?:string
   meters: number | null; minutes: number | null; basis: string
   available?: boolean; geometry?: number[][]; has_steps?: boolean | null; steps_meters?: number | null
   sections?: Array<{way_id:number;road_name:string;meters:number;steps:boolean;bridge:boolean;highway:string}>
@@ -32,7 +33,7 @@ export interface RouteOverviewData {
   exit_leg?: WalkingLeg | null
   exit_anchor?: {latitude:number;longitude:number;label:string} | null
   entry_leg?: WalkingLeg | null
-  entry_anchor?: {latitude:number;longitude:number;label:string} | null
+  entry_anchor?: {latitude:number;longitude:number;label:string;label_en?:string} | null
   exit_minutes?: number | null
   reserve_minutes?: number
   network_version?: string
@@ -55,6 +56,26 @@ export function getRouteOverview(spotIds: number[], pace = 'standard', signal?: 
     data: { spot_ids: spotIds, pace, ...options },
     signal,
     timeout: 15000
+  })
+}
+export interface RouteOrderProposal {
+  input_spot_ids: number[]
+  spot_ids: number[]
+  original_route: RouteOverviewData
+  proposed_route: RouteOverviewData
+  unchanged: boolean
+  optimal: boolean
+  method: 'exact' | 'multistart_2opt'
+  saved_meters: number
+  saved_minutes: number
+  fixed_start: boolean
+  fixed_end: boolean
+  network_version: string
+}
+export function optimizeRouteOrder(spotIds: number[], options: {fixed_start:boolean;fixed_end:boolean;pace:'standard'|'relaxed'}, signal?:AbortSignal) {
+  return request_handler<{success:boolean;data:RouteOrderProposal}>({
+    url:'/tour-experience/optimize-order', method:'post',
+    data:{spot_ids:spotIds,...options}, signal, timeout:20000,
   })
 }
 export async function getContentPreview(data: Record<string, unknown>, signal?: AbortSignal) {

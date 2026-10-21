@@ -81,9 +81,9 @@ def _path(start, end, avoid_steps, blocked):
     return tuple(reversed(vertices)), tuple(reversed(edges)), distances[end]
 
 
-def route_between(a, b=None, *, end_area=None, avoid_steps=False):
-    origin = access_point(a)
-    destination = NETWORK['gates'].get(end_area) if end_area else access_point(b) if b else None
+def route_between(a, b=None, *, end_area=None, avoid_steps=False, origin_anchor=None, destination_anchor=None):
+    origin = origin_anchor or access_point(a)
+    destination = destination_anchor or (NETWORK['gates'].get(end_area) if end_area else access_point(b) if b else None)
     if not origin or not destination: return None
     result = _path(origin['node_id'], destination['node_id'], bool(avoid_steps), rules())
     if result is None: return None
@@ -113,4 +113,10 @@ def distance_between(a, b, avoid_steps=False):
 def gate_distance(a, area, avoid_steps=False):
     origin, destination = access_point(a), NETWORK['gates'].get(area)
     result = _path(origin['node_id'], destination['node_id'], bool(avoid_steps), rules()) if origin and destination else None
+    return round(result[2]) if result else float('inf')
+
+
+def anchor_distance(a, anchor, avoid_steps=False):
+    origin = access_point(a)
+    result = _path(origin['node_id'], anchor['node_id'], bool(avoid_steps), rules()) if origin and anchor else None
     return round(result[2]) if result else float('inf')

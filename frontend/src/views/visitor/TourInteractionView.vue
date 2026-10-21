@@ -63,7 +63,7 @@
 
     <div v-if="sessionError" class="tour-alert" role="alert">
       <span>{{ $t(sessionError) }}</span
-      ><el-button :loading="sessionLoading" @click="refreshSessionInfo">{{ $t("重新加载") }}</el-button><el-button @click="router.push('/visitor/home')">{{ $t('返回规划') }}</el-button>
+      ><el-button :loading="sessionLoading" @click="refreshSessionInfo">{{ $t("重新加载") }}</el-button><el-button @click="router.push(planningHome)">{{ $t('返回规划') }}</el-button>
     </div>
     <div class="tour-main">
       <section class="tour-left" :aria-label='$t("数字人导游")'>
@@ -296,6 +296,7 @@ import { useGeolocation } from '@/composables/useGeolocation'
 import { formatTourMessage, isKnowledgeSourceUrl } from '@/utils/tourPresentation'
 
 const router = useRouter()
+const planningHome = computed(()=>router.currentRoute.value.path.startsWith('/m/')?'/m/home':'/station/summer-palace-east')
 const props = defineProps<{ sessionId: string }>()
 
 // ── GPS 位置追踪 ──
@@ -740,7 +741,7 @@ async function handleEndTour() {
     sessionStorage.removeItem('zhiyou-active-tour')
     sessionStorage.removeItem('tour-draft-'+props.sessionId)
     ElMessage.success(t("导览已结束"))
-    router.push('/visitor/home')
+    router.push(planningHome.value)
   } catch {
     /* user cancelled */
   }

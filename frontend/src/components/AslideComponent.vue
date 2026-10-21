@@ -36,6 +36,7 @@ const isAdmin = computed(() => tokenStore.userInfo.role === 'admin')
       <el-menu-item index="/home">
         <el-icon><House /></el-icon><span>{{ $t("综合看板") }}</span>
       </el-menu-item>
+      <el-menu-item index="/stations"><el-icon><Guide /></el-icon><span>{{ $t('服务站管理') }}</span></el-menu-item>
 
       <div v-show="!isCollapse" class="menu-caption secondary">{{ $t("管理模块") }}</div>
       <el-sub-menu index="/scenic-spot">

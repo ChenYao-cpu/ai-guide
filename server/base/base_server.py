@@ -9,6 +9,8 @@
 
 import time
 import uuid
+import asyncio
+from contextlib import suppress
 
 # 自动加载项目根目录 .env 文件（开发环境免去手动 export 环境变量）
 from pathlib import Path as _Path
@@ -43,6 +45,7 @@ from .routers import (
     digital_guide, avatar, spot_favorites, xingyun, tts,
 )
 from .server_info import SERVER_PLUGINS_INFO
+from .models import station_models
 from .utils import ChatItem, ResultCode, gen_default_data, make_return_data, streamer_sales_process
 
 swagger_description = """
@@ -76,6 +79,8 @@ async def lifespan(app: FastAPI):
     # 启动
     logger.info("Step 1/3: 创建/检查数据库表结构...")
     create_db_and_tables()
+    from .routers.service_stations import initialize_station
+    initialize_station()
     from .modules.avatar_runtime import fail_interrupted_jobs
     fail_interrupted_jobs()
 
@@ -95,10 +100,14 @@ async def lifespan(app: FastAPI):
             SERVER_PLUGINS_INFO.rag_enabled = False
             logger.warning(f"景区 RAG 初始化失败，已降级为景点上下文问答: {exc}")
 
-    yield
-
-    # 结束
-    logger.info("Base server stopped.")
+    from .routers.service_stations import prune_expired_loop
+    station_cleanup = asyncio.create_task(prune_expired_loop())
+    try:
+        yield
+    finally:
+        station_cleanup.cancel()
+        with suppress(asyncio.CancelledError): await station_cleanup
+        logger.info("Base server stopped.")
 
 
 app = FastAPI(
@@ -137,9 +146,10 @@ app.include_router(scenic_spots.router)
 app.include_router(knowledge_base.router)
 app.include_router(tour_routes.router)
 app.include_router(tour_chat.router)
-from .routers import tour_adaptive, tour_experience
+from .routers import tour_adaptive, tour_experience, service_stations
 app.include_router(tour_adaptive.router)
 app.include_router(tour_experience.router)
+app.include_router(service_stations.router)
 app.include_router(tts.router)
 app.include_router(feedback_analytics.router)
 app.include_router(digital_guide.router)
