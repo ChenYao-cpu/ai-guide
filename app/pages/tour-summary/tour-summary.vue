@@ -283,7 +283,7 @@ export default {
     catLabel: function (c) { var m = { historical: '历史', natural: '自然', cultural: '文化' }; return this.t(m[c] || c) },
     fixImg: function(u) { if (!u) return ''; return assetUrl(u) },
     goHome: function() {
-      uni.reLaunch({ url: '/pages/tour-guide/tour-guide' })
+      uni.reLaunch({ url: '/pages/tabs/tabs?tab=tour' })
     },
     goBack:function(){
       const pages=getCurrentPages(),previous=pages[pages.length-2]

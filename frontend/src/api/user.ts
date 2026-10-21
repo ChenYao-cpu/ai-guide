@@ -11,6 +11,7 @@ type loginFormType = {
 
 interface UserInfo {
   user_id: number
+  user_no?: string
   username: string
   avatar: string
   email: string

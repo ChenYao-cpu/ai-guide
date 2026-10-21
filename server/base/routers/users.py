@@ -177,6 +177,7 @@ def register_email(data: EmailRegistration):
     from ..database.init_db import DB_ENGINE
     from ..models.user_model import UserInfo, EmailVerification
     from ..modules.email_registration import normalize_email, code_digest
+    from ..modules.user_number import assign_user_no
 
     email = normalize_email(data.email)
     nickname = data.nickname.strip()
@@ -206,7 +207,8 @@ def register_email(data: EmailRegistration):
             raise HTTPException(409, '该昵称已被使用，请换一个')
         session.add(UserInfo(username=nickname, email=email,
                              hashed_password=get_password_hash(data.password),
-                             create_time=datetime.now(timezone.utc), delete=False))
+                             create_time=datetime.now(timezone.utc), delete=False,
+                             user_no=assign_user_no(session)))
         session.delete(verification)
         try:
             session.commit()

@@ -25,6 +25,8 @@ class TokenItem(BaseModel):
 
 class UserBaseInfo(BaseModel):
     user_id: int | None = Field(default=None, primary_key=True, unique=True)
+    # 对外展示的用户编号：年月 + 4 位注册顺序，如 2026100001；内部主键仍用 user_id。
+    user_no: str | None = Field(default=None, unique=True)
     username: str = Field(index=True, unique=True)
     email: str | None = None
     avatar: str | None = None

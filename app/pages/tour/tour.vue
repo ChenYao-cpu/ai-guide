@@ -464,7 +464,7 @@ export default {
       this.cancelRecord();this.stopPlayback();this.stopGps()
       this.closeXingyun()
       var self=this
-      uni.reLaunch({url:url||'/pages/tour-guide/tour-guide',fail:function(){
+      uni.reLaunch({url:url||'/pages/tabs/tabs?tab=tour',fail:function(){
         self.leavingTour=false
         uni.showToast({title:'返回首页失败，请重试',icon:'none'})
       }})

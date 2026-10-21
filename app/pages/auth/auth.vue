@@ -1,9 +1,6 @@
 <template>
   <view class="auth-page" :class="{ 'auth-english': tourLanguage === 'en' }">
-    <view class="auth-language" role="group" :aria-label="t('界面语言')">
-      <button :class="{ active: tourLanguage === 'zh' }" :aria-pressed="tourLanguage === 'zh'" @tap="setLanguage('zh')">中文</button>
-      <button :class="{ active: tourLanguage === 'en' }" :aria-pressed="tourLanguage === 'en'" @tap="setLanguage('en')">English</button>
-    </view>
+    <button class="auth-lang" :class="{ 'is-eng': tourLanguage !== 'en' }" hover-class="none" :aria-label="tourLanguage === 'en' ? '切换到中文' : 'Switch to English'" :aria-pressed="tourLanguage === 'en'" @tap="setLanguage(tourLanguage === 'en' ? 'zh' : 'en')">{{ tourLanguage === 'en' ? '中' : 'ENG' }}</button>
     <view class="auth-brand"><BrandLogo stacked animated /></view>
     <view class="welcome-card">
       <text class="welcome-title">{{ t('让每一程，都有故事') }}</text>
@@ -18,7 +15,7 @@
           <button class="dialog-cancel" style="margin:20rpx 0" :disabled="sendingCode || logining || codeRetryAt>0" @tap="sendEmailCode">{{ t(sendingCode ? '正在发送…' : codeRetryAt>0 ? '请稍后再发送' : '发送验证码') }}</button>
         </view>
       </view>
-      <button class="primary" :disabled="logining" @tap="beginLogin">{{ t(logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录') }}</button>
+      <button class="primary login-cta" :disabled="logining" @tap="beginLogin">{{ t(logining ? '正在处理…' : appLogin ? (registering ? '注册并登录' : '登录') : developmentLogin ? '开发测试登录' : '微信授权登录') }}</button>
       <view v-if="appLogin" class="register-row" @tap="toggleRegistration">
         <text class="register-text">{{ t(registering ? '已有账号，去登录' : '没有账号？邮箱注册') }}</text>
       </view>
@@ -58,7 +55,9 @@ export default {
   data() { return {appLogin:APP_LOGIN,emailCode:'',sendingCode:false,codeRetryAt:0,codeNotice:'',registering:false,confirmPassword:'',account:'',password:'',logining:false,error:'',developmentLogin:DEVELOPMENT_LOGIN,avatarPath:'',nickname:'',showProfileDialog:false} },
   onShow() { this.tourLanguage=uni.getStorageSync(LANGUAGE_STORAGE_KEY)==='en'?'en':'zh'; uni.setNavigationBarColor({frontColor:'#000000',backgroundColor:'#f8fafc',animation:{duration:0,timingFunc:'linear'}}) },
   onUnload() { clearTimeout(this._emailCodeTimer);clearTimeout(this._wxLoginTimer) },
-  onLoad() {
+  onLoad(options = {}) {
+    // The explicit onboarding action always opens sign-in, even with a saved account.
+    if (options.fromOnboarding === '1') return
     if(uni.getStorageSync('login_auto_disabled')) return
     // 登录一次即长期免登录：本地有 token 就直接恢复会话。
     if(uni.getStorageSync('token')) { this.restoreSession(); return }
@@ -80,7 +79,7 @@ export default {
       uni.removeStorageSync('login_auto_disabled')
       this.logining=false
       this.showProfileDialog=false
-      uni.reLaunch({url:'/pages/tour-guide/tour-guide',fail:e=>{this.logining=false;this.error='进入导览页面失败，请重新编译小程序后重试';console.error('Login navigation failed',e)}})
+      uni.reLaunch({url:'/pages/tabs/tabs?tab=tour',fail:e=>{this.logining=false;this.error='进入导览页面失败，请重新编译小程序后重试';console.error('Login navigation failed',e)}})
     },
     restoreSession() {
       this.logining=true;this.error=''
@@ -227,9 +226,13 @@ export default {
 .register-row{margin-top:26rpx;}
 .register-text{color:#8b84a3;font-size:23rpx;letter-spacing:.5rpx;}
 .login-area{margin-top:26rpx;padding:0;border:0;box-shadow:none;background:transparent;}.primary{border-radius:22rpx;}
+/* 登录按钮：柔和浅紫色静态渐变。 */
+.primary.login-cta{background:linear-gradient(110deg,#9879df 0%,#aa8fe7 55%,#b7a0ec 100%);animation:none;box-shadow:0 12rpx 30rpx -12rpx rgba(152,121,223,.32)}
+.primary.login-cta[disabled]{background:#e2e8f0;color:#64748b;box-shadow:none;animation:none}
 .auth-page{position:relative;}
-.auth-language{position:absolute;right:36rpx;top:calc(32rpx + env(safe-area-inset-top));display:flex;padding:6rpx;border:1rpx solid rgba(139,116,201,.2);border-radius:40rpx;background:rgba(255,255,255,.75);}
-.auth-language button{margin:0;padding:0 24rpx;height:60rpx;line-height:60rpx;border-radius:32rpx;background:transparent;color:#79718f;font-size:24rpx;}
-.auth-language button::after{border:0;}.auth-language button.active{background:#6c4ce4;color:#fff;box-shadow:0 4rpx 14rpx rgba(108,76,228,.2);}
+/* 登录页语言按钮：与引导页一致的白色圆形 ENG/中 切换 */
+.auth-lang{position:absolute;right:36rpx;top:calc(32rpx + env(safe-area-inset-top));width:64rpx;height:64rpx;min-height:0;margin:0;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.68);border:1rpx solid rgba(255,255,255,.92);box-shadow:0 6rpx 16rpx rgba(103,80,217,.14),inset 0 1rpx 0 rgba(255,255,255,.95);color:#5b45e0;font-size:26rpx;letter-spacing:0;-webkit-tap-highlight-color:transparent}
+.auth-lang.is-eng{font-size:19rpx;font-weight:600;letter-spacing:0}
+.auth-lang::after{border:0}
 .auth-english .auth-eyebrow{letter-spacing:1rpx;}.auth-english .welcome-title{font-size:36rpx;letter-spacing:0;}.auth-english .register-text{font-size:22rpx;letter-spacing:0;}
 </style>

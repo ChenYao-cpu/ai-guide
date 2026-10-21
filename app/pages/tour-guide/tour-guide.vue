@@ -178,7 +178,6 @@
     </ScenicSheet>
 
     <!-- TabBar -->
-    <TabBarNav v-if="!showItinerary" current="tour" />
   </view>
 </template>
 
@@ -186,7 +185,6 @@
 import RouteTiming from '../../components/RouteTiming.vue'
 import FloatingTourButton from '../../components/FloatingTourButton.vue'
 import ScenicSheet from '../../components/ScenicSheet.vue'
-import TabBarNav from '../../components/TabBarNav.vue'
 import { selectedOrder, moveStop, previewOptions, roadMap } from '../../common/route-planning.js'
 import { prioritizeSummerPalace } from '../../common/scenic-order.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
@@ -200,7 +198,10 @@ var api={
   createSession:function(n,g,p,s,planning){return req({url:'/tour-session/visitor-create?name='+encodeURIComponent(n||'游客')+'&guide_id='+(g||1)+'&visitor_preferences='+encodeURIComponent(p||'')+'&spot_ids='+encodeURIComponent(JSON.stringify(s||[]))+(planning?'&planning='+encodeURIComponent(JSON.stringify(planning)):''),method:'POST'})},
 }
 export default {
-  components:{FloatingTourButton,RouteTiming,ScenicSheet,TabBarNav},
+  components:{FloatingTourButton,RouteTiming,ScenicSheet},
+  watch:{
+    showItinerary:function(v){ uni.$emit('dock:sync',{source:'tour',hide:!!v}) },
+  },
   onReady:function(){
     this.pageReady=true
     // #ifdef MP-WEIXIN
@@ -208,7 +209,7 @@ export default {
     // #endif
   },
   data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
-    previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
+    previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,dataLoaded:false,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
     spotCats:[{value:'all',label:'全部'},{value:'natural',label:'自然'},{value:'cultural',label:'文化'},{value:'historical',label:'历史'}],
   }},
@@ -331,22 +332,35 @@ export default {
         const picked={};ids.forEach(id=>{picked[id]=true});this.pickedIds=picked;this.orderedIds=ids.slice();this.pickedRouteId=null
       }catch(_){uni.showToast({title:this.t('部分推荐景点已不可用，请重新规划'),icon:'none'})}
     },
-    loadData:function(){var s=this;s.loading=true;s.error=''
+    loadData:function(){var s=this
+      // 只有首次进入显示骨架屏；从 AI 页滑回来时静默刷新，避免整页闪一下骨架块。
+      var first=!s.dataLoaded
+      if(first)s.loading=true
+      s.error=''
       Promise.all([api.getGuides(s.tourLanguage).catch(function(){return null}),api.getSpots().catch(function(){return null}),api.getRoutes().catch(function(){return null})]).then(function(r){
         var gr=r[0],sr=r[1],rr=r[2]
-        if(gr&&gr.data){var g=gr.data;s.guides=(g.data&&g.data.guide_list)?g.data.guide_list:(g.guide_list||[])}
+        if(gr&&gr.data){var g=gr.data
+          var list=(g.data&&g.data.guide_list)?g.data.guide_list:(g.guide_list||[])
+          var known={};s.guides.forEach(function(old){known[old.guide_id]=old})
+          s.guides=list.map(function(item){var old=known[item.guide_id]
+            return old?Object.assign({},item,{previewUrl:old.previewUrl,previewMessage:old.previewMessage,previewLoading:old.previewLoading}):Object.assign({},item,{previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})})
+          var previous=s.pickedGuide&&s.pickedGuide.guide_id
+          s.pickedGuide=s.guides.find(function(item){return item.guide_id===previous})||null
+          // 只为新增的数字人拉取预览，已有预览保留，避免列表图片重新闪一遍。
+          s.guides.forEach(function(item){if(!known[item.guide_id])s.loadGuidePreview(item)})
+        }
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
         if(rr&&rr.data){var rd=rr.data;s.routes=(rd.data&&rd.data.route_list)?rd.data.route_list:(rd.route_list||[])}
         s.spots=s.spots.filter(function(x){return isBeijingCity(x.city)})
         s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)})
         var ordered=prioritizeSummerPalace(s.spots,s.routes);s.spots=ordered.spots;s.routes=ordered.routes
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}
-        s.guides=s.guides.map(function(g){return Object.assign({},g,{previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})});var previous=s.pickedGuide&&s.pickedGuide.guide_id;s.pickedGuide=s.guides.find(function(g){return g.guide_id===previous})||null;s.guides.forEach(function(g){s.loadGuidePreview(g)})
-        if(!gr||!sr||!rr)s.error='部分数据加载失败，请重试'
+        if(gr&&sr&&rr)s.dataLoaded=true
+        if(!gr||!sr||!rr){if(first)s.error='部分数据加载失败，请重试'}
         // 进入导览页不自动选景点：上一次 AI 推荐留下的暂存直接丢弃。
         s.restoreAISelection()
         s.loading=false
-      }).catch(function(){s.error='网络连接失败';s.loading=false})},
+      }).catch(function(){if(first)s.error='网络连接失败';s.loading=false})},
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },

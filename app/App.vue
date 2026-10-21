@@ -1,5 +1,6 @@
 <script>
 import { LOGIN_PROVIDER } from './common/config.js'
+import { ONBOARDING_STORAGE_KEY, ONBOARDING_ROUTE } from './common/onboarding.js'
 export default {
   onLaunch: function() {
     console.log('App Launch')
@@ -11,6 +12,11 @@ export default {
     if (pages && pages.length) {
       currentPage = (pages[pages.length - 1] || {}).route || ''
     }
+    if (!uni.getStorageSync(ONBOARDING_STORAGE_KEY)) {
+      if (currentPage && currentPage !== ONBOARDING_ROUTE) uni.reLaunch({ url: '/' + ONBOARDING_ROUTE })
+      return
+    }
+    if (currentPage === ONBOARDING_ROUTE) return
     if ((!token || uni.getStorageSync('login_provider') !== LOGIN_PROVIDER) && currentPage.indexOf('pages/auth/auth') === -1) {
       uni.reLaunch({ url: '/pages/auth/auth' })
     }
@@ -29,6 +35,8 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .nav { background:var(--ng-surface); border-bottom:1rpx solid var(--ng-border); padding-bottom:24rpx; }
 .page .nav-title { font-family:var(--app-font-family); font-size:36rpx; font-weight:700; letter-spacing:0; }
 .page .tb-root { background:var(--ng-surface); border-top:1rpx solid var(--ng-border); box-shadow:0 -8rpx 30rpx rgba(30,41,59,.06); }
+/* 三页容器：标签栏在 AI 页收起时，页面底部留白同步释放，避免出现空档 */
+.tabs-shell.dock-down .panel-slot .page.aurora-page{padding-bottom:calc(env(safe-area-inset-bottom))!important}
 .page .tb-ink-line { display:none; }
 .page .tb-hl-ring { background:transparent; border:none; box-shadow:none; }
 .page .tb-hl-ring.on { background:var(--ng-surface); border-radius:20rpx; }
@@ -40,7 +48,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .msg-bubble.user { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .aurora-page{background:transparent!important;color:var(--ng-text)}
 .aurora-background{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,var(--ng-surface) 0%,var(--ng-surface) 35%,var(--ng-surface) 70%,var(--ng-surface) 100%)}
-.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay){position:relative;z-index:1}
+.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay):not(.login-reveal){position:relative;z-index:1}
 .aurora-page .nav{background:transparent!important;border-bottom-color:var(--ng-border)!important;gap:18rpx}
 .aurora-page .nav-title{color:var(--ng-text)}
 .aurora-page .tb-root{position:fixed!important;background:var(--ng-surface)!important;border-top-color:var(--ng-border)!important}
