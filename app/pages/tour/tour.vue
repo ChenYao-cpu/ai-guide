@@ -46,7 +46,7 @@
       </view>
       <template v-if="tourVisible && !leavingTour && !(appXingyun && guideProvider==='xingyun' && (xingyunConnected || xingyunActive))">
       <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
-      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text class="avatar-notice">{{ t('形象未配置') }}</text></view>
+      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text class="avatar-notice">{{ guideProvider==='xingyun' ? t(xingyunFailed ? '连接失败' : '连接中…') : t('形象未配置') }}</text></view>
       </template>
       <view class="stage-status" :class="{on:speaking}">
         <text>{{ t(speaking ? '讲解中' : appXingyun&&guideProvider==='xingyun' ? (xingyunConnected ? '已连接' : xingyunFailed ? '连接失败' : '连接中…') : '待命中') }}</text>
@@ -55,7 +55,7 @@
 
     <!-- #ifdef APP-PLUS -->
     <view v-if="guideProvider==='xingyun' && xingyunFailed && avatarMessage" class="stage-footer"><text class="avatar-runtime-status">{{ t(avatarMessage) }}</text></view>
-    <button v-if="guideProvider==='xingyun'&&xingyunFailed" class="xingyun-open" @tap="connectXingyun">{{ t('重新连接数字人') }}</button>
+    <view v-if="guideProvider==='xingyun'&&xingyunFailed" class="xingyun-retry" role="button" @tap="connectXingyun"><text>{{ t('重新连接数字人') }}</text></view>
     <!-- #endif -->
     <!-- #ifndef APP-PLUS -->
     <button v-if="guideProvider==='xingyun'" class="xingyun-open" @tap="openXingyun">{{ t('打开数字人导览') }}</button>
@@ -123,6 +123,7 @@ import TourXingyun from '../../components/tour-xingyun.vue'
 import TourXfyun from '../../components/tour-xfyun.vue'
 // #endif
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
+import { appendTourChatMessage } from '../../common/tour-chat-log.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
 
@@ -195,7 +196,7 @@ export default {
     visitedDuration: function() {
       var total = 0
       for (var i = 0; i < this.spotIdx && i < this.spotCards.length; i++) {
-        total += this.spotCards[i].visit_duration || 20
+        total += this.spotCards[i].visit_duration ||10
       }
       return total
     },
@@ -204,7 +205,7 @@ export default {
       if(this.routeOverview)return this.routeOverview.total_minutes
       var total = 0
       for (var i = this.spotIdx + 1; i < this.spotCards.length; i++) {
-        total += this.spotCards[i].visit_duration || 20
+        total += this.spotCards[i].visit_duration ||10
       }
       return total
     },
@@ -366,6 +367,7 @@ export default {
       var currentSpot = self.spotCards[self.spotIdx]
       var nextSpot = self.spotCards[self.spotIdx+1]
       self.msgs.push({ role:'user', message:t, send_time: new Date().toISOString() })
+      appendTourChatMessage('user', t)
       self.lastMsgId = 'bottom'
       // AI推荐
       api.aiChatRecommend(t).then(function(r) {
@@ -379,6 +381,7 @@ export default {
         if(turn!==self._turnVersion||!res)return
         var d = res.data
         if (d && d.success) {
+          appendTourChatMessage('ai', d.data && d.data.message)
           // TTS自动播报
           if(playbackVersion===self._playbackVersion){
             // #ifdef MP-WEIXIN
@@ -615,6 +618,7 @@ export default {
 <style scoped>
 .route-tools{display:flex;gap:14rpx;padding:12rpx 24rpx;flex-shrink:0}.route-tools button{flex:1;min-width:0;margin:0;font-size:26rpx;line-height:2.5;border:1rpx solid var(--ng-border);border-radius:14rpx;color:#614b9a;background:#f0ecf8}.tour-route-mask{position:fixed;inset:0;z-index:1500;background:rgba(25,30,50,.35);display:flex;align-items:flex-end}.tour-route-sheet{width:100%;height:88vh;padding:28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));box-sizing:border-box;background:var(--ng-surface,#fff);border-radius:30rpx 30rpx 0 0;display:flex;flex-direction:column}.tour-route-heading{display:flex;align-items:center;justify-content:space-between;font-size:34rpx;padding-bottom:24rpx}.tour-route-heading button{margin:0;padding:0 20rpx;font-size:36rpx;line-height:1.7;background:#f5f1fa;color:#655574}.tour-route-body{flex:1;height:0;min-height:0}
 .xingyun-open{margin:8rpx 24rpx;padding:8rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:14rpx;color:var(--ng-secondary);background:var(--ng-surface);font-size:26rpx;flex-shrink:0}
+.xingyun-retry{position:relative;z-index:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;min-height:44px;margin:0 24rpx;color:#7952d5;font-size:26rpx;background:transparent;border:0;box-shadow:none}
 .stage-footer{position:relative;z-index:1;display:flex;align-items:center;gap:12rpx;padding:10rpx 24rpx;flex-shrink:0}
 .stage-footer .avatar-runtime-status{flex:1;min-width:0;padding:0;color:var(--ng-secondary);font-size:22rpx;line-height:1.6}
 .stage-location{display:flex;align-items:center;justify-content:flex-end;gap:10rpx;max-width:70%;margin-left:auto}
@@ -708,17 +712,18 @@ export default {
 .loading-tip{text-align:center;padding:16rpx;color:var(--ng-secondary);font-size:24rpx}
 
 /* 底部输入 */
-.bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:calc(64rpx + env(safe-area-inset-bottom))}
-.input-row{display:flex;align-items:center;gap:10rpx;padding:10rpx 16rpx}
-.voice-btn{width:68rpx;height:68rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
+.bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* 输入区尺寸与 AI 小导游页保持一致（84/88rpx、胶囊圆角） */
+.input-row{display:flex;align-items:center;gap:12rpx;padding:16rpx 18rpx 18rpx}
+.voice-btn{width:84rpx;height:84rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
 .voice-btn .iconfont{font-size:32rpx;color:var(--ng-secondary)}
 .voice-btn.rec{background:rgba(99,102,241,0.18)}
 .voice-btn.rec .iconfont{color:var(--ng-text)}
-.voice-hold-btn{flex:1;height:68rpx;display:flex;align-items:center;justify-content:center;border:1rpx solid var(--ng-border);border-radius:34rpx;background:var(--ng-surface);font-size:26rpx;color:var(--ng-secondary);font-weight:600;user-select:none}
-.voice-hold-btn.pressing{background:rgba(99,102,241,.18);color:var(--ng-text)}
+.voice-hold-btn{flex:1;height:88rpx;display:flex;align-items:center;justify-content:center;border:1rpx dashed rgba(99,102,241,0.25);border-radius:44rpx;background:rgba(99,102,241,0.08);font-size:28rpx;color:var(--ng-secondary);font-weight:600;user-select:none}
+.voice-hold-btn.pressing{background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);border-style:solid}
 @keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0.15)}50%{box-shadow:0 0 0 12rpx rgba(99,102,241,0.15)}}
-.msg-input{flex:1;height:68rpx;padding:0 20rpx;border:1rpx solid var(--ng-border);border-radius:34rpx;background:var(--ng-surface);font-size:26rpx;color:var(--ng-text)}
-.send-btn{height:68rpx;padding:0 26rpx;line-height:68rpx;border-radius:34rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:26rpx;font-weight:700;flex-shrink:0}
+.msg-input{flex:1;height:88rpx;padding:0 24rpx;border:1rpx solid var(--ng-border);border-radius:44rpx;background:var(--ng-surface);font-size:28rpx;color:var(--ng-text)}
+.send-btn{height:88rpx;padding:0 32rpx;line-height:88rpx;border-radius:44rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:28rpx;font-weight:700;flex-shrink:0}
 .send-btn.disabled{opacity:.35}
 .spot-switch{flex-shrink:0}.ss-desc{line-height:1.4}.ss-card{align-items:center}.ss-img{height:80rpx;width:80rpx}
 

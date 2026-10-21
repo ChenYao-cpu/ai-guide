@@ -1,5 +1,5 @@
 // 本地开发地址由 scripts/configure_app.ps1 更新；正式部署改为 HTTPS。
-export const LAN_SERVER_ORIGIN = 'http://10.205.242.153:18000'
+export const LAN_SERVER_ORIGIN = 'http://192.168.43.41:18000'
 
 // 模拟器直连本机；真机使用编译时检测到的局域网地址。
 const runtimePlatform = typeof wx !== 'undefined'

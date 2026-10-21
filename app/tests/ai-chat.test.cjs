@@ -36,10 +36,11 @@ test('clear ignores a late photo and never sends its follow-up question',async()
 test('clear ignores late speech recognition and does not auto-send old questions',async()=>{
  const h=harness(),s=h.s;s.initRecorder();h.handlers.stop({tempFilePath:'/speech.mp3',duration:1000});const upload=h.uploads.shift();s.clearHistory();upload.success({statusCode:200,data:JSON.stringify({success:true,data:'old question'})});upload.complete();await tick();assert.equal(h.calls.length,0);assert.equal(s.text,'');assert.equal(s.transcribing,false)
 })
-test('account-scoped state restores mode, context and route preview without mixing users',()=>{
- const h=harness(),s=h.s;s.chatMode='route';s.qaSpotId=7;s.qaSession={session_id:70,guide_id:2};s.msgs=[{role:'user',content:'Private A'}];s.recommendedPlan={spot_ids:[7,8],estimated_time_minutes:91};s.saveHistory()
- h.storage.set('user_id',18);h.storage.set('token','mock-18');s.loadHistory();assert.equal(s.msgs.length,0);assert.equal(s.qaSession,null);assert.equal(s.lastSpotIds.length,0)
- s.msgs=[{role:'user',content:'Private B'}];s.saveHistory();h.storage.set('user_id',17);h.storage.set('token','mock-17');s.loadHistory();assert.equal(s.msgs[0].content,'Private A');assert.equal(s.chatMode,'route');assert.equal(s.qaSession.session_id,70);assert.deepEqual(plain(s.lastSpotIds),[7,8]);assert.equal(s.totalDuration,91)
+test('re-entering an account clears the chat page but keeps that account Q&A history',()=>{
+ const h=harness(),s=h.s;s.chatMode='route';s.qaSpotId=7;s.qaSession={session_id:70,guide_id:2};s.pushMsg({role:'user',content:'Private A'});s.recommendedPlan={spot_ids:[7,8],estimated_time_minutes:91};s.saveHistory()
+ h.storage.set('user_id',18);h.storage.set('token','mock-18');s.loadHistory();assert.equal(s.historyMsgs.length,0);assert.equal(s.msgs.length,0);assert.equal(s.qaSession,null);assert.equal(s.lastSpotIds.length,0)
+ s.pushMsg({role:'user',content:'Private B'});s.saveHistory();h.storage.set('user_id',17);h.storage.set('token','mock-17');s.loadHistory()
+ assert.equal(s.msgs.length,0);assert.equal(s.historyMsgs[0].content,'Private A');assert.equal(s.chatMode,'guide');assert.equal(s.qaSession,null);assert.deepEqual(plain(s.lastSpotIds),[])
 })
 test('input accepts 2000 characters and rejects an overlong programmatic send',async()=>{
  const h=harness(),s=h.s;assert.match(fs.readFileSync(path.join(root,'pages/ai-chat/ai-chat.vue'),'utf8'),/:maxlength="2000"/)
@@ -51,4 +52,47 @@ test('switching accounts during a question ignores its reply and does not overwr
 })
 test('a photo picker returning after clear cannot restore the discarded draft',()=>{
  const h=harness(),s=h.s;let picker;h.uni.chooseImage=options=>{picker=options};s.pickScenicImage('album');s.clearHistory();picker.success({tempFilePaths:['/old-photo.jpg']});assert.equal(s.pendingPhoto,'')
+})
+test('opening English history translates stored Chinese questions and answers and caches them',async()=>{
+ const h=harness(),s=h.s;s.historyMsgs=[{role:'user',content:'介绍这个景点'},{role:'ai',content:'这座桥始建于乾隆十五年。'}];s.saveHistory()
+ s.openHistory();assert.equal(s.showHistory,true);assert.equal(s.historyTranslating,true)
+ const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call,'translation request');assert.equal(call.data.target,'en');assert.deepEqual(plain(call.data.texts),['介绍这个景点','这座桥始建于乾隆十五年。'])
+ call.success({statusCode:200,data:{success:true,data:{translations:['Introduce this attraction.','This bridge was built in the fifteenth year of Qianlong.']}}});await tick();await tick()
+ assert.equal(s.historyTranslating,false);assert.equal(s.historyMsgs[0].content,'Introduce this attraction.');assert.equal(s.historyMsgs[1].content,'This bridge was built in the fifteenth year of Qianlong.')
+ assert.equal(s.historyMsgs[0].lang,'en');assert.equal(s.historyMsgs[0].translations.zh,'介绍这个景点')
+ const saved=JSON.parse(h.storage.get(s.historyKey()));assert.equal(saved.messages[0].content,'Introduce this attraction.')
+ s.openHistory();assert.equal(h.calls.filter(c=>/translate-texts$/.test(c.url)).length,1)
+})
+test('a failed history translation keeps the stored Chinese text for a later retry',async()=>{
+ const h=harness(),s=h.s;s.historyMsgs=[{role:'user',content:'介绍这个景点'}];s.saveHistory()
+ s.openHistory();const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call)
+ call.fail({errMsg:'request:fail'});await tick();await tick()
+ assert.equal(s.historyTranslating,false);assert.equal(s.historyMsgs[0].content,'介绍这个景点')
+})
+
+ test('English history rejects untranslated server fallback and exposes retry',async()=>{
+ const h=harness(),s=h.s;s.historyMsgs=[{role:'user',content:'介绍景点'}];s.openHistory();h.reply(h.calls.find(c=>/translate-texts$/.test(c.url)),{translations:['介绍景点']});await tick();assert.equal(s.historyTranslationFailed,true);assert.doesNotMatch(s.historyPairs[0].q,/[\u3400-\u9fff]/);assert.equal(s.historyMsgs[0].content,'介绍景点')
+})
+ test('history translation processes all records in bounded batches',async()=>{
+ const h=harness(),s=h.s;s.historyMsgs=Array.from({length:9},(_,i)=>({role:'user',content:'景点'+i}));s.openHistory();
+ for(const size of [4,4,1]){const call=h.calls.shift();assert.equal(call.data.texts.length,size);h.reply(call,{translations:call.data.texts.map(()=> 'An attraction')});await tick()}
+ assert.equal(s.historyTranslating,false);assert.ok(s.historyMsgs.every(m=>m.content==='An attraction'))
+})
+
+test('clearing history from its panel preserves an in-flight reply and current question',async()=>{
+ const h=harness(),s=h.s;s.chatMode='route';s.historyMsgs=[{role:'user',content:'Old question'}];s.text='Current question';const run=s.sendText(),call=h.calls.shift(),epoch=s.requestEpoch;s.showHistory=true;s.clearHistoryFromPanel();assert.equal(s.requestEpoch,epoch);assert.equal(s.loading,true);assert.equal(s.showHistory,false);assert.equal(s.msgs[0].content,'Current question');assert.equal(s.historyMsgs.length,1);assert.equal(s.historyMsgs[0].content,'Current question');h.reply(call,{spot_ids:[],ai_response:'Current answer'});await run;assert.equal(s.msgs.length,2);assert.equal(s.msgs.at(-1).role,'ai');assert.ok(s.msgs.at(-1).content);assert.equal(s.historyMsgs.at(-1).content,s.msgs.at(-1).content);assert.equal(s.loading,false)
+})
+test('clearing archived history preserves visible conversation and its session',()=>{
+ const h=harness(),s=h.s;s.msgs=[{role:'user',content:'Visible question'},{role:'ai',content:'Visible answer'}];s.historyMsgs=s.msgs.slice();s.qaSession={session_id:70};s.clearHistoryFromPanel();assert.equal(s.msgs.length,2);assert.equal(s.qaSession.session_id,70);assert.equal(s.historyMsgs.length,0);assert.equal(JSON.parse(h.storage.get(s.historyKey())).messages.length,0)
+})
+
+test('welcome loads the existing catalog once and selecting a place never auto-sends a question',async()=>{
+ const h=harness(),s=h.s;const first=s.loadWelcomeCatalog(),second=s.loadQACatalog();assert.equal(h.calls.length,2)
+ h.reply(h.calls.shift(),{spot_list:spots});h.reply(h.calls.shift(),{guide_list:[guide]});await Promise.all([first,second]);assert.equal(s.qaSpots.length,2)
+ s.selectQuestionSpot({detail:{value:1}});assert.equal(s.qaSpotId,8);assert.equal(s.msgs.length,0);assert.equal(h.calls.length,0)
+ s.chatScrollTop=900;s.followBottom=false;s.clearHistory();assert.equal(s.chatScrollTop,0);assert.equal(s.followBottom,true)
+})
+test('welcome exposes a catalog failure and retry can load places without stale failure state',async()=>{
+ const h=harness(),s=h.s;const first=s.loadWelcomeCatalog();h.calls.shift().fail({errMsg:'offline'});h.reply(h.calls.shift(),{guide_list:[guide]});await first;assert.match(s.catalogError,/景点加载失败/);assert.equal(s.qaCatalogLoading,false)
+ const retry=s.loadWelcomeCatalog();h.reply(h.calls.shift(),{spot_list:spots});h.reply(h.calls.shift(),{guide_list:[guide]});await retry;assert.equal(s.catalogError,'');assert.equal(s.qaSpots.length,2)
 })
