@@ -193,7 +193,6 @@ def main() -> None:
                 poster_image="",
                 voice_style="female_wenrou",
                 voice_speed=1.0,
-                live2d_model_path="/models/汉服女导游1.vrm",
                 user_id=user_id,
             ),
             DigitalGuideInfo(
@@ -203,7 +202,6 @@ def main() -> None:
                 poster_image="",
                 voice_style="male_wenhou",
                 voice_speed=0.95,
-                live2d_model_path="/models/西装男导游1.vrm",
                 user_id=user_id,
             ),
         ]
@@ -214,7 +212,7 @@ def main() -> None:
             else:
                 for field in (
                     "character", "avatar", "poster_image", "voice_style", "voice_speed",
-                    "live2d_model_path", "user_id",
+                    "user_id",
                 ):
                     setattr(guide, field, getattr(payload, field))
                 guide.delete = False

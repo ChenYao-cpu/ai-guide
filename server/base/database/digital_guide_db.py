@@ -16,7 +16,6 @@ from sqlmodel import Session, and_, select
 from ...web_configs import API_CONFIG
 from ..models.tour_models import DigitalGuideInfo
 from ..modules.guide_identity import (
-    FEMALE_DEFAULT_MODEL,
     SHOWCASE_GUIDE_CHARACTER,
     SHOWCASE_GUIDE_NAME,
 )
@@ -41,8 +40,7 @@ def ensure_default_showcase_guide(user_id: int = 1) -> int:
 
         if guide is None:
             guide = DigitalGuideInfo(name=SHOWCASE_GUIDE_NAME, user_id=user_id,
-                character=SHOWCASE_GUIDE_CHARACTER, voice_style='female_wenrou',
-                live2d_model_path='/live2d/shizuku/shizuku.model.json')
+                character=SHOWCASE_GUIDE_CHARACTER, voice_style='female_wenrou')
         # 已有导游的模型、素材、声音等由管理员维护，启动和创建会话不能覆盖。
         session.add(guide)
         session.flush()
@@ -149,6 +147,7 @@ def create_or_update_db_guide_by_id(guide_id: int, new_info: DigitalGuideInfo, u
             guide_info.is_enabled = new_info.is_enabled
             guide_info.avatar = new_info.avatar
             guide_info.voice_style = new_info.voice_style
+            guide_info.language = getattr(new_info, "language", "zh")
             guide_info.voice_speed = new_info.voice_speed
             guide_info.outfit_images = new_info.outfit_images
             guide_info.tts_weight_tag = new_info.tts_weight_tag
@@ -158,7 +157,6 @@ def create_or_update_db_guide_by_id(guide_id: int, new_info: DigitalGuideInfo, u
             if guide_info.base_mp4_path != new_info.base_mp4_path:
                 guide_info.base_video_metadata = ""
             guide_info.base_mp4_path = new_info.base_mp4_path
-            guide_info.live2d_model_path = new_info.live2d_model_path
 
             session.add(guide_info)
         else:

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, Header, HTTPException, Request
+from pydantic import BaseModel
 from loguru import logger
 
 from ...web_configs import API_CONFIG, WEB_CONFIGS
@@ -39,7 +40,7 @@ from ..models.tour_models import TourChatItem
 from ..modules.rag import rag_worker
 from ..modules.json_utils import extract_json_object
 from ..modules.issue_analysis import normalize_issue_analysis
-from ..modules.guide_identity import resolve_model_path, resolve_guide_voice
+from ..modules.guide_identity import resolve_guide_voice
 from ..modules.xingyun_access import selectable, issue_tour_avatar_token
 from ..modules.session_report import normalize_session_report
 from ..modules.sentiment_analyzer import analyze_sentiment
@@ -268,7 +269,7 @@ async def begin_tour(sessionId: int):
 @router.get("/spots", summary="获取景点列表（游客公开接口）")
 async def get_visitor_spots():
     """游客端获取所有可用景点（免登录）"""
-    from ..modules.route_city import spot_city
+    from ..modules.route_city import spot_city, is_summer_palace_spot
     from ..modules.route_recommender import get_spot_profile
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
@@ -283,6 +284,7 @@ async def get_visitor_spots():
         covers={}
         for link, route in session.exec(select(TourRouteSpot,TourRoute).join(TourRoute,TourRouteSpot.route_id==TourRoute.route_id).where(TourRoute.delete==False).order_by(TourRoute.route_id)).all():
             if route.cover_image:covers.setdefault(link.spot_id,API_CONFIG.REQUEST_FILES_URL+'/'+route.cover_image)
+    spots.sort(key=lambda s: (not is_summer_palace_spot(s), s.spot_id))
     spot_list = []
     for s in (spots or []):
         spot_list.append({
@@ -299,7 +301,7 @@ async def get_visitor_spots():
             "latitude": s.latitude or 0.0,
             "longitude": s.longitude or 0.0,
             "trigger_radius": s.trigger_radius or 50.0,
-            "visit_duration": s.visit_duration or 20,
+            "visit_duration": s.visit_duration or 10,
             "best_season": s.best_season or "",
             "history_detail": s.history_detail or "",
             "photo_tips": s.photo_tips or "",
@@ -310,10 +312,9 @@ async def get_visitor_spots():
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"spot_list": spot_list, "total": len(spot_list)})
 
 
-@router.post("/set-random-durations", summary="为景点随机分配游览时长（10~40分钟）")
+@router.post("/set-random-durations", summary="将景点建议停留时间重置为10分钟")
 async def set_random_durations():
-    """为所有景点随机设置 visit_duration（10~40 分钟）"""
-    import random
+    """将所有景点的建议停留时间重置为10分钟（兼容旧接口路径）"""
     from sqlmodel import Session
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -325,18 +326,18 @@ async def set_random_durations():
 
         updated = 0
         for s in (spots or []):
-            s.visit_duration = random.randint(10, 40)
+            s.visit_duration = 10
             session.add(s)
             updated += 1
         session.commit()
 
-    return make_return_data(True, ResultCode.SUCCESS, f"已为 {updated} 个景点设置随机游览时长", {"updated": updated})
+    return make_return_data(True, ResultCode.SUCCESS, f"已为 {updated} 个景点设置10分钟建议停留时间", {"updated": updated})
 
 
 @router.post("/ai-chat-recommend", summary="自然语言个性化路线推荐")
 async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minutes: int = 120,
                             pace: str = "standard", start_area: str = "auto", end_area: str = "auto",
-                            queue_reserve_minutes: int = 0, excluded_spot_ids: str = ""):
+                            queue_reserve_minutes: int = 0, excluded_spot_ids: str = "", language: str = "zh"):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -391,6 +392,16 @@ async def ai_chat_recommend(message: str = "", city: str = "", time_budget_minut
                 result["model"] = os.getenv("LLM_MODEL_NAME", "")
         except Exception as error:
             logger.warning(f"Recommendation explanation fallback: {type(error).__name__}")
+    if str(language or 'zh').lower().startswith('en'):
+        # 英文模式下：行程文本经统一翻译通道转英文，景点名走固定映射。
+        from ..modules.tour_language import translate_answer, ENGLISH_SPOT_NAMES
+        from ..routers.llm import get_llm_res
+        generate = get_llm_res if _llm_is_configured() else None
+        try:
+            result["ai_response"] = await translate_answer(result["ai_response"], generate)
+        except Exception as error:
+            logger.warning(f"Recommendation English translation failed: {type(error).__name__}")
+        result["spot_names"] = [ENGLISH_SPOT_NAMES.get(name, name) for name in result.get("spot_names", [])]
     return make_return_data(True, ResultCode.SUCCESS, "推荐完成", result)
 
 
@@ -400,9 +411,10 @@ async def get_visitor_routes():
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import TourRoute, TourRouteSpot, ScenicSpotInfo
-    from ..modules.route_city import route_city
+    from ..modules.route_city import route_city, is_summer_palace_spot
 
     route_list = []
+    summer_palace_route_ids = set()
     with Session(DB_ENGINE) as session:
         routes = session.exec(
             select(TourRoute).where(and_(TourRoute.delete == False))
@@ -454,11 +466,12 @@ async def get_visitor_routes():
                 **route_editorial(r.name, [s.model_dump() for s in route_members], overview),
             })
 
+    route_list.sort(key=lambda r: (r['route_id'] not in summer_palace_route_ids, r['route_id']))
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"route_list": route_list, "total": len(route_list)})
 
 
 @router.get("/guides", summary="获取数字导游列表（游客公开接口）")
-async def get_visitor_guides():
+async def get_visitor_guides(language: str = "zh"):
     """游客端获取所有可用数字导游（免登录）"""
     from sqlmodel import Session, select, and_
     from ..database.init_db import DB_ENGINE
@@ -472,24 +485,36 @@ async def get_visitor_guides():
             .order_by(DigitalGuideInfo.guide_id)
         ).all()
         guides = [g for g in guides if selectable(session, g)]
-        voice_labels = {g.guide_id: (session.get(XingyunGuideBinding, g.guide_id).voice_label if g.render_mode == "xingyun" else "") for g in guides}
+        if str(language or "zh").lower().startswith("en"):
+            # 英文模式优先英文导游（language=en），没有时仍回退到中文导游。
+            guides = sorted(guides, key=lambda g: 0 if str(getattr(g, "language", "zh") or "zh").startswith("en") else 1)
+        english_mode = str(language or "zh").lower().startswith("en")
+        bindings = {g.guide_id: session.get(XingyunGuideBinding, g.guide_id) for g in guides if g.render_mode == "xingyun"}
+        def _voice_label(g):
+            binding = bindings.get(g.guide_id)
+            if binding is None:
+                return ""
+            if english_mode:
+                return binding.voice_label_en or ""
+            return binding.voice_label or ""
+        voice_labels = {g.guide_id: _voice_label(g) for g in guides}
 
     guide_list = []
     for g in (guides or []):
-        model_path = resolve_model_path(g.voice_style, g.live2d_model_path)
         guide_list.append({
             "guide_id": g.guide_id,
-            "name": g.name,
-            "character": g.character,
+            "name": (getattr(g, "name_en", "") or g.name) if english_mode else g.name,
+            "character": (getattr(g, "character_en", "") or g.character) if english_mode else g.character,
             "avatar": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.avatar.lstrip('/')) if g.avatar and not g.avatar.startswith(('http://','https://')) else (g.avatar or ""),
             "poster_image": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.poster_image.lstrip('/')) if g.poster_image and not g.poster_image.startswith(('http://','https://')) else (g.poster_image or ""),
             "base_mp4_path": (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + g.base_mp4_path.lstrip('/')) if g.base_mp4_path and not g.base_mp4_path.startswith(('http://','https://')) else (g.base_mp4_path or ""),
-            "voice_style": resolve_guide_voice(g.voice_style, model_path, g.render_mode),
+            "voice_style": resolve_guide_voice(g.voice_style),
             "voice_speed": g.voice_speed,
-            "live2d_model_path": model_path,
+            "language": getattr(g, "language", "zh") or "zh",
+            "name_en": getattr(g, "name_en", "") or "",
+            "character_en": getattr(g, "character_en", "") or "",
             "render_mode": g.render_mode,
             "voice_label": voice_labels[g.guide_id],
-            "model3d_url": ("/api/v1/files/" + g.model3d_path.lstrip("/")) if g.render_mode == "3d" and g.model3d_path else "",
         })
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"guide_list": guide_list, "total": len(guide_list)})
 
@@ -728,7 +753,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         answer_mode = "database"
     elif _llm_is_configured():
         try:
-            guide_response = await get_llm_res(prompt,timeout=25)
+            guide_response = await asyncio.wait_for(get_llm_res(prompt,timeout=15), timeout=16)
             answer_mode = "llm_rag" if rag_applied else "llm_context"
         except Exception as exc:
             logger.warning("LLM unavailable, using local knowledge fallback: {}", type(exc).__name__)
@@ -817,7 +842,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
     from ..modules.reply_media import prepare_reply_media
     native_voice = chat_item.avatarMode == 'xingyun'
     speech_pending = chat_item.defer_speech and not chat_item.text_only and not native_voice
-    media = dict(ttsAudioUrl='', avatarJob=None, avatarPerformance=None)
+    media = dict(ttsAudioUrl='', avatarJob=None)
     if not chat_item.text_only and not speech_pending:
         media = await prepare_reply_media(guide_info_data, session_id, interaction.message_id, speech_text,
             chat_item.avatarMode, chat_item.language, background_tasks)
@@ -886,7 +911,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
 
 
 @router.post("/recognize-spot", summary="拍照识景")
-async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), user_id: int = Depends(get_current_user_info)):
+async def recognize_spot(file: UploadFile = File(...), question: str = Form('', max_length=1000), language: str = Form('zh'), user_id: int = Depends(get_current_user_info)):
     from sqlmodel import Session, select
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -902,7 +927,7 @@ async def recognize_spot(file: UploadFile = File(...), question: str = Form('', 
                         'city':s.city or '', 'description':(s.description or '')[:600]} for s in spots]
         if not catalog:
             raise HTTPException(503, '景点资料尚未配置，暂时无法识别')
-        result = await recognize_photo(content, catalog, question)
+        result = await recognize_photo(content, catalog, question, language)
         with Session(DB_ENGINE) as db:
             record = ScenicRecognition(user_id=user_id, result_json=json.dumps(result, ensure_ascii=False))
             db.add(record)
@@ -1445,3 +1470,30 @@ async def go_to_next_spot(sessionId: int):
     if not success:
         return make_return_data(False, ResultCode.FAIL, "切换失败", "")
     return make_return_data(True, ResultCode.SUCCESS, "已切换到下一个景点", "")
+
+
+class TranslateTextsRequest(BaseModel):
+    texts: list[str] = []
+    target: str = 'zh'
+
+
+@router.post("/translate-texts", summary="翻译历史问答文本")
+async def translate_texts(payload: TranslateTextsRequest):
+    """把前端已存在的问答历史整体转换成当前界面语言。"""
+    target = 'en' if str(payload.target or '').lower().startswith('en') else 'zh'
+    from ..modules.tour_language import translate_to_english, translate_to_chinese, ENGLISH_UNAVAILABLE
+    generate = get_llm_res if _llm_is_configured() else None
+
+    async def convert(value):
+        text = str(value or '')
+        if not text.strip():
+            return ''
+        if target == 'en':
+            result = await translate_to_english(text, generate)
+            return text if result == ENGLISH_UNAVAILABLE else result
+        return await translate_to_chinese(text, generate)
+
+    texts = [str(item)[:4000] for item in (payload.texts or [])][:60]
+    logger.info(f"translate-texts requested: target={target} count={len(texts)}")
+    translations = list(await asyncio.gather(*[convert(item) for item in texts])) if texts else []
+    return make_return_data(True, ResultCode.SUCCESS, '成功', {'target': target, 'translations': translations})

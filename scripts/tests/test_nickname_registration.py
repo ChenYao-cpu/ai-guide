@@ -31,11 +31,15 @@ class NicknameRegistrationTest(unittest.TestCase):
             with Session(engine) as db:
                 user = db.exec(select(UserInfo).where(UserInfo.email == 'nickname-test@example.com')).one()
                 self.assertEqual(user.username, 'cc123')
+                # 新账号获得「年月 + 4 位顺序」的展示编号，第一个账号为 0001。
+                self.assertRegex(user.user_no, r'^\d{6}0001$')
+                registered_no = user.user_no
             for name in ('cc123', 'nickname-test@example.com'):
                 login = client.post('/user/login', data={'username': name, 'password': 'isolated-test-password'})
                 self.assertEqual(login.status_code, 200, login.text)
                 me = client.get('/user/me', headers={'Authorization': 'Bearer '+login.json()['access_token']})
                 self.assertEqual(me.json()['data']['username'], 'cc123')
+                self.assertEqual(me.json()['data']['user_no'], registered_no)
             self.assertEqual(client.post('/user/login', data={'username': 'cc123', 'password': 'wrong'}).status_code, 401)
             seed('other-test@example.com')
             duplicate = client.post('/user/register', json={'email': 'other-test@example.com', 'nickname': 'cc123', 'password': 'isolated-test-password', 'code': '123456'})

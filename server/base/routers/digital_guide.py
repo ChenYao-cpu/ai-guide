@@ -19,11 +19,7 @@ from ..database.digital_guide_db import (
     get_db_digital_guides,
 )
 from ..models.tour_models import DigitalGuideInfo
-from ..modules.guide_identity import (
-    SHOWCASE_GUIDE_NAME,
-    resolve_model_path,
-    validate_guide_identity,
-)
+from ..modules.guide_identity import SHOWCASE_GUIDE_NAME
 from ..utils import ResultCode, make_return_data
 from .users import get_current_user_info
 
@@ -59,9 +55,6 @@ async def get_guide_detail(guideId: int, user_id: int = Depends(require_guide_ad
 
 @router.post("/create", summary="新增数字导游")
 async def create_guide(new_info: DigitalGuideInfo, user_id: int = Depends(require_guide_admin)):
-    valid, message = validate_guide_identity(new_info.voice_style, new_info.live2d_model_path)
-    if not valid:
-        return make_return_data(False, ResultCode.FAIL, message, "")
     new_info.guide_id = None
     if not new_info.poster_image or not new_info.avatar:
         return make_return_data(False, ResultCode.FAIL, "请上传数字人全身形象和头像", "")
@@ -73,9 +66,6 @@ async def create_guide(new_info: DigitalGuideInfo, user_id: int = Depends(requir
 
 @router.put("/edit/{guide_id}", summary="编辑数字导游")
 async def edit_guide(guide_id: int, new_info: DigitalGuideInfo, user_id: int = Depends(require_guide_admin)):
-    valid, message = validate_guide_identity(new_info.voice_style, new_info.live2d_model_path)
-    if not valid:
-        return make_return_data(False, ResultCode.FAIL, message, "")
     if not new_info.poster_image or not new_info.avatar:
         return make_return_data(False, ResultCode.FAIL, "请上传数字人全身形象和头像", "")
     success = create_or_update_db_guide_by_id(guide_id, new_info, user_id)

@@ -19,7 +19,6 @@ export interface TourSessionInfo {
     character: string
     avatar: string
     base_mp4_path: string
-    live2d_model_path: string
     voice_style: string
     voice_speed: number
   } | null

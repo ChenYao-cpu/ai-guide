@@ -95,8 +95,8 @@ async def get_db_scenic_spot_info(
         spot_list = []
 
     for spot in spot_list:
-        spot.image_path = API_CONFIG.REQUEST_FILES_URL + spot.image_path
-        spot.instruction = API_CONFIG.REQUEST_FILES_URL + spot.instruction
+        spot.image_path = (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + spot.image_path.lstrip('/')) if spot.image_path else ''
+        spot.instruction = (API_CONFIG.REQUEST_FILES_URL.rstrip('/') + '/' + spot.instruction.lstrip('/')) if spot.instruction else ''
 
     return spot_list, total_spot_num
 

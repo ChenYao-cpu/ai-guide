@@ -1,4 +1,10 @@
-# 景区导览AI数字人 —— 运行指南
+# 景区 AI 数字人导览 —— 运行指南
+
+## 统一源码目录
+
+Android App 源码为本仓库 `app/`（在 HBuilderX 中打开该目录），Web 为 `frontend/`，后端为 `server/`，共享代码为 `shared/`。App 启动说明见 [app/README.md](app/README.md)。手机上已经安装的旧开发包需要从新目录重新运行，才会切换到本仓库源码。
+
+保留游客网页导览、手机网页、管理后台及 Capacitor App。微信小程序已移除。景点和路线由数据库接口提供。
 
 ## 环境要求
 
@@ -120,31 +126,36 @@ conda env remove -n tourist
 ```
 
 
-## 微信登录与个性化数字人
+## 导入颐和园数据（保留其他景区）
 
-小程序默认使用正式微信登录（`DEVELOPMENT_LOGIN=false`）。后端 `.env` 中的 `WX_APPID` 必须与小程序 `manifest.json` 一致，`WX_SECRET` 仅配置在后端。上线时将 `ALLOW_DEV_LOGIN=false`，并在微信后台配置 HTTPS request/uploadFile 合法域名及头像昵称相关隐私声明。
+后端首次启动完成建表和管理员初始化后，执行：
 
-用户主动选择微信头像、填写昵称后，调用微信登录换取 code，由后端向微信校验身份，创建数据库用户并签发 JWT，再上传头像并保存昵称。不能通过前端传入 openid 登录。
+```powershell
+Expand-Archive -LiteralPath resources/local-resources.zip -DestinationPath resources -Force
+python scripts/import_resource_pack.py resources/local-resources
+```
 
-智能导览的“个性化 → 数字人形象”使用数据库导游列表，并从 `/avatar/capabilities/{guide_id}` 获取真实渲染能力和卡通预览。可预览数据库中配置的基础视频；选中的 guide_id 传入创建导览会话接口。缺少素材或渲染环境时显示实际原因。
+资源包提供 16 个颐和园景点、3 条路线和对应素材。导入是补充操作，保留已有其他景区与路线，不执行景区清理。
 
-首次登录资料保存后，小程序下次启动会调用 `/user/me` 验证已有登录态。JWT 失效时通过微信静默登录换取新令牌，已保存的资料直接复用。网络错误不会清除登录态；用户主动退出后停止自动登录。登录分支回归检查：`node scripts/test_login_session.cjs`（隔离测试，不代表微信真机联调）。
+本机数据库修改不会随 Git 上传；其他部署者需要执行上述导入命令。不要提交 `.env` 或私有数据库备份。
 
+## 网页与 App
 
-当前四个角色使用已有海报生成的静态基础素材（`static/digital_guide/sources/*-portrait.mp4`），MuseTalk 根据本轮讲解音频生成口型。此方案不包含自然全身动作；要实现动作需上传真人动作视频。素材路径已保存于数据库，原配置备份在 `work_dirs/guide-source-before-20261006.json`。启动后端外，还需运行 `powershell -ExecutionPolicy Bypass -File scripts/start_avatar_worker.ps1`；未启动时能力接口会返回真实未就绪原因。
+管理后台入口 `/`，游客网页入口 `/visitor/home`，手机网页入口 `/m/home`。App 继续使用 `frontend/capacitor.config.ts` 和 `cap:*` 构建命令；打包前将其中开发服务器地址改为实际部署地址。当前未生成或验证安装包。
 
+数字人配置导入后默认下架；管理员绑定真实应用或配置素材后再上架。缺少素材、密钥或工作进程时会显示实际未就绪状态。
 
 ## 海报生成全身动作（阿里云百炼）
 
-在后端 `.env` 设置 `DASHSCOPE_API_KEY`（北京地域百炼密钥）并重启后端，默认 API 为 `https://dashscope.aliyuncs.com/api/v1`。业务空间专属域名可通过 `MOTION_API_BASE` 设置，密钥和 endpoint 须属于同一地域。密钥不要填入小程序或发到聊天。
+在后端 `.env` 设置 `DASHSCOPE_API_KEY`（北京地域百炼密钥）并重启后端，默认 API 为 `https://dashscope.aliyuncs.com/api/v1`。业务空间专属域名可通过 `MOTION_API_BASE` 设置，密钥和 endpoint 须属于同一地域。密钥仅配置在后端。
 
 管理端导游卡片 → 数字人接入状态 → 海报生成全身动作：编辑动作描述，点击生成（收费），查看真实任务状态，预览生成结果，再点击使用动作视频。当前接口使用 `wan2.2-i2v-plus`、1080P、模型固定5秒无声视频；保留AI生成水印。服务将收到所选角色海报。
 
 任务保存在 `avatar_motion_job` 表中，刷新页面会恢复原任务。网络查询失败只重查原任务，不重新付费提交；提交超时会显示结果不确定并阻止重复提交，请在百炼控制台核对。生成结果转存到本地并检查实际解码和画面变化；这些检查不保证动作自然，必须预览判断人脸、手指、服装和首尾衔接。
 
-应用素材后保存到 `digital_guide_info.base_mp4_path/base_video_metadata`，小程序待命循环播放，讲解时通过 MuseTalk 在该动作视频上合成本轮口型。更换海报或基础素材后，旧生成任务不能覆盖新配置。
+应用素材后保存到 `digital_guide_info.base_mp4_path/base_video_metadata`，客户端待命循环播放，讲解时通过 MuseTalk 在该动作视频上合成本轮口型。更换海报或基础素材后，旧生成任务不能覆盖新配置。
 
 ## 魔珐星云数字人
 
-桌面和手机网页端已增加星云 SDK 接入。管理员可为每位导游独立绑定星云应用、上架或下架，游客按所选人物连接。小程序半身导览还需配置 XINGYUN_WEB_ORIGIN 和微信业务域名。详细步骤见 [接入说明](docs/xingyun-integration.md)。缺少应用凭据时不会显示为已连接。
+桌面和手机网页端已增加星云 SDK 接入。管理员可为每位导游独立绑定星云应用、上架或下架，游客按所选人物连接。详细步骤见 [接入说明](docs/xingyun-integration.md)。缺少应用凭据时不会显示为已连接。
 签名验证：python scripts/verify_xingyun.py。

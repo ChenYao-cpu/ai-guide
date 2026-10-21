@@ -13,7 +13,7 @@
         <span v-if="isSpeaking || loading" class="mt-status" role="status"><i></i>{{ $t(isSpeaking ? '正在讲解' : '正在准备讲解') }}</span>
       </div>
       <div v-if="guideInfo?.guide_id" class="mt-3d-wrap">
-        <DigitalAvatarPlayer ref="live2dRef" :audioElement="ttsAudio" :width="gw" :height="gh"
+        <DigitalAvatarPlayer ref="avatarRef" :audioElement="ttsAudio" :width="gw" :height="gh"
           :tour-id="sid" framing="full"
           :poster-image="guideInfo.poster_image" :source-video="guideInfo.base_mp4_path"
           :guide-id="guideInfo.guide_id" :speaking="isSpeaking" :busy="loading" @playing="isSpeaking = $event" />
@@ -103,7 +103,7 @@ const viewportHeight = ref(window.innerHeight)
 function syncViewport() { viewportWidth.value = window.innerWidth; viewportHeight.value = window.innerHeight }
 const chatEl=ref<HTMLElement|null>(null)
 const ttsAudio=ref<HTMLAudioElement|null>(null)
-const live2dRef=ref<InstanceType<typeof DigitalAvatarPlayer>|null>(null)
+const avatarRef=ref<InstanceType<typeof DigitalAvatarPlayer>|null>(null)
 
 const gw = computed(() => viewportWidth.value >= 900 ? Math.min(viewportWidth.value * .52, 1000) : viewportWidth.value - 24)
 const gh = computed(() => viewportWidth.value >= 900 ? viewportHeight.value - 100 : Math.max(240, Math.min(viewportHeight.value * .43, 440)))
@@ -156,12 +156,11 @@ async function send(text:string){
   try{
     const viewingSpot=spotCards.value[spotIdx.value]
     const nextViewingSpot=spotCards.value[spotIdx.value+1]
-    live2dRef.value?.stop()
-    const res=await sendTourChatMessage(sid,msg,viewingSpot?.spot_id||currentSpot.value?.spot_id,nextViewingSpot?.spot_id||0,(await live2dRef.value?.getMode())||'audio', { language: locale.value })
+    avatarRef.value?.stop()
+    const res=await sendTourChatMessage(sid,msg,viewingSpot?.spot_id||currentSpot.value?.spot_id,nextViewingSpot?.spot_id||0,(await avatarRef.value?.getMode())||'audio', { language: locale.value })
     const b=res.data
     if(b?.success){
-      await live2dRef.value?.acceptPerformance(b.data?.avatarPerformance)
-      const videoPending=live2dRef.value?.speak(b.data?.message)||live2dRef.value?.acceptJob(b.data?.avatarJob)
+      const videoPending=avatarRef.value?.speak(b.data?.message)||avatarRef.value?.acceptJob(b.data?.avatarJob)
       if(!videoPending&&b.data?.ttsAudioUrl&&ttsAudio.value){
         ttsAudio.value.pause();ttsAudio.value.currentTime=0
         ttsAudio.value.src=b.data.ttsAudioUrl.replace(/^https?:\/\/[^/]+/,'')

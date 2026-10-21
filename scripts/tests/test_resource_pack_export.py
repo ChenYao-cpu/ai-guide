@@ -33,7 +33,7 @@ class ResourceExportTests(unittest.TestCase):
                 Column('spot_name', String), Column('delete', Boolean), Column('user_id', Integer), Column('api_key', String)),
             'tour_route': Table('tour_route', metadata, Column('route_id', Integer, primary_key=True), Column('name', String), Column('delete', Boolean)),
             'digital_guide_info': Table('digital_guide_info', metadata, Column('guide_id', Integer, primary_key=True),
-                Column('name', String), Column('delete', Boolean), Column('is_enabled', Boolean), Column('model3d_path', String)),
+                Column('name', String), Column('delete', Boolean), Column('is_enabled', Boolean)),
             'knowledge_document': Table('knowledge_document', metadata, Column('doc_id', Integer, primary_key=True),
                 Column('title', String), Column('file_path', String), Column('content_hash', String)),
             'tour_route_spot': Table('tour_route_spot', metadata, Column('id', Integer, primary_key=True), Column('route_id', Integer), Column('spot_id', Integer)),
@@ -46,9 +46,9 @@ class ResourceExportTests(unittest.TestCase):
             db.execute(tables['tour_route'].insert(), dict(route_id=1, name='路线', delete=False))
             db.execute(tables['tour_route_spot'].insert(), [dict(id=1, route_id=1, spot_id=1), dict(id=2, route_id=1, spot_id=2)])
             db.execute(tables['digital_guide_info'].insert(), dict(guide_id=1, name='角色', delete=False,
-                is_enabled=True, model3d_path='models/idle.gltf'))
+                is_enabled=True))
             db.execute(tables['knowledge_document'].insert(), dict(doc_id=1, title='知识', file_path='knowledge/a.md', content_hash='old'))
-        for name, content in [('models/idle.gltf', b'{}'), ('models/body.bin', b'model-buffer'), ('knowledge/a.md', b'knowledge')]:
+        for name, content in [('knowledge/a.md', b'knowledge')]:
             p = root / 'static' / name
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(content)
@@ -69,7 +69,6 @@ class ResourceExportTests(unittest.TestCase):
             document = data['tables']['knowledge_document'][0]
             self.assertEqual(document['status'], 'pending')
             self.assertEqual(document['content_hash'], hashlib.sha256(b'knowledge').hexdigest())
-            self.assertIn('static/models/body.bin', data['files'])
             archive = root / 'pack.zip'
             exporter.zip_pack(root / 'pack', archive)
             with zipfile.ZipFile(archive) as zipped:

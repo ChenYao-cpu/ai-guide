@@ -348,15 +348,17 @@ def gen_default_data():
             return False
 
         password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        admin_user = UserInfo(
-            username=os.environ.get("ADMIN_USERNAME", "admin"),
-            ip_address=IPv4Address("127.0.0.1"),
-            email=os.environ.get("ADMIN_EMAIL", "admin@example.com"),
-            hashed_password=password_context.hash(admin_password),
-            avatar="/user/user-avatar.png",
-        )
+        from .modules.user_number import assign_user_no
 
         with Session(DB_ENGINE) as session:
+            admin_user = UserInfo(
+                username=os.environ.get("ADMIN_USERNAME", "admin"),
+                ip_address=IPv4Address("127.0.0.1"),
+                email=os.environ.get("ADMIN_EMAIL", "admin@example.com"),
+                hashed_password=password_context.hash(admin_password),
+                avatar="/user/user-avatar.png",
+                user_no=assign_user_no(session),
+            )
             session.add(admin_user)
             session.commit()
         return True

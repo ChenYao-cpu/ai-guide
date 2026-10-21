@@ -218,30 +218,16 @@ const openGuidePicker = () => {
   guidePickerMode.value = activeMenuTab.value
   guidePickerVisible.value = true
 }
-// 选择卡片展示后端保存的角色照片。
+// 选择卡片展示后端保存的角色照片（不再按 3D/VRM 模型文件名分组）。
 const modelCategories = computed(() => {
-  const cats: Record<string, { label: string; models: { guideId: number; name: string; path: string; voice: string; poster: string; voiceLabel: string }[] }> = {}
-  for (const g of guideList.value) {
-    const path = g.model3d_url || ''
-    const name = g.name || ''
-    let cat = 'other'
-    if (path.includes('汉服')) cat = 'hanfu'
-    else if (path.includes('西装女')) cat = 'suit_female'
-    else if (path.includes('西装男')) cat = 'suit_male'
-    else if (path.includes('休闲')) cat = 'casual'
-    if (!cats[cat]) {
-      const labels: Record<string, { label: string }> = {
-        hanfu: { label: t("汉服风华") },
-        suit_female: { label: t("商务女导游") },
-        suit_male: { label: t("商务男导游") },
-        casual: { label: t("休闲风女导游") },
-        other: { label: t("默认形象") },
-      }
-      cats[cat] = { ...labels[cat], models: [] }
-    }
-    cats[cat].models.push({ guideId: g.guide_id, name: g.name, path, voice: g.voice_style || '', poster:g.poster_image || g.avatar || '', voiceLabel:g.render_mode==='xingyun'?(g.voice_label||'星云应用音色'):(g.voice_style?.startsWith('male_')?'男声':'女声') })
-  }
-  return Object.values(cats)
+  const models = guideList.value.map(g => ({
+    guideId: g.guide_id,
+    name: g.name,
+    voice: g.voice_style || '',
+    poster: g.poster_image || g.avatar || '',
+    voiceLabel: g.render_mode === 'xingyun' ? (g.voice_label || '星云应用音色') : (g.voice_style?.startsWith('male_') ? '男声' : '女声'),
+  }))
+  return models.length ? [{ label: t('选择数字人'), models }] : []
 })
 const selectedGuide = computed(() => activeDraft.value.guide)
 const selectedSpotIds = computed({ get: () => activeDraft.value.spotIds, set: value => { activeDraft.value.spotIds = value } })

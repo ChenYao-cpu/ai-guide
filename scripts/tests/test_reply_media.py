@@ -20,7 +20,7 @@ class NormalSpeechTests(unittest.IsolatedAsyncioTestCase):
             result = await reply_media.prepare_reply_media(
                 {'voice_style': 'male_wenhou'}, 1, 2, '你好', 'xingyun', 'zh', BackgroundTasks())
         synthesize.assert_not_awaited()
-        self.assertEqual(result, dict(ttsAudioUrl='', avatarJob=None, avatarPerformance=None))
+        self.assertEqual(result, dict(ttsAudioUrl='', avatarJob=None))
 
     async def test_local_audio_keeps_selected_voice_at_normal_speed(self):
         with tempfile.TemporaryDirectory() as temporary:

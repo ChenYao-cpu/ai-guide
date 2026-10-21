@@ -18,7 +18,7 @@ def route_overview(spots, pace='standard', include_first_visit=True, end_area='a
             access_longitude=anchor['longitude'] if anchor else None,
             access_label=anchor['label'] if anchor else '',
             access_offset_meters=anchor['offset_meters'] if anchor else None,
-            visit_minutes=max(1, int(spot.get('visit_duration') or 20)) if index or include_first_visit else 0))
+            visit_minutes=max(1, int(spot.get('visit_duration') or 10)) if index or include_first_visit else 0))
 
     def leg(a, b=None, gate=None, anchor=None):
         path = route_between(a, b, end_area=gate, avoid_steps=avoid_steps, destination_anchor=anchor)

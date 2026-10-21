@@ -10,7 +10,32 @@ from ..models.user_model import UserInfo
 from ..models.xingyun import XingyunBootstrapState, XingyunGuideBinding
 
 
+def apply_env_english_app():
+    """把 .env 里的英文星云应用凭据写入默认导游的绑定（每次启动覆盖为环境变量值）。"""
+    app_id = os.getenv("XINGYUN_APP_ID_EN", "").strip()
+    secret = os.getenv("XINGYUN_APP_SECRET_EN", "").strip()
+    if not app_id or not secret:
+        return
+    with Session(DB_ENGINE) as db:
+        state = db.get(XingyunBootstrapState, "default-guide-v1")
+        if not state:
+            logger.warning("英文星云应用未应用：默认导游尚未初始化")
+            return
+        binding = db.get(XingyunGuideBinding, state.guide_id)
+        if binding is None:
+            logger.warning("英文星云应用未应用：默认导游没有应用绑定")
+            return
+        from ..modules.xingyun_access import encrypt_secret
+        binding.app_id_en = app_id[:200]
+        binding.secret_encrypted_en = encrypt_secret(secret[:500])
+        binding.voice_label_en = os.getenv("XINGYUN_VOICE_EN", "").strip()[:80]
+        db.add(binding)
+        db.commit()
+        logger.info("已从 .env 写入英文星云应用凭据（guide_id={}）", state.guide_id)
+
+
 def initialize_default_xingyun():
+    apply_env_english_app()
     app_id = os.getenv("XINGYUN_APP_ID", "").strip()
     secret = os.getenv("XINGYUN_APP_SECRET", "").strip()
     if not app_id or not secret:

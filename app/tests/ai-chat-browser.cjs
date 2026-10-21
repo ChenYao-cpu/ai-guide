@@ -1,0 +1,35 @@
+// Compiled App UI with simulated APIs. Text/photo/ASR stale-result guards also
+// run in ai-chat.test.cjs; this does not claim real AI or phone validation.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),{chromium}=require('playwright-core')
+const root=path.resolve(__dirname,'..'),version=process.env.APP_QA_VERSION||'1.2.9',dist=path.join(root,'unpackage/main-d31183c-'+version+'/browser'),out=path.join(root,'unpackage/main-d31183c-'+version+'/ai-chat-results');fs.mkdirSync(out,{recursive:true})
+const spots=[{spot_id:12,spot_name:'玉带桥',city:'北京',latitude:0,longitude:0,category:'historical',visit_duration:20},{spot_id:3,spot_name:'昆明湖',city:'北京',latitude:0,longitude:0,category:'natural',visit_duration:20}],guide={guide_id:2,name:'Test guide',render_mode:'audio',is_enabled:true}
+const requests=[],errors=[],ok=data=>({success:true,code:0,data});let held,holdNext=false
+const plan={spot_ids:[12,3],spot_names:['玉带桥','昆明湖'],estimated_time_minutes:91,requested_time_minutes:150,pace:'relaxed',preferences:['nature'],score_details:[{spot_id:12},{spot_id:3,walk_from_previous_meters:345,walk_from_previous_minutes:6}],ai_response:'Test route'}
+const server=http.createServer((req,res)=>{let file=path.resolve(dist,'.'+new URL(req.url,'http://local').pathname);if(file!==dist&&!file.startsWith(dist+path.sep)){res.writeHead(403).end();return}if(!fs.existsSync(file)||!fs.statSync(file).isFile())file=path.join(dist,'index.html');res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png'})[path.extname(file)]||'application/octet-stream');fs.createReadStream(file).pipe(res)})
+async function run(){await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser,page
+try{browser=await chromium.launch({executablePath:process.env.APP_QA_CHROME||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});page=await context.newPage();page.on('pageerror',e=>errors.push(e.message))
+await context.route('**/api/v1/**',async route=>{const req=route.request(),url=new URL(req.url()),p=url.pathname.replace('/api/v1','');let data;requests.push({path:p,method:req.method(),body:req.postData()})
+ if(p==='/user/login')data={access_token:'mock-user-17',token_type:'bearer'}
+ else if(p==='/user/me')data=ok({user_id:17,username:'App QA'})
+ else if(p==='/tour-session/spots')data=ok({spot_list:spots})
+ else if(p==='/tour-session/guides')data=ok({guide_list:[guide]})
+ else if(p==='/tour-session/routes')data=ok({route_list:[]})
+ else if(p.startsWith('/avatar/capabilities/'))data=ok({preferredMode:'audio',realistic:{ready:false},cartoon:{ready:false}})
+ else if(p==='/tour-session/visitor-create')data=ok({session_id:71})
+ else if(p==='/tour-session/chat')data=ok({message:'English history answer',language:'en'})
+ else if(p==='/tour-session/ai-chat-recommend'){data=ok(plan);if(holdNext){holdNext=false;await new Promise(resolve=>held=resolve)}}
+ else if(p==='/xingyun/chat-voice'){await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'Voice disabled in UI test'})});return}
+ else if(p==='/tour-experience/route-preview')data=ok({stops:spots.map((s,i)=>({...s,order:i+1})),legs:[],complete:true,total_minutes:91,walking_meters:345,walking_minutes:6,visit_minutes:80,rest_minutes:5})
+ else data=ok({})
+ await route.fulfill({contentType:'application/json',body:JSON.stringify(data)})})
+await page.goto('http://127.0.0.1:'+server.address().port);await page.locator('.auth-lang, .auth-language button:last-child').first().click();const fields=page.locator('.nickname-input input');await fields.nth(0).fill('app-qa');await fields.nth(1).fill('mock-password');await page.locator('.primary').click();await page.locator('.spot-card').first().waitFor();await page.locator('.tb-item').nth(1).click();await page.locator('.chat-mode').first().waitFor()
+assert.match(await page.locator('.chat-mode.selected').innerText(),/Ask a guide/);const input=page.locator('.msg-input input');assert.equal(await input.getAttribute('maxlength'),'2000')
+await page.locator('.question-place').click();await page.locator('.select-option').first().click();await input.fill('What is its history?');await page.locator('.send-btn:not(.disabled)').click();await page.getByText('English history answer',{exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/tour-session/ai-chat-recommend').length,0);const ask=requests.find(r=>r.path==='/tour-session/chat');assert.equal(JSON.parse(ask.body).language,'en')
+await page.locator('.chat-mode').nth(1).click();await input.fill('A relaxed 150 minute nature tour');await page.locator('.send-btn:not(.disabled)').click();await page.locator('.rp-total-value').waitFor();assert.match(await page.locator('.rp-total-value').innerText(),/91/);assert.match(await page.locator('.rp-walk').innerText(),/345.*6/);await page.screenshot({path:path.join(out,'route-preview.png')})
+await page.reload({waitUntil:'networkidle'});await page.locator('.rp-total-value').waitFor();assert.match(await page.locator('.chat-mode.selected').innerText(),/Plan a route/);assert.match(await page.locator('.rp-total-value').innerText(),/91/)
+await page.locator('.chat-mode').first().click();await input.fill('Tell me more.');await page.locator('.send-btn:not(.disabled)').click();await page.waitForFunction(()=>document.querySelectorAll('.msg-l').length>=3);assert.equal(requests.filter(r=>r.path==='/tour-session/visitor-create').length,1)
+await page.locator('.chat-mode').nth(1).click();holdNext=true;await input.fill('Old route request');await page.locator('.send-btn:not(.disabled)').click();await page.waitForFunction(()=>document.querySelector('.typing'));await page.locator('.nav-clear').click();held();await page.waitForLoadState('networkidle');assert.equal(await page.locator('.msg-row').count(),0);assert.equal(await page.locator('.route-preview').count(),0)
+await input.fill('a'.repeat(1500));assert.equal((await input.inputValue()).length,1500);await page.screenshot({path:path.join(out,'long-input-and-cleared.png')});assert.deepEqual(errors,[])
+fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,mockedBackend:true,phoneVerified:false,checks:['ordinary question uses chat, language=en','route totals and walking data from server','reload restores mode, session and preview','followup reuses persisted session','clear ignores a held old route reply','1500-character input accepted, maximum 2000'],requests,errors},null,2));console.log('Compiled App AI chat browser checks passed')
+}catch(e){if(page){await page.screenshot({path:path.join(out,'failure.png')});fs.writeFileSync(path.join(out,'failure.json'),JSON.stringify({error:e.message,body:await page.locator('body').innerText(),requests,errors},null,2))}throw e}finally{held?.();await browser?.close();server.close()}}
+run().catch(e=>{console.error(e);process.exitCode=1})

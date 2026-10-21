@@ -42,7 +42,7 @@ from .database.init_db import create_db_and_tables
 from .routers import (
     digital_human, llm, products, streamer_info, streaming_room, users,
     scenic_spots, knowledge_base, tour_routes, tour_chat, feedback_analytics,
-    digital_guide, avatar, spot_favorites, xingyun, tts, xfyun,
+    digital_guide, avatar, spot_favorites, xingyun, tts,
 )
 from .server_info import SERVER_PLUGINS_INFO
 from .models import station_models
@@ -123,6 +123,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from fastapi.middleware.cors import CORSMiddleware
+
+# 浏览器端预览（App H5 / 独立前端）从其他端口访问本服务时需要 CORS 放行
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 注册路由（原有路由 + 新增景区导览路由）
 app.include_router(users.router)
 app.include_router(products.router)
@@ -145,7 +156,6 @@ app.include_router(digital_guide.router)
 app.include_router(avatar.router)
 app.include_router(spot_favorites.router)
 app.include_router(xingyun.router)
-app.include_router(xfyun.router)
 
 
 # 挂载静态文件目录，以便访问上传的文件

@@ -16,7 +16,6 @@ export interface DigitalGuide {
   is_enabled: boolean
   voice_label?: string
   render_mode?: string
-  model3d_url?: string
   guide_id: number
   name: string
   character: string
@@ -28,7 +27,6 @@ export interface DigitalGuide {
   base_mp4_path: string
   tts_reference_audio: string
   tts_reference_sentence: string
-  live2d_model_path: string
   created_at: string
   updated_at: string
 }

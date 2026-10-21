@@ -35,7 +35,7 @@ class ScenicSpotInfo(SQLModel, table=True):
     latitude: float = 0.0  # WGS84 GPS纬度；GCJ02底图展示时转换，不直接覆盖数据库
     longitude: float = 0.0  # WGS84 GPS经度
     trigger_radius: float = 50.0  # 自动触发讲解的半径（米）
-    visit_duration: int = 20  # 建议停留分钟数；景点可单独配置，不含景点间步行
+    visit_duration: int = 10  # 建议停留时长（分钟），由景点配置维护
     best_season: str = ""  # 最佳游览季节，如 "春季/秋季"
     description: str = ""  # 景点简介
     history_detail: str = ""  # 历史文化详细介绍
@@ -167,6 +167,9 @@ class DigitalGuideInfo(SQLModel, table=True):
 
     voice_style: str = "female_wenrou"  # 声音风格: female_wenrou / female_huopo / male_wenhou / male_hongliang
     voice_speed: float = 1.0  # 语速倍率: 0.8 ~ 1.5
+    language: str = "zh"  # 导游语言: zh / en / both（英文模式优先选 en 的导游）
+    name_en: str = ""  # 英文模式展示的名字
+    character_en: str = ""  # 英文模式展示的人物简介
 
     outfit_images: str = ""  # 换装图片，JSON数组
 
@@ -177,10 +180,8 @@ class DigitalGuideInfo(SQLModel, table=True):
     poster_image: str = ""
     base_mp4_path: str = ""  # 数字人基础循环视频
     base_video_metadata: str = ""  # 服务端校验后的素材信息 JSON
-    model3d_path: str = ""  # 已校验骨骼和口型的原生 glTF 模型
     render_mode: str = "realistic"
     is_enabled: bool = True  # 管理员上架后才对游客开放
-    live2d_model_path: str = ""  # Live2D 模型路径（如 /live2d/haru/haru_greeter_t05.model3.json）
 
     delete: bool = False
 
