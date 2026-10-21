@@ -6,9 +6,26 @@ import { serverIP, serverPort } from 'virtual:server-info'
 import BrandLogo from '@/components/BrandLogo.vue'
 import DigitalAvatarPlayer from '@/components/DigitalAvatarPlayer.vue'
 import ScenicSpotCover from '@/components/ScenicSpotCover.vue'
+import ScenicVisitContext from '@/components/ScenicVisitContext.vue'
 import RouteOverview from '@/components/RouteOverview.vue'
 import TourVisualContext from '@/components/TourVisualContext.vue'
-import StationDirectionsMap from '@/components/StationDirectionsMap.vue'
+import StationWalkingDirections from '@/components/StationWalkingDirections.vue'
+import StationVisitorInfo from '@/components/StationVisitorInfo.vue'
+import {
+  Guide,
+  ChatDotRound,
+  MapLocation,
+  Picture,
+  ArrowRight,
+  House,
+  Microphone,
+  Position,
+  Location,
+  InfoFilled,
+  Notebook,
+  Check,
+  Plus
+} from '@element-plus/icons-vue'
 import { useStationIdle } from '@/composables/useStationIdle'
 import { locale, setLocale, t } from '@/i18n'
 import {
@@ -23,7 +40,7 @@ import {
   shareStationPlan,
   stationDirections,
   stationError,
-  defaultStationPreferences,
+  defaultStationPlanningInput,
   type StationCatalog,
   type StationVisit,
   type StationPlan,
@@ -35,10 +52,14 @@ import {
 const route = useRoute()
 const stationId = computed(() => String(route.params.stationId || 'summer-palace-east'))
 const S = (zh: string, en: string) => (locale.value === 'en' ? en : zh)
-type Task = 'home' | 'plan' | 'chat' | 'explore' | 'facilities' | 'result'
+type Task = 'home' | 'plan' | 'chat' | 'info' | 'explore' | 'facilities' | 'result'
 const task = ref<Task>('home'),
   catalog = ref<StationCatalog | null>(null),
   visit = ref<StationVisit | null>(null)
+// The live receptionist stays connected on the welcome screen. Only a visitor's
+// interaction starts the idle countdown and exposes the "finish" action.
+const engaged = ref(false),
+  receptionError = ref('')
 const loading = ref(true),
   offline = ref(false),
   stale = ref(false),
@@ -46,7 +67,7 @@ const loading = ref(true),
   busy = ref(false),
   speechBusy = ref(false),
   speaking = ref(false)
-const prefs = reactive(defaultStationPreferences()),
+const prefs = reactive(defaultStationPlanningInput()),
   plans = ref<StationPlan[]>([]),
   planIndex = ref(0),
   planStale = ref(false)
@@ -84,6 +105,7 @@ let controller: AbortController | undefined,
   speechController: AbortController | undefined,
   configurationController: AbortController | undefined
 let version = 0,
+  visitVersion = 0,
   speechVersion = 0,
   configurationVersion = 0,
   disposed = false,
@@ -169,31 +191,23 @@ watch(search, () => {
 const options = computed(() => [
   {
     key: 'plan' as Task,
-    no: '01',
     name: S('帮我规划游览', 'Plan my visit'),
-    desc: S('从本站出发，安排一条合适的路线', 'A walking plan starting right here'),
-    icon: '↗'
+    icon: Guide
   },
   {
-    key: 'chat' as Task,
-    no: '02',
-    name: S('问问数字人', 'Ask the digital guide'),
-    desc: S('景点故事、游览问题，直接问我', 'Stories and answers, with pictures'),
-    icon: '✧'
+    key: 'info' as Task,
+    name: S('游园须知', 'Visitor essentials'),
+    icon: Notebook
   },
   {
     key: 'facilities' as Task,
-    no: '03',
     name: S('找景点与设施', 'Find your way'),
-    desc: S('查找出口与已核实的服务位置', 'Exits and published visitor facilities'),
-    icon: '⌖'
+    icon: MapLocation
   },
   {
     key: 'explore' as Task,
-    no: '04',
     name: S('了解这座景区', 'Discover the park'),
-    desc: S('先看风景，再听一段它的故事', 'Explore the sights and their history'),
-    icon: '▧'
+    icon: Picture
   }
 ])
 const facilityItems = computed(() =>
@@ -243,7 +257,7 @@ const facilityItems = computed(() =>
 )
 const idle = useStationIdle({
   seconds: () => station.value?.idle_seconds || 120,
-  active: () => !!visit.value,
+  active: () => engaged.value,
   busy: () =>
     busy.value || speaking.value || recording.value || speechBusy.value || shareBusy.value,
   onExpire: () => reset()
@@ -281,6 +295,7 @@ async function load() {
         JSON.stringify({ data, saved: Date.now() })
       )
     } catch {}
+    void prepareReception()
   } catch (e: any) {
     if (disposed || own !== configurationVersion || e.code === 'ERR_CANCELED') return
     if (e.response?.status === 404) {
@@ -308,16 +323,16 @@ async function load() {
 async function ensureVisit() {
   if (visit.value) return visit.value
   if (starting) return starting
-  const own = version
+  const own = visitVersion
   const pending = beginStationVisit(stationId.value, locale.value)
     .then((v) => {
-      if (disposed || own !== version) {
+      if (disposed || own !== visitVersion) {
         void endStationVisit(v).catch(() => {})
         return null
       }
       visit.value = v
       lastExtend = Date.now()
-      idle.touch()
+      if (engaged.value) idle.touch()
       return v
     })
     .finally(() => {
@@ -326,12 +341,25 @@ async function ensureVisit() {
   starting = pending
   return pending
 }
+async function prepareReception() {
+  if (disposed || offline.value || !catalog.value?.guide) return
+  const own = visitVersion
+  receptionError.value = ''
+  try {
+    await ensureVisit()
+  } catch (e) {
+    if (!disposed && own === visitVersion) receptionError.value = stationError(e)
+  }
+}
 async function go(next: Task) {
   stopSpeech()
   stopListening()
   error.value = ''
   task.value = next
   if (next === 'home') return
+  engaged.value = true
+  idle.touch()
+  if (next === 'info') return
   if (offline.value) return
   try {
     await ensureVisit()
@@ -370,9 +398,12 @@ function cancel() {
   stopListening()
   idle.touch()
 }
-function reset() {
+function reset(reconnect = true) {
   const previous = visit.value
+  visitVersion++
   cancel()
+  engaged.value = false
+  receptionError.value = ''
   visit.value = null
   starting = null
   plans.value = []
@@ -397,14 +428,17 @@ function reset() {
   textOnly.value = false
   planStale.value = false
   task.value = 'home'
-  Object.assign(prefs, defaultStationPreferences())
+  Object.assign(prefs, defaultStationPlanningInput())
   setLocale(station.value?.default_language || 'zh')
   idle.touch()
   explorePage.value = 0
   wayfindingKind.value = 'exits'
   facilitySearch.value = ''
   if (previous) void endStationVisit(previous).catch(() => {})
-  if (stale.value || !catalog.value) void load()
+  if (reconnect) {
+    if (stale.value || !catalog.value) void load()
+    else void prepareReception()
+  }
 }
 function toggleStop(s: StationSpot) {
   prefs.spot_ids = prefs.spot_ids.includes(s.spot_id)
@@ -475,7 +509,14 @@ async function ask(value = question.value) {
     )
     if (disposed || own !== version) return
     reply.value = data
-    Object.assign(prefs, data.preferences)
+    const { budget, end_area, avoid_steps, spot_ids } = data.preferences
+    Object.assign(prefs, {
+      budget,
+      end_area,
+      avoid_steps,
+      spot_ids: [...spot_ids],
+      language: locale.value
+    })
     messages.value = [
       ...messages.value,
       { role: 'user', text: value },
@@ -648,16 +689,20 @@ async function poll() {
     ) {
       stale.value = true
       planStale.value = true
-      if (!visit.value) await load()
+      if (!engaged.value) {
+        reset(false)
+        await load()
+      }
     }
     if (visit.value && Date.now() - lastExtend > 60000) {
       await extendStationVisit(visit.value)
       lastExtend = Date.now()
     }
+    if (catalog.value?.guide && !visit.value && !receptionError.value) void prepareReception()
   } catch (e: any) {
     offline.value = true
     if (e.response?.status === 404) {
-      reset()
+      reset(false)
       catalog.value = null
       error.value = stationError(e)
     }
@@ -700,7 +745,7 @@ watch(planIndex, () => {
 watch(
   () => route.params.stationId,
   () => {
-    reset()
+    reset(false)
     catalog.value = null
     void load()
   }
@@ -719,7 +764,7 @@ onMounted(() => {
   void poll()
   interval = setInterval(() => {
     clock.value = Date.now()
-    if (!visit.value && !document.hidden && Date.now() % 12000 < 1100) heroIndex.value++
+    if (task.value === 'home' && !document.hidden && Date.now() % 12000 < 1100) heroIndex.value++
   }, 1000)
   heartbeat = setInterval(poll, 30000)
   window.addEventListener('online', online)
@@ -727,6 +772,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   disposed = true
+  visitVersion++
   configurationController?.abort()
   const previous = visit.value
   cancel()
@@ -746,8 +792,8 @@ function suggestPlan() {
   selectedSpot.value = null
   void ask(
     S(
-      '两小时，带着老人，想看湖，最后从东门离园',
-      'Two hours, with seniors, lake views, finish at the east gate'
+      '我有两小时，最后从东宫门离园，请帮我规划路线',
+      'I have two hours. Please plan a route ending at the east gate.'
     )
   )
 }
@@ -769,6 +815,9 @@ function audioEnded() {
   speaking.value = false
   idle.touch()
 }
+function backToAttractions() {
+  selectedSpot.value = null
+}
 </script>
 
 <template>
@@ -785,13 +834,13 @@ function audioEnded() {
           <button :aria-pressed="locale === 'zh'" @click="setLocale('zh')">中文</button
           ><button :aria-pressed="locale === 'en'" @click="setLocale('en')">English</button>
         </div>
-        <button v-if="visit" class="station-end" @click="endConfirm = true">
+        <button v-if="engaged" class="station-end" @click="endConfirm = true">
           {{ S('结束本次使用', 'Finish this visit') }}
         </button>
       </div>
     </header>
     <div v-if="loading && !catalog" class="station-splash" role="status">
-      <span class="station-orbit">✧</span>
+      <ChatDotRound class="station-orbit" aria-hidden="true" />
       <h1>{{ S('正在准备您的景区服务站', 'Preparing your service station') }}</h1>
     </div>
     <template v-else-if="catalog">
@@ -810,25 +859,8 @@ function audioEnded() {
         ><button @click="load">{{ S('重新连接', 'Reconnect') }}</button>
       </div>
       <div class="station-workspace">
-        <aside class="station-reception">
-          <div class="reception-heading">
-            <span class="station-eyebrow">{{
-              S('您的数字接待员', 'YOUR DIGITAL RECEPTIONIST')
-            }}</span
-            ><span class="reception-status"
-              ><i :class="{ busy, speaking }"></i
-              >{{
-                busy
-                  ? S('正在为您准备', 'Preparing your answer')
-                  : speaking
-                    ? S('正在讲解', 'Speaking')
-                    : S('欢迎咨询', 'Here to help')
-              }}</span
-            >
-          </div>
+        <aside class="station-reception" :aria-label="S('实时数字人', 'Live digital guide')">
           <div class="station-avatar-stage">
-            <div class="station-stage-ring"></div>
-            <div class="station-stage-landscape"></div>
             <DigitalAvatarPlayer
               v-if="catalog.guide"
               :key="catalog.guide.guide_id"
@@ -836,38 +868,26 @@ function audioEnded() {
               station-mode
               :guide-id="catalog.guide.guide_id"
               :station-visit="visit || undefined"
-              :poster-image="catalog.guide.poster_image"
               :audio-element="audio"
-              :width="390"
-              :height="440"
+              :width="640"
+              :height="900"
               :speaking="speaking"
               :busy="busy"
               @playing="speaking = $event"
             />
             <div v-else class="station-no-avatar">
-              ✧<span>{{ S('文字接待已就绪', 'Text assistance is ready') }}</span>
+              <ChatDotRound aria-hidden="true" /><span>{{ S('文字咨询', 'Text assistance') }}</span>
+            </div>
+            <div v-if="receptionError" class="station-avatar-error" role="alert">
+              <p>{{ t(receptionError) }}</p>
+              <button class="station-secondary" @click="prepareReception">
+                {{ S('重新连接数字人', 'Reconnect guide') }}
+              </button>
             </div>
           </div>
-          <div class="reception-copy">
-            <span class="station-guide-name">{{ t(catalog.guide?.name || '数字接待员') }}</span>
-            <h2>
-              {{
-                task === 'home'
-                  ? S('从这里，开启一段好旅程', 'A better visit starts here')
-                  : S('有什么需要，我来帮您', 'How can I help?')
-              }}
-            </h2>
-            <p>{{ locale === 'en' ? station?.welcome_en : station?.welcome }}</p>
-          </div>
-          <div class="station-local-anchor">
-            <span>⌖</span>
-            <div>
-              <strong>{{ S('您现在位于本站', 'You are at this station') }}</strong>
-              <p>{{ locationName }}</p>
-            </div>
-          </div>
-          <button class="station-ask-button" @click="go('chat')">
-            ✧ {{ S('和数字人聊一聊', 'Talk to the guide') }} <span>↗</span>
+          <button class="station-ask-button" :aria-pressed="task === 'chat'" @click="go('chat')">
+            <ChatDotRound aria-hidden="true" />{{ S('和数字人聊一聊', 'Talk to the guide')
+            }}<ArrowRight aria-hidden="true" />
           </button>
         </aside>
         <section class="station-task-area" :aria-busy="busy">
@@ -877,7 +897,7 @@ function audioEnded() {
             :aria-label="S('服务导航', 'Services')"
           >
             <button class="station-home-button" @click="go('home')">
-              ⌂ {{ S('首页', 'Home') }}</button
+              <House aria-hidden="true" />{{ S('首页', 'Home') }}</button
             ><button
               v-for="item in options"
               :key="item.key"
@@ -896,41 +916,38 @@ function audioEnded() {
           <Transition name="station-page" mode="out-in">
             <div v-if="task === 'home'" key="home" class="station-home-content">
               <div class="station-home-heading">
-                <span class="station-eyebrow">{{
-                  S('问得明白 · 玩得从容', 'ASK · PLAN · EXPLORE')
-                }}</span>
                 <h1>{{ S('今天，想怎样游览？', 'How would you like to explore?') }}</h1>
-                <p>
-                  {{
-                    S(
-                      '在这里了解景区、安排路线，再把游览方案带到手机。',
-                      'Discover the park, plan your walk, and take your itinerary with you.'
-                    )
-                  }}
-                </p>
               </div>
-              <div class="station-feature-image">
-                <ScenicSpotCover v-if="hero" :key="hero.spot_id" :spot="hero" />
-                <div class="station-feature-overlay">
-                  <span>{{ S('颐和园 · 湖山之间', 'SUMMER PALACE') }}</span
-                  ><strong>{{ t(hero?.spot_name || '昆明湖') }}</strong
-                  ><button @click="discoverHero">
-                    {{ S('走近这处风景', 'Discover this place') }} ↗
-                  </button>
+              <div class="station-home-showcase">
+                <div class="station-feature-card">
+                  <ScenicSpotCover
+                    v-if="hero"
+                    :key="hero.spot_id"
+                    :spot="hero"
+                    position="50% 40%"
+                  />
+                  <div class="station-feature-caption">
+                    <strong>{{ t(hero?.spot_name || '昆明湖') }}</strong>
+                    <button @click="discoverHero">
+                      {{ S('查看景点', 'View attraction') }}<ArrowRight aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
-                <span class="station-image-caption">{{
-                  S('本站规划 · 手机随行', 'PLAN HERE · CONTINUE ON YOUR PHONE')
-                }}</span>
+                <ScenicVisitContext
+                  v-if="station"
+                  class="station-home-weather"
+                  weather-only
+                  :latitude="station.anchor.latitude"
+                  :longitude="station.anchor.longitude"
+                />
               </div>
               <div class="station-service-cards">
                 <button v-for="item in options" :key="item.key" @click="go(item.key)">
-                  <span class="station-service-icon">{{ item.icon }}</span>
-                  <div>
-                    <span class="station-service-number">{{ item.no }}</span>
-                    <h2>{{ item.name }}</h2>
-                    <p>{{ item.desc }}</p>
-                  </div>
-                  <span class="station-service-arrow">↗</span>
+                  <span class="station-service-icon"
+                    ><component :is="item.icon" aria-hidden="true"
+                  /></span>
+                  <h2>{{ item.name }}</h2>
+                  <ArrowRight class="station-service-arrow" aria-hidden="true" />
                 </button>
               </div>
               <div v-if="activeNotices.length" class="station-announcements">
@@ -942,16 +959,7 @@ function audioEnded() {
             </div>
             <div v-else-if="task === 'plan'" key="plan" class="station-planner">
               <div class="station-section-title">
-                <span class="station-eyebrow">{{ S('从本站出发', 'START AT THIS STATION') }}</span>
-                <h1>{{ S('把时间，留给喜欢的风景', 'Make time for what you love') }}</h1>
-                <p>
-                  {{
-                    S(
-                      '告诉我您的安排，我会把步行、停留和休息一起算好。',
-                      'Your plan includes the walk from here, attraction visits, breaks and the final exit.'
-                    )
-                  }}
-                </p>
+                <h1>{{ S('游览规划', 'Plan your visit') }}</h1>
               </div>
               <div class="station-planning-form">
                 <fieldset>
@@ -976,54 +984,29 @@ function audioEnded() {
                   </div>
                 </fieldset>
                 <fieldset>
-                  <legend>{{ S('想看什么？', 'What interests you?') }}</legend>
-                  <div class="station-choice-row">
+                  <legend>{{ S('最后去哪里？', 'Where will you finish?') }}</legend>
+                  <div
+                    class="station-choice-row station-endpoint-options"
+                    role="group"
+                    :aria-label="S('选择游览终点', 'Choose an end point')"
+                  >
                     <button
-                      v-for="item in [
-                        ['all', '综合游览', 'A little of everything'],
-                        ['history', '历史建筑', 'History'],
-                        ['nature', '湖山风景', 'Nature'],
-                        ['photo', '摄影漫游', 'Photography'],
-                        ['family', '亲子探索', 'Family']
+                      v-for="end in [
+                        ['east', '东宫门', 'East Palace Gate'],
+                        ['north', '北宫门', 'North Palace Gate'],
+                        ['south', '新建宫门', 'New Palace Gate'],
+                        ['return', '返回本站', 'Return to this station']
                       ] as const"
-                      :key="item[0]"
-                      :aria-pressed="prefs.interest === item[0]"
-                      @click="prefs.interest = item[0]"
+                      :key="end[0]"
+                      :aria-pressed="prefs.end_area === end[0]"
+                      @click="prefs.end_area = end[0]"
                     >
-                      {{ S(item[1], item[2]) }}
+                      <Check v-if="prefs.end_area === end[0]" aria-hidden="true" />{{
+                        S(end[1], end[2])
+                      }}
                     </button>
                   </div>
                 </fieldset>
-                <div class="station-form-split">
-                  <fieldset>
-                    <legend>{{ S('游览节奏', 'Walking pace') }}</legend>
-                    <div class="station-choice-row">
-                      <button
-                        :aria-pressed="prefs.pace === 'standard'"
-                        @click="prefs.pace = 'standard'"
-                      >
-                        {{ S('正常游览', 'Standard') }}</button
-                      ><button
-                        :aria-pressed="prefs.pace === 'relaxed'"
-                        @click="prefs.pace = 'relaxed'"
-                      >
-                        {{ S('轻松慢行', 'Relaxed') }}
-                      </button>
-                    </div>
-                  </fieldset>
-                  <fieldset>
-                    <legend>{{ S('最后去哪里？', 'Where will you finish?') }}</legend>
-                    <select
-                      v-model="prefs.end_area"
-                      :aria-label="S('选择游览终点', 'Choose an end point')"
-                    >
-                      <option value="east">{{ S('东宫门', 'East Palace Gate') }}</option>
-                      <option value="north">{{ S('北宫门', 'North Palace Gate') }}</option>
-                      <option value="south">{{ S('新建宫门', 'New Palace Gate') }}</option>
-                      <option value="return">{{ S('返回本站', 'Return to this station') }}</option>
-                    </select>
-                  </fieldset>
-                </div>
                 <label class="station-step-option"
                   ><input type="checkbox" v-model="prefs.avoid_steps" /><span
                     >{{ S('避开路网已标注的台阶', 'Avoid steps marked in the walking network')
@@ -1035,38 +1018,49 @@ function audioEnded() {
                     }}</small></span
                   ></label
                 >
-                <details class="station-manual-stops">
-                  <summary>
-                    {{ S('有特别想去的景点？', 'Have specific places in mind?') }}
-                    <span>{{
-                      prefs.spot_ids.length
-                        ? prefs.spot_ids.length + ' ' + S('处已选', 'selected')
-                        : S('可选', 'Optional')
-                    }}</span>
-                  </summary>
+                <section class="station-manual-stops" aria-labelledby="station-manual-stops-title">
+                  <header class="station-manual-heading">
+                    <h2 id="station-manual-stops-title">
+                      <MapLocation aria-hidden="true" />{{
+                        S('自选景点', 'Choose your attractions')
+                      }}
+                    </h2>
+                    <span class="station-stop-count"
+                      >{{ prefs.spot_ids.length }} {{ S('处已选', 'selected') }}</span
+                    >
+                    <button
+                      v-if="prefs.spot_ids.length"
+                      class="station-clear-stops"
+                      @click="prefs.spot_ids = []"
+                    >
+                      {{ S('清空选择', 'Clear selection') }}
+                    </button>
+                  </header>
                   <p>
                     {{
                       S(
-                        '勾选后保留全部选择，并计算顺路顺序；超出预算会提示您调整。',
-                        'Selected stops are all retained and reordered. If they exceed your budget, you will be asked to adjust.'
+                        '不选景点时，按时间和终点安排路线；自选后保留全部景点并优化顺序。',
+                        'Leave this empty for a route based on your time and end point, or select stops to keep them all and optimize their order.'
                       )
                     }}
                   </p>
-                  <div>
+                  <div class="station-stop-options">
                     <button
                       v-for="spot in catalog.spots"
                       :key="spot.spot_id"
                       :aria-pressed="prefs.spot_ids.includes(spot.spot_id)"
                       @click="toggleStop(spot)"
                     >
-                      {{ prefs.spot_ids.includes(spot.spot_id) ? '✓' : '＋' }}
+                      <Check v-if="prefs.spot_ids.includes(spot.spot_id)" aria-hidden="true" />
+                      <Plus v-else aria-hidden="true" />
                       {{ t(spot.spot_name) }}
                     </button>
                   </div>
-                </details>
+                </section>
               </div>
               <div class="station-inline-footer">
-                <span>⌖ {{ S('起点', 'Start') }} · {{ stationName }}</span
+                <span
+                  ><Location aria-hidden="true" />{{ S('起点', 'Start') }} · {{ stationName }}</span
                 ><button
                   class="station-primary"
                   :disabled="
@@ -1083,22 +1077,13 @@ function audioEnded() {
                       ? S('正在计算步行方案…', 'Calculating your walk…')
                       : S('生成我的游览方案', 'Create my walking plan')
                   }}
-                  ↗
+                  <ArrowRight aria-hidden="true" />
                 </button>
               </div>
             </div>
             <div v-else-if="task === 'result' && plan" key="result" class="station-result">
               <div class="station-section-title">
-                <span class="station-eyebrow">{{ S('行程已经安排好', 'YOUR WALK IS READY') }}</span>
-                <h1>{{ S('从本站出发，一路顺着风景走', 'A route that starts right here') }}</h1>
-                <p>
-                  {{
-                    S(
-                      '已计入本站到首站，以及末站到终点的步行。',
-                      'Includes walking from this station to the first stop and from the last stop to your destination.'
-                    )
-                  }}
-                </p>
+                <h1>{{ S('游览方案', 'Your itinerary') }}</h1>
               </div>
               <div class="station-plan-tabs">
                 <button
@@ -1155,7 +1140,7 @@ function audioEnded() {
                 {{
                   S(
                     '需求或资料已变化，请重新计算后领取。',
-                    'Preferences or information changed. Recalculate before pickup.'
+                    'Route details or information changed. Recalculate before pickup.'
                   )
                 }}
                 <button @click="calculate" :disabled="busy || offline">
@@ -1165,7 +1150,7 @@ function audioEnded() {
               <p class="station-estimate-note">{{ moneyFreeNote }}</p>
               <div class="station-inline-footer">
                 <button class="station-secondary" @click="go('plan')">
-                  {{ S('调整我的需求', 'Adjust my preferences') }}</button
+                  {{ S('修改路线条件', 'Edit route details') }}</button
                 ><button
                   class="station-primary"
                   :disabled="planStale || offline || shareBusy"
@@ -1175,20 +1160,15 @@ function audioEnded() {
                 </button>
               </div>
             </div>
+            <StationVisitorInfo
+              v-else-if="task === 'info'"
+              key="info"
+              :now="clock"
+              :announcements="activeNotices"
+            />
             <div v-else-if="task === 'chat'" key="chat" class="station-chat">
               <div class="station-section-title">
-                <span class="station-eyebrow">{{
-                  S('直接问我', 'ASK ME ANYTHING ABOUT YOUR VISIT')
-                }}</span>
-                <h1>{{ S('先聊一聊，再轻松出发', 'A little conversation, a better visit') }}</h1>
-                <p>
-                  {{
-                    S(
-                      '例如：我们有两小时，带着老人，想看看湖，最后从东门出去。',
-                      'For example: Two hours, travelling with seniors, lakeside views, finishing at the east gate.'
-                    )
-                  }}
-                </p>
+                <h1>{{ S('数字人咨询', 'Ask the digital guide') }}</h1>
               </div>
               <div class="station-quick-questions">
                 <button @click="suggestPlan">
@@ -1203,9 +1183,6 @@ function audioEnded() {
                 <template v-if="reply"
                   ><div class="station-user-question">{{ lastQuestion }}</div>
                   <div class="station-answer">
-                    <span class="station-answer-label"
-                      >✧ {{ S('数字接待员', 'Digital receptionist') }}</span
-                    >
                     <p>{{ reply.answer }}</p>
                     <TourVisualContext :context="reply.visuals" :expanded="true" />
                     <div class="station-answer-actions">
@@ -1214,7 +1191,7 @@ function audioEnded() {
                         class="station-primary"
                         @click="go('plan')"
                       >
-                        {{ S('查看已整理的规划需求', 'Review my planning preferences') }} ↗</button
+                        {{ S('查看路线条件', 'Review route details') }} ↗</button
                       ><button
                         v-if="reply.destination_key"
                         class="station-primary"
@@ -1242,23 +1219,8 @@ function audioEnded() {
                   </details></template
                 >
                 <div v-else class="station-chat-empty">
-                  <span>✧</span>
-                  <h2>
-                    {{
-                      S(
-                        '路线、景点故事，或者游览中的疑问',
-                        'Routes, stories, and questions about your visit'
-                      )
-                    }}
-                  </h2>
-                  <p>
-                    {{
-                      S(
-                        '点击下方说话，或输入您想了解的内容。',
-                        'Tap the microphone or type a question below.'
-                      )
-                    }}
-                  </p>
+                  <ChatDotRound aria-hidden="true" />
+                  <h2>{{ S('有什么想问的？', 'What would you like to know?') }}</h2>
                 </div>
                 <div v-if="busy" class="station-generating" role="status">
                   <span class="station-dot-pulse">● ● ●</span
@@ -1299,29 +1261,54 @@ function audioEnded() {
                   :disabled="busy || offline"
                   @click="listen"
                 >
-                  {{ recording ? S('停止', 'Stop') : S('说话', 'Speak') }} ♩</button
+                  <Microphone aria-hidden="true" />{{
+                    recording ? S('停止', 'Stop') : S('说话', 'Speak')
+                  }}</button
                 ><button
                   class="station-primary"
                   :disabled="busy || offline || !question.trim()"
                   type="submit"
                 >
-                  {{ S('发送', 'Send') }} ↗
+                  {{ S('发送', 'Send') }}<Position aria-hidden="true" />
                 </button>
               </form>
             </div>
             <div v-else-if="task === 'explore'" key="explore" class="station-explore">
               <template v-if="selectedSpot"
-                ><button class="station-back" @click="suggestPlan">
+                ><button class="station-back" @click="backToAttractions">
                   ← {{ S('全部景点', 'All attractions') }}
                 </button>
                 <div class="station-spot-detail">
-                  <ScenicSpotCover :spot="selectedSpot" />
-                  <div>
-                    <span class="station-eyebrow">{{
-                      S('风景背后的故事', 'THE STORY BEHIND THE SIGHT')
-                    }}</span>
-                    <h1>{{ t(selectedSpot.spot_name) }}</h1>
-                    <p>{{ t(selectedSpot.description) }}</p>
+                  <div class="station-spot-overview">
+                    <ScenicSpotCover
+                      class="station-spot-photo"
+                      :spot="selectedSpot"
+                      framing="natural"
+                    />
+                    <div class="station-spot-summary">
+                      <h1>{{ t(selectedSpot.spot_name) }}</h1>
+                      <p>{{ t(selectedSpot.description) }}</p>
+                      <div class="station-answer-actions">
+                        <button
+                          class="station-primary"
+                          :disabled="offline"
+                          @click="
+                            ask(
+                              S(
+                                '请介绍' + selectedSpot.spot_name,
+                                'Tell me about ' + t(selectedSpot.spot_name)
+                              )
+                            )
+                          "
+                        >
+                          {{ S('请数字人讲一讲', 'Ask the guide about this place') }} ✧</button
+                        ><button class="station-secondary" @click="addSelectedSpot">
+                          {{ S('放进我的游览计划', 'Add to my visit') }} ＋
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="station-spot-notes">
                     <details open>
                       <summary>{{ S('历史与文化', 'History and culture') }}</summary>
                       <p>{{ t(selectedSpot.history_detail) }}</p>
@@ -1330,33 +1317,12 @@ function audioEnded() {
                       <summary>{{ S('值得留意', 'Things to notice') }}</summary>
                       <p>{{ t(selectedSpot.tour_tips) }}</p>
                     </details>
-                    <div class="station-answer-actions">
-                      <button
-                        class="station-primary"
-                        :disabled="offline"
-                        @click="
-                          ask(
-                            S(
-                              '请介绍' + selectedSpot.spot_name,
-                              'Tell me about ' + t(selectedSpot.spot_name)
-                            )
-                          )
-                        "
-                      >
-                        {{ S('请数字人讲一讲', 'Ask the guide about this place') }} ✧</button
-                      ><button class="station-secondary" @click="addSelectedSpot">
-                        {{ S('放进我的游览计划', 'Add to my visit') }} ＋
-                      </button>
-                    </div>
                   </div>
                 </div></template
               >
               <template v-else
                 ><div class="station-section-title">
-                  <span class="station-eyebrow">{{
-                    S('一园湖山，慢慢认识', 'DISCOVER THE SUMMER PALACE')
-                  }}</span>
-                  <h1>{{ S('每一处风景，都有故事', 'Every place has a story') }}</h1>
+                  <h1>{{ S('景点介绍', 'Explore attractions') }}</h1>
                 </div>
                 <input
                   class="station-search"
@@ -1373,7 +1339,7 @@ function audioEnded() {
                     <ScenicSpotCover :spot="spot" />
                     <div>
                       <h2>{{ t(spot.spot_name) }}</h2>
-                      <span>{{ S('看图 · 听故事', 'Pictures · Stories') }} ↗</span>
+                      <ArrowRight aria-hidden="true" />
                     </div>
                   </button>
                 </div>
@@ -1400,18 +1366,7 @@ function audioEnded() {
             </div>
             <div v-else-if="task === 'facilities'" key="facilities" class="station-facilities">
               <div class="station-section-title">
-                <span class="station-eyebrow">{{
-                  S('从这里，找到方向', 'FIND YOUR WAY FROM HERE')
-                }}</span>
-                <h1>{{ S('您想去哪里？', 'Where would you like to go?') }}</h1>
-                <p>
-                  {{
-                    S(
-                      '路线从本站位置开始，沿已收录的园内步道计算。',
-                      'Walking directions start at this station and follow the mapped park paths.'
-                    )
-                  }}
-                </p>
+                <h1>{{ S('景点与设施', 'Attractions and facilities') }}</h1>
               </div>
               <div class="station-choice-row station-wayfinding-tabs">
                 <button
@@ -1445,16 +1400,18 @@ function audioEnded() {
                   :disabled="item.disabled || busy || offline"
                   @click="showDirections(item.key, item.name)"
                 >
-                  <span>⌖</span><strong>{{ item.name }}</strong
+                  <Location class="station-facility-icon" aria-hidden="true" /><strong>{{
+                    item.name
+                  }}</strong
                   ><small>{{ item.kind }}</small
-                  ><b>↗</b>
+                  ><ArrowRight class="station-facility-arrow" aria-hidden="true" />
                 </button>
               </div>
               <div
                 v-if="wayfindingKind === 'services' && !station?.facilities.some((f) => f.verified)"
                 class="station-facility-note"
               >
-                <span>ⓘ</span>
+                <InfoFilled aria-hidden="true" />
                 <p>
                   {{
                     S(
@@ -1465,48 +1422,16 @@ function audioEnded() {
                 </p>
               </div>
               <div v-if="directions" ref="directionsResult" class="station-direction-result">
-                <div class="station-direction-heading">
-                  <h2>{{ S('本站', 'This station') }} → {{ directionTitle }}</h2>
-                  <strong
-                    >{{ distance(directions.meters) }} ·
-                    {{ metricTime(directions.minutes) }}</strong
-                  >
-                </div>
-                <StationDirectionsMap :directions="directions" />
-                <ol class="station-directions-list">
-                  <li v-for="(section, index) in directions.sections" :key="index">
-                    <span
-                      >{{ t(section.road_name || '园内步道') }}
-                      {{ section.steps ? S('（台阶）', '(steps)') : '' }}</span
-                    ><b>{{ distance(section.meters) }}</b>
-                  </li>
-                </ol>
-                <p class="station-estimate-note">
-                  {{
-                    S(
-                      '地图不反映即时开放状态，出入口与通行安排请以现场为准。',
-                      'The map does not confirm live access. Follow on-site entrance and passage arrangements.'
-                    )
-                  }}
-                </p>
+                <StationWalkingDirections
+                  :directions="directions"
+                  :origin-name="stationName || S('本站', 'This station')"
+                  :destination-name="directionTitle"
+                />
               </div>
             </div>
           </Transition>
         </section>
       </div>
-      <footer class="station-bottom">
-        <span
-          ><i :class="{ offline }"></i
-          >{{
-            offline
-              ? S('离线资料浏览', 'Offline information')
-              : S('本站接待 · 手机随行', 'Plan here · Continue on your phone')
-          }}</span
-        ><span>{{ stationName }}</span
-        ><button v-if="visit" @click="endConfirm = true">
-          {{ S('结束并为下一位复位', 'Finish and reset for the next visitor') }} ↗</button
-        ><span v-else>{{ S('触摸屏幕，开始您的咨询', 'Touch the screen to get started') }}</span>
-      </footer>
     </template>
     <div v-else class="station-splash" role="alert">
       <h1>{{ S('本站暂时无法连接', 'This station is temporarily unavailable') }}</h1>
@@ -1526,16 +1451,16 @@ function audioEnded() {
           @click="showShare = false"
           :aria-label="S('关闭', 'Close')"
         >
-          ×</button
-        ><span class="station-eyebrow">{{ S('把路线放进口袋', 'TAKE YOUR PLAN WITH YOU') }}</span>
+          ×
+        </button>
         <h2 id="station-share-title">
           {{ S('手机扫码，继续这段旅程', 'Scan and continue on your phone') }}
         </h2>
         <p>
           {{
             S(
-              '景点顺序、路线和游览偏好会一起带走。',
-              'Your stop order, walking route and visit preferences travel with you.'
+              '景点顺序、步行路线和预计用时会一起带走。',
+              'Your stop order, walking route and estimated time travel with you.'
             )
           }}
         </p>
@@ -1580,7 +1505,7 @@ function audioEnded() {
             )
           }}
         </p>
-        <button class="station-secondary" @click="reset">
+        <button class="station-secondary" @click="reset()">
           {{ S('完成，结束本次使用', 'Done, finish this visit') }}
         </button>
       </section>
@@ -1593,7 +1518,6 @@ function audioEnded() {
         aria-modal="true"
         aria-labelledby="station-idle-title"
       >
-        <span class="station-eyebrow">{{ S('还需要继续吗？', 'STILL HERE?') }}</span>
         <h2 id="station-idle-title">
           {{ S('我们会为下一位游客准备好屏幕', 'This screen will reset for the next visitor') }}
         </h2>
@@ -1607,7 +1531,7 @@ function audioEnded() {
           }}
         </p>
         <div class="station-dialog-actions">
-          <button class="station-secondary" @click="reset">{{ S('结束使用', 'Finish') }}</button
+          <button class="station-secondary" @click="reset()">{{ S('结束使用', 'Finish') }}</button
           ><button class="station-primary" @click="idle.touch">
             {{ S('我还在，继续使用', 'I am here, keep going') }}
           </button>
@@ -1634,7 +1558,7 @@ function audioEnded() {
         <div class="station-dialog-actions">
           <button class="station-secondary" @click="endConfirm = false">
             {{ S('继续使用', 'Keep using') }}</button
-          ><button class="station-primary" @click="reset">
+          ><button class="station-primary" @click="reset()">
             {{ S('结束并复位', 'Finish and reset') }}
           </button>
         </div>

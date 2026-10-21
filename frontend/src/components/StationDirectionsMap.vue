@@ -27,19 +27,36 @@ async function draw() {
     }
     group.clearLayers()
     const points = props.directions.geometry.map((p) => wgs84ToGcj02(p[0], p[1]))
-    if (points.length > 1) L.polyline(points, { color: '#6853b9', weight: 6 }).addTo(group)
-    for (const [anchor, label] of [
-      [props.directions.origin, '本站'],
+    if (points.length > 1) {
+      L.polyline(points, { color: '#fff', weight: 10, opacity: 0.9 }).addTo(group)
+      L.polyline(points, { color: '#4f46e5', weight: 6 }).addTo(group)
+    }
+    for (const [index, [anchor, label]] of (
       [
-        props.directions.destination,
-        locale.value === 'en' && props.directions.destination.label_en
-          ? props.directions.destination.label_en
-          : props.directions.destination.label
-      ]
-    ] as const) {
+        [props.directions.origin, '本站'],
+        [
+          props.directions.destination,
+          locale.value === 'en' && props.directions.destination.label_en
+            ? props.directions.destination.label_en
+            : props.directions.destination.label
+        ]
+      ] as const
+    ).entries()) {
       const text = document.createElement('strong')
       text.textContent = t(label)
-      L.marker(wgs84ToGcj02(anchor.latitude, anchor.longitude))
+      const letter = index === 0 ? 'A' : 'B'
+      const icon = L.divIcon({
+        className: 'station-map-endpoint',
+        html:
+          '<span style="display:grid;place-items:center;width:34px;height:34px;background:' +
+          (index === 0 ? '#6366f1' : '#4338ca') +
+          ';border:3px solid white;border-radius:50%;box-shadow:0 3px 10px #1e293b33;color:white;font:600 17px Arial">' +
+          letter +
+          '</span>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      })
+      L.marker(wgs84ToGcj02(anchor.latitude, anchor.longitude), { icon })
         .bindTooltip(text, { permanent: true, direction: 'top' })
         .addTo(group)
     }

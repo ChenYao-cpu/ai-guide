@@ -62,13 +62,14 @@ watch(()=>props.speaking,value=>{if(!value&&props.audioElement?.ended&&mode.valu
 defineExpose({getMode:async()=>{await capabilityReady;return xingyunRef.value?.isReady() ? 'xingyun' : mode.value},speak:(text?:string)=>xingyunRef.value?.speak(text)||false,acceptJob,acceptPerformance,stop})
 </script>
 <template>
-  <div class="digital-avatar" :style="{maxWidth:(width||360)+'px'}">
+  <div class="digital-avatar" :class="{'station-avatar':stationMode}" :style="{maxWidth:stationMode?'none':(width||360)+'px'}">
     <div class="viewport" :style="{minHeight:0+'px'}">
       <div v-if="!state" class="avatar-loading" role="status">{{ $t(capabilityLoading ? '数字人正在加载中' : message) }}<button v-if="!capabilityLoading" type="button" @click="capabilityRevision++">{{ $t('重试') }}</button></div>
-      <XingyunGuide v-show="state?.preferredMode === 'xingyun' && (!!tourId || !!stationVisit)" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :station-visit="stationVisit" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
+      <div v-if="stationMode && state?.preferredMode === 'xingyun' && !stationVisit" class="avatar-loading" role="status">{{ $t('数字人正在加载中') }}</div>
+      <XingyunGuide v-if="!stationMode || !!stationVisit" v-show="state?.preferredMode === 'xingyun' && (!!tourId || !!stationVisit)" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :station-visit="stationVisit" :station-mode="stationMode" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
       <TourAvatar3D v-show="!xingyunConnected" :natural-standing="true" v-if="mode==='3d'&&state?.threeD?.modelUrl" :model-url="sceneUrl||state.threeD.modelUrl" :audio-element="audioElement" :width="Math.max(200,(width||360)-30)" :height="height||440" @ready="sceneReady" @error="sceneError" />
       <video v-show="!xingyunConnected" v-else-if="videoUrl" :key="'speech-'+videoUrl" :muted="false" :loop="false" playsinline :src="videoUrl" controls autoplay @play="emit('playing',true)" @pause="emit('playing',false)" @ended="emit('playing',false)" @error="message='视频播放失败，请检查网络';emit('playing',false)" />
-      <img v-show="!xingyunConnected" v-else-if="posterUrl && state && (state.preferredMode !== 'xingyun' || stationMode)" :src="posterUrl" :alt='$t("所选数字人全身形象")' style="width:100%;height:100%;min-height:0;object-fit:contain" />
+      <img v-show="!xingyunConnected" v-else-if="!stationMode && posterUrl && state && state.preferredMode !== 'xingyun'" :src="posterUrl" :alt='$t("所选数字人全身形象")' style="width:100%;height:100%;min-height:0;object-fit:contain" />
       <div v-show="!xingyunConnected" v-else-if="state && state.preferredMode !== 'xingyun'" class="placeholder"><strong>{{ $t("待开发：请上传数字人形象素材") }}</strong></div>
     </div>
     <p v-if="state && !xingyunConnected && state.preferredMode !== 'xingyun'" class="playback-message" role="status">{{ $t(message) }}</p>

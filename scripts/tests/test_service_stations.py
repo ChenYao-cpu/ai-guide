@@ -123,7 +123,9 @@ class StationServiceTests(unittest.TestCase):
         response=self.client.post(self.prefix+'/chat',json={'question':'两小时，带着老人，想看湖，最后从东门离园'},headers=self.headers)
         self.assertEqual(response.status_code,200,response.text)
         result=response.json();self.assertEqual(result['actions'],['plan'])
-        self.assertEqual(result['preferences']['budget'],120);self.assertEqual(result['preferences']['pace'],'relaxed');self.assertEqual(result['preferences']['interest'],'nature')
+        self.assertEqual(result['preferences']['budget'],120)
+        self.assertEqual(result['preferences']['pace'],'standard');self.assertEqual(result['preferences']['interest'],'all')
+        self.assertNotIn('节奏',result['answer'])
         self.assertEqual(result['preferences']['end_area'],'east')
         with Session(self.engine) as db:
             self.assertEqual(db.exec(select(TourSessionInfo)).all(),[])
@@ -170,7 +172,8 @@ class StationServiceTests(unittest.TestCase):
 
     def test_english_extraction_and_non_gate_service_station(self):
         parsed=extract_request('2 hours, senior visitors, lake views, north gate')
-        self.assertEqual(parsed['budget'],120);self.assertEqual(parsed['pace'],'relaxed');self.assertEqual(parsed['end_area'],'north')
+        self.assertEqual(parsed['budget'],120);self.assertEqual(parsed['end_area'],'north')
+        self.assertNotIn('pace',parsed);self.assertNotIn('interest',parsed)
         self.assertEqual(extract_request('three hours')['budget'],180)
         self.assertEqual(extract_request('一个半小时')['budget'],90)
         with Session(self.engine) as db:

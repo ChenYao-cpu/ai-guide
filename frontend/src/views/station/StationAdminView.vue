@@ -413,8 +413,8 @@ onMounted(load)
 </template>
 <style scoped>
 .station-admin {
-  font-family: Arial, 'Microsoft YaHei', sans-serif;
-  color: #394a40;
+  font-family: var(--app-font-family);
+  color: #1f2937;
   padding: 25px;
   line-height: 1.7;
 }
@@ -432,7 +432,7 @@ onMounted(load)
 .admin-preview > span {
   font-size: 12px;
   letter-spacing: 0.1em;
-  color: #a098b2;
+  color: #4f46e5;
 }
 .station-admin h1 {
   font-size: 30px;
@@ -440,7 +440,7 @@ onMounted(load)
 }
 .station-admin header p {
   font-size: 16px;
-  color: #899180;
+  color: #64748b;
   margin: 0;
 }
 .station-admin h2 {
@@ -454,11 +454,11 @@ onMounted(load)
   font: inherit;
 }
 .station-admin button {
-  border: 1px solid #e0e3d9;
-  background: #f5f7ef;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
   border-radius: 11px;
   padding: 9px 16px;
-  color: #6e7c60;
+  color: #4b5563;
   cursor: pointer;
   min-height: 43px;
 }
@@ -476,7 +476,7 @@ onMounted(load)
   background: white;
   padding: 22px;
   border-radius: 20px;
-  border: 1px solid #e7eade;
+  border: 1px solid #e2e8f0;
 }
 .station-admin aside > button {
   display: block;
@@ -486,8 +486,8 @@ onMounted(load)
   padding: 14px;
 }
 .station-admin aside > button[aria-pressed='true'] {
-  background: #f0ebf8;
-  border-color: #c9bcdf;
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 .station-admin aside strong,
 .station-admin aside span,
@@ -500,23 +500,23 @@ onMounted(load)
 }
 .station-admin aside span {
   font-size: 13px;
-  color: #919981;
+  color: #64748b;
   margin-top: 4px;
 }
 .station-admin aside small {
   font-size: 11px;
-  color: #abb19e;
+  color: #64748b;
 }
 .station-admin aside i {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #bbbfae;
+  background: #f8fafc;
   margin-right: 5px;
 }
 .station-admin aside i.online {
-  background: #6aab83;
+  background: #f8fafc;
 }
 .station-admin form > section {
   margin-bottom: 20px;
@@ -524,7 +524,7 @@ onMounted(load)
 .station-admin label {
   display: block;
   font-size: 15px;
-  color: #85917a;
+  color: #4b5563;
   margin-bottom: 15px;
 }
 .station-admin label > input:not([type='checkbox']),
@@ -532,12 +532,12 @@ onMounted(load)
 .station-admin textarea {
   display: block;
   width: 100%;
-  border: 1px solid #dfe5d8;
-  background: #fafbf7;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 10px 12px;
   margin-top: 6px;
-  color: #4d5f46;
+  color: #4b5563;
   min-width: 0;
 }
 .station-admin textarea {
@@ -551,7 +551,7 @@ onMounted(load)
 }
 .admin-note {
   font-size: 13px;
-  color: #a0a88e;
+  color: #64748b;
   margin: 12px 0 0;
   line-height: 1.8;
 }
@@ -564,7 +564,7 @@ onMounted(load)
 .station-admin input[type='checkbox'] {
   width: 18px;
   height: 18px;
-  accent-color: #8571b6;
+  accent-color: #4f46e5;
 }
 .admin-section-heading {
   display: flex;
@@ -577,8 +577,8 @@ onMounted(load)
   margin: 0;
 }
 .admin-entry {
-  background: #f9faf5;
-  border: 1px solid #e7ebde;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 13px;
   padding: 18px;
   margin-bottom: 17px;
@@ -591,18 +591,18 @@ onMounted(load)
   position: sticky;
   bottom: 10px;
   padding: 18px;
-  background: #fffffff2;
+  background: #ffffff;
   border-radius: 15px;
-  box-shadow: 0 3px 25px #78846c12;
+  box-shadow: 0 3px 25px #1e293b12;
 }
 .admin-save span {
-  color: #a2aa94;
+  color: #64748b;
   font-size: 14px;
 }
 .admin-save button {
-  background: #7460ad;
+  background: #4f46e5;
   color: white;
-  border-color: #7460ad;
+  border-color: #c7d2fe;
 }
 .admin-preview {
   position: sticky;
@@ -613,24 +613,24 @@ onMounted(load)
 }
 .admin-preview p {
   font-size: 15px;
-  color: #8c9780;
+  color: #64748b;
 }
 .admin-preview dt {
   font-size: 12px;
-  color: #a3ac96;
+  color: #64748b;
   margin-top: 16px;
 }
 .admin-preview dd {
   margin: 3px 0 0;
   font-size: 16px;
-  color: #78886c;
+  color: #4b5563;
 }
 .admin-preview a {
   display: block;
   padding: 13px;
-  background: #f0ebf8;
+  background: #eef2ff;
   border-radius: 10px;
-  color: #8772b1;
+  color: #4f46e5;
   font-size: 14px;
   text-decoration: none;
 }
@@ -638,13 +638,13 @@ onMounted(load)
 .admin-success {
   padding: 14px 22px;
   border-radius: 12px;
-  background: #fcefdf;
+  background: #f8fafc;
   color: #b18b62;
   font-size: 16px;
 }
 .admin-success {
-  background: #ebf3e7;
-  color: #7d9d6b;
+  background: #f8fafc;
+  color: #4b5563;
 }
 @media (max-width: 1450px) {
   .station-admin-grid {

@@ -59,14 +59,17 @@ export interface StationVisit {
   access_token: string
   expires_at: string
 }
-export interface StationPreferences {
+export interface StationPlanningInput {
   budget: number
-  pace: 'standard' | 'relaxed'
-  interest: 'all' | 'history' | 'nature' | 'photo' | 'family'
   end_area: 'east' | 'north' | 'south' | 'return'
   avoid_steps: boolean
   spot_ids: number[]
   language: 'zh' | 'en'
+}
+// Older saved itineraries and mobile handoffs retain these response fields.
+export interface StationPreferences extends StationPlanningInput {
+  pace: 'standard' | 'relaxed'
+  interest: 'all' | 'history' | 'nature' | 'photo' | 'family'
 }
 export interface StationPlan {
   plan_id: string
@@ -90,14 +93,17 @@ export interface StationReply {
   source: string
   destination_key?: string | null
 }
-export const defaultStationPreferences = (): StationPreferences => ({
+export const defaultStationPlanningInput = (): StationPlanningInput => ({
   budget: 120,
-  pace: 'standard',
-  interest: 'all',
   end_area: 'east',
   avoid_steps: false,
   spot_ids: [],
   language: 'zh'
+})
+export const defaultStationPreferences = (): StationPreferences => ({
+  ...defaultStationPlanningInput(),
+  pace: 'standard',
+  interest: 'all'
 })
 
 export function stationError(error: unknown): string {
@@ -146,18 +152,22 @@ export function extendStationVisit(visit: StationVisit) {
 }
 export function planAtStation(
   visit: StationVisit,
-  prefs: StationPreferences,
+  prefs: StationPlanningInput,
   signal?: AbortSignal
 ) {
   return request_handler
     .post<{
       plans: StationPlan[]
-    }>('/service-stations/visits/' + visit.visit_id + '/plans', prefs, { headers: headers(visit), signal, timeout: 20000 })
+    }>('/service-stations/visits/' + visit.visit_id + '/plans', prefs, {
+      headers: headers(visit),
+      signal,
+      timeout: 20000
+    })
     .then((r) => r.data)
 }
 export function consultStation(
   visit: StationVisit,
-  data: { question: string; language: string; preferences: StationPreferences; spot_id?: number },
+  data: { question: string; language: string; preferences: StationPlanningInput; spot_id?: number },
   signal?: AbortSignal
 ) {
   return request_handler
@@ -182,7 +192,11 @@ export function shareStationPlan(visit: StationVisit, plan_id: string, signal?: 
     .post<{
       token: string
       expires_at: string
-    }>('/service-stations/visits/' + visit.visit_id + '/share', { plan_id }, { headers: headers(visit), signal, timeout: 10000 })
+    }>(
+      '/service-stations/visits/' + visit.visit_id + '/share',
+      { plan_id },
+      { headers: headers(visit), signal, timeout: 10000 }
+    )
     .then((r) => r.data)
 }
 export interface StationDirections {

@@ -132,10 +132,7 @@ def extract_request(question, existing=None):
             values['budget']=min(480,count*60+(30 if english[2] else 0))
         elif '半小时' in q or 'half an hour' in q: values['budget'] = 30
         elif '半天' in q: values['budget'] = 240
-    if any(s in q for s in ('老人', '长辈', '轻松', '少走', 'elder', 'senior', 'relaxed', 'less walking')): values['pace'] = 'relaxed'
     if any(s in q for s in ('不要台阶', '少台阶', '轮椅', 'avoid stairs', 'wheelchair')): values['avoid_steps'] = True
-    for words, interest in [(('拍照', '摄影', 'photo'), 'photo'), (('历史', '文化', 'history', 'heritage'), 'history'), (('孩子', '亲子', 'child', 'family'), 'family'), (('看湖', '湖景', '自然', 'lake', 'nature'), 'nature')]:
-        if any(w in q for w in words): values['interest'] = interest; break
     for words, area in [(('东门', '东宫门', 'east gate'), 'east'), (('北门', '北宫门', 'north gate'), 'north'), (('南门', '新建宫门', 'south gate'), 'south'), (('回到这里', '返回本站', 'return here'), 'return')]:
         if any(w in q for w in words): values['end_area'] = area; break
     return values
@@ -160,8 +157,8 @@ def consultation(question, station, spots, language):
         answer = ('I can show the walking path from this station to ' + ENGLISH_SPOT_NAMES.get(spot['spot_name'], 'the attraction') + '. Use the directions button below to see the route and estimated walking time.' if en else
                   '我可以为您查看从本站到' + spot['spot_name'] + '的步行路线。点击下方入口，可在地图上查看路径与预计步行时间。')
     elif route_intent:
-        answer = ('I have filled in the planning form from your request. Check the time, pace and exit, then calculate a walk from this station. Walking, visits and breaks all count toward your budget.' if en else
-                  '我已把您提到的时间、节奏和终点整理到规划表里。确认后即可计算从本站出发的路线，预算会包含步行、景点停留和休息。')
+        answer = ('Check your time and end point in the planning form. You can also select the attractions you want to visit. The route starts at this station and includes walking, visits and breaks in the time estimate.' if en else
+                  '请在规划表里确认游览时间和终点，也可以直接选择想去的景点。路线从本站出发，预计用时包含步行、景点停留和休息。')
     elif facility_intent:
         answer = ('Choose a published facility or exit below to see the walking path from this station. Unverified facilities and live opening conditions cannot be assumed; please ask staff if a service is not listed.' if en else
                   '您可以在设施与出口中查看已发布的位置，并计算从本站出发的步行路线。未核实的卫生间、饮水点不会推测标注；未列出的服务请咨询现场工作人员。')
@@ -171,7 +168,7 @@ def consultation(question, station, spots, language):
         visuals = build_visual_context(spot, turn.intents, answer, language)
         actions = ['explore', 'plan']
     else:
-        answer = ('I am the digital receptionist at this fixed service station. Ask about a Summer Palace attraction, plan a walk, or find a published facility or exit. For example: “Two hours, lakeside views, finish at the east gate.”' if en else
-                  '我是固定在本站的数字接待员，可以介绍颐和园景点、从这里规划游览，也能帮您查找已发布的设施与出口。您可以说：“两小时，想看湖，最后从东门离园。”')
+        answer = ('I am the digital receptionist at this fixed service station. Ask about a Summer Palace attraction, plan a walk, or find a published facility or exit. For example: “I have two hours and will finish at the east gate.”' if en else
+                  '我是固定在本站的数字接待员，可以介绍颐和园景点、从这里规划游览，也能帮您查找已发布的设施与出口。您可以说：“我有两小时，最后从东宫门离园。”')
     return dict(answer=answer, actions=actions, visuals=visuals, spot=spot, route_intent=route_intent,
                 destination_key='spot:'+spot['spot_name'] if wayfinding else None)

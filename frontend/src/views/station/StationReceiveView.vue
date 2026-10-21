@@ -139,10 +139,10 @@ async function receive() {
 <style scoped>
 .station-receive {
   min-height: 100dvh;
-  background: #eef3ee;
-  color: #314638;
+  background: #f8fafc;
+  color: #1f2937;
   padding: 22px;
-  font-family: Arial, 'Microsoft YaHei', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 17px;
   line-height: 1.8;
 }
@@ -154,12 +154,12 @@ async function receive() {
   justify-content: space-between;
   gap: 20px;
   font-size: 15px;
-  color: #85917a;
+  color: #4b5563;
 }
 .station-receive section {
   max-width: 850px;
   margin: 24px auto;
-  background: #fffefa;
+  background: #ffffff;
   padding: 30px;
   border-radius: 24px;
 }
@@ -169,11 +169,11 @@ async function receive() {
   margin: 10px 0 15px;
 }
 .station-receive p {
-  color: #83917a;
+  color: #4b5563;
 }
 .receive-eyebrow {
   font-size: 12px;
-  color: #9b8bb4;
+  color: #4f46e5;
   letter-spacing: 0.1em;
 }
 .receive-stats {
@@ -181,13 +181,13 @@ async function receive() {
   flex-wrap: wrap;
   gap: 25px;
   padding: 18px 0;
-  color: #8270ac;
+  color: #4f46e5;
   font-size: 20px;
 }
 .station-receive button {
   width: 100%;
   border: 0;
-  background: #6553ae;
+  background: #4f46e5;
   color: white;
   border-radius: 13px;
   padding: 15px;
@@ -202,7 +202,7 @@ async function receive() {
   font-size: 14px;
 }
 .station-receive a {
-  color: #6e5ca9;
+  color: #4f46e5;
 }
 .station-receive [role='alert'] {
   color: #bd866b;

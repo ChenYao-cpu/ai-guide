@@ -33,14 +33,11 @@ const url = computed(() => '/station/' + encodeURIComponent(String(route.params.
 <style scoped>
 .station-screen-preview {
   padding: 18px;
-  background: #dfe5de;
+  background: #f8fafc;
   min-height: 100dvh;
   width: max-content;
-  font:
-    16px Arial,
-    'Microsoft YaHei',
-    sans-serif;
-  color: #53614f;
+  font: 16px var(--app-font-family);
+  color: #4b5563;
 }
 .station-screen-preview header {
   display: flex;
@@ -52,21 +49,21 @@ const url = computed(() => '/station/' + encodeURIComponent(String(route.params.
 .station-screen-preview select {
   font: inherit;
   padding: 8px;
-  border: 1px solid #bfcbbb;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: white;
 }
 .station-screen-preview a {
-  color: #7a67aa;
+  color: #4f46e5;
 }
 .station-screen-preview header span {
-  color: #89967f;
+  color: #64748b;
   font-size: 14px;
 }
 .station-screen-preview iframe {
-  border: 1px solid #cbd6c7;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   display: block;
-  background: #f2f5ef;
+  background: #f8fafc;
 }
 </style>
