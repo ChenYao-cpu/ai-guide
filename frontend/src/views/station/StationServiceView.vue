@@ -38,6 +38,7 @@ import {
   consultStation,
   speakAtStation,
   shareStationPlan,
+  stationShareStatus,
   stationDirections,
   stationError,
   defaultStationPlanningInput,
@@ -93,6 +94,12 @@ const showShare = ref(false),
   shareBusy = ref(false),
   shareError = ref(''),
   endConfirm = ref(false)
+const shareToken = ref(''),
+  shareReceived = ref(false),
+  routeUpdate = ref('')
+let checkingShare = false,
+  shareGeneration = 0
+const visitorVolume = ref(0.7)
 const avatar = ref<InstanceType<typeof DigitalAvatarPlayer> | null>(null),
   audio = ref<HTMLAudioElement | null>(null),
   textOnly = ref(false),
@@ -155,6 +162,9 @@ const vDialogFocus = {
     focusCleanup.delete(el)
   }
 }
+const sharePreviewUrl = computed(() =>
+  shareUrl.value ? location.origin + '/m/receive' + new URL(shareUrl.value).hash : ''
+)
 const remainingSeconds = computed(() =>
   Math.max(0, Math.ceil((shareExpiry.value - clock.value) / 1000))
 )
@@ -265,10 +275,16 @@ const idle = useStationIdle({
 const idleRemaining = idle.remaining
 const moneyFreeNote = computed(() =>
   S(
-    '预计用时包含步行、停留和休息；开放、票务与排队以现场为准。',
-    'Estimates include walking, visits and breaks. Check access, tickets and queues on site.'
+    '预计用时包含步行、停留和休息；开放与排队以现场为准。',
+    'Estimates include walking, visits and breaks. Check access and queues on site.'
   )
 )
+const exits = [
+  { area: 'east', zh: '东宫门', en: 'east gate' },
+  { area: 'north', zh: '北宫门', en: 'north gate' },
+  { area: 'south', zh: '新建宫门', en: 'south gate' },
+  { area: 'return', zh: '返回本站', en: 'return here' }
+]
 const distance = (m: number | null | undefined) =>
   m == null ? '—' : m >= 1000 ? (m / 1000).toFixed(2) + ' km' : m + ' m'
 function metricTime(minutes: number | null | undefined) {
@@ -286,6 +302,7 @@ async function load() {
     const data = await getStation(id, configurationController.signal)
     if (disposed || own !== configurationVersion) return
     catalog.value = data
+    if (!engaged.value) visitorVolume.value = data.station.volume
     offline.value = false
     stale.value = false
     if (!visit.value) setLocale(data.station.default_language)
@@ -357,6 +374,7 @@ async function go(next: Task) {
   error.value = ''
   task.value = next
   if (next === 'home') return
+  if (next !== 'explore' && next !== 'chat') selectedSpot.value = null
   engaged.value = true
   idle.touch()
   if (next === 'info') return
@@ -386,9 +404,10 @@ function stopSpeech() {
 function stopListening() {
   if (recordingTimer) clearTimeout(recordingTimer)
   recordingTimer = undefined
-  recognition.value?.abort()
+  const previous = recognition.value
   recognition.value = null
   recording.value = false
+  previous?.abort()
 }
 function cancel() {
   version++
@@ -421,6 +440,11 @@ function reset(reconnect = true) {
   shareUrl.value = ''
   shareExpiry.value = 0
   shareError.value = ''
+  shareToken.value = ''
+  shareReceived.value = false
+  shareGeneration++
+  routeUpdate.value = ''
+  visitorVolume.value = station.value?.volume ?? 0.7
   endConfirm.value = false
   error.value = ''
   voiceError.value = ''
@@ -465,6 +489,8 @@ async function calculate() {
     plans.value = data.plans
     planIndex.value = 0
     planStale.value = false
+    routeUpdate.value = ''
+    selectedSpot.value = null
     task.value = 'result'
     showShare.value = false
   } catch (e: any) {
@@ -491,6 +517,7 @@ async function ask(value = question.value) {
   error.value = ''
   stopSpeech()
   stopListening()
+  const previousTask = task.value
   task.value = 'chat'
   lastQuestion.value = value
   question.value = ''
@@ -503,7 +530,8 @@ async function ask(value = question.value) {
         question: value,
         language: locale.value,
         preferences: { ...prefs, language: locale.value },
-        spot_id: selectedSpot.value?.spot_id
+        spot_id: selectedSpot.value?.spot_id,
+        plan_id: plan.value && !planStale.value ? plan.value.plan_id : undefined
       },
       controller.signal
     )
@@ -524,10 +552,21 @@ async function ask(value = question.value) {
     ].slice(-12)
     if (data.spot_id)
       selectedSpot.value = catalog.value?.spots.find((s) => s.spot_id === data.spot_id) || null
+    if (data.plans?.length) {
+      await nextTick()
+      plans.value = data.plans
+      planIndex.value = 0
+      planStale.value = false
+      routeUpdate.value = data.answer
+      showShare.value = false
+      selectedSpot.value = null
+      task.value = 'result'
+    }
     if (!textOnly.value) void playAnswer()
   } catch (e: any) {
     if (own === version && e.code !== 'ERR_CANCELED') {
       question.value = value
+      task.value = previousTask
       handleError(e)
     }
   } finally {
@@ -544,6 +583,7 @@ async function playAnswer() {
   speechController = new AbortController()
   try {
     if (avatar.value?.speak(reply.value.answer)) {
+      speaking.value = true
       speechBusy.value = false
       return
     }
@@ -552,7 +592,7 @@ async function playAnswer() {
     blobUrl = URL.createObjectURL(blob)
     if (audio.value) {
       audio.value.src = blobUrl
-      audio.value.volume = station.value?.volume ?? 0.7
+      audio.value.volume = visitorVolume.value
       await audio.value.play()
     }
   } catch (e: any) {
@@ -586,10 +626,12 @@ function listen() {
   rec.interimResults = false
   rec.continuous = false
   rec.onresult = (event: any) => {
+    if (recognition.value !== rec) return
     question.value = event.results[0][0].transcript
     stopListening()
   }
   rec.onerror = () => {
+    if (recognition.value !== rec) return
     listenError.value = S(
       '没有听清或麦克风不可用，请重试或输入文字。',
       'Microphone unavailable or speech not understood. Retry or type your question.'
@@ -597,6 +639,8 @@ function listen() {
     stopListening()
   }
   rec.onend = () => {
+    if (recognition.value !== rec) return
+    recognition.value = null
     recording.value = false
     if (recordingTimer) clearTimeout(recordingTimer)
     recordingTimer = undefined
@@ -647,14 +691,24 @@ async function openReplyDirections() {
 async function share() {
   if (!plan.value || !visit.value || shareBusy.value || planStale.value) return
   const own = version,
+    generation = ++shareGeneration,
     planId = plan.value.plan_id
   shareBusy.value = true
   shareError.value = ''
   showShare.value = true
   shareQr.value = ''
+  shareToken.value = ''
+  shareReceived.value = false
   try {
     const data = await shareStationPlan(visit.value, planId)
-    if (disposed || own !== version || plan.value?.plan_id !== planId) return
+    if (
+      disposed ||
+      own !== version ||
+      generation !== shareGeneration ||
+      !showShare.value ||
+      plan.value?.plan_id !== planId
+    )
+      return
     const origin = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
       ? `http://${serverIP}:${serverPort}`
       : location.origin
@@ -664,7 +718,8 @@ async function share() {
       margin: 2,
       color: { dark: '#252243', light: '#ffffff' }
     })
-    if (disposed || own !== version) return
+    if (disposed || own !== version || generation !== shareGeneration || !showShare.value) return
+    shareToken.value = data.token
     shareQr.value = qr
     shareUrl.value = url
     shareExpiry.value = Date.parse(data.expires_at)
@@ -672,7 +727,7 @@ async function share() {
   } catch (e) {
     if (own === version) shareError.value = stationError(e)
   } finally {
-    if (own === version) shareBusy.value = false
+    if (own === version && generation === shareGeneration) shareBusy.value = false
   }
 }
 async function poll() {
@@ -695,8 +750,18 @@ async function poll() {
       }
     }
     if (visit.value && Date.now() - lastExtend > 60000) {
-      await extendStationVisit(visit.value)
-      lastExtend = Date.now()
+      try {
+        await extendStationVisit(visit.value)
+        lastExtend = Date.now()
+      } catch (e: any) {
+        if ([403, 410].includes(e.response?.status)) {
+          if (engaged.value) handleError(e)
+          else {
+            visit.value = null
+            void prepareReception()
+          }
+        } else receptionError.value = stationError(e)
+      }
     }
     if (catalog.value?.guide && !visit.value && !receptionError.value) void prepareReception()
   } catch (e: any) {
@@ -750,6 +815,61 @@ watch(
     void load()
   }
 )
+async function checkShare() {
+  if (
+    !showShare.value ||
+    !shareToken.value ||
+    shareReceived.value ||
+    !visit.value ||
+    !remainingSeconds.value ||
+    checkingShare ||
+    document.hidden
+  )
+    return
+  const token = shareToken.value,
+    generation = shareGeneration
+  checkingShare = true
+  try {
+    const data = await stationShareStatus(visit.value, token)
+    if (
+      disposed ||
+      generation !== shareGeneration ||
+      token !== shareToken.value ||
+      !showShare.value
+    )
+      return
+    shareError.value = ''
+    if (data.status === 'received') {
+      shareReceived.value = true
+      shareQr.value = ''
+      shareUrl.value = ''
+      idle.touch()
+    }
+    if (data.status === 'expired') shareExpiry.value = 0
+  } catch {
+    if (!disposed && generation === shareGeneration && showShare.value)
+      shareError.value = S(
+        '暂时无法确认领取状态，请以手机上的结果为准，正在重试。',
+        'Unable to confirm pickup yet. Check your phone; retrying automatically.'
+      )
+  } finally {
+    checkingShare = false
+  }
+}
+watch(showShare, (value) => {
+  if (!value) {
+    shareGeneration++
+    shareToken.value = ''
+    shareQr.value = ''
+    shareUrl.value = ''
+    shareExpiry.value = 0
+    shareReceived.value = false
+    shareBusy.value = false
+  }
+})
+watch(visitorVolume, (value) => {
+  if (audio.value) audio.value.volume = value
+})
 watch(textOnly, (value) => {
   if (value) stopSpeech()
 })
@@ -764,6 +884,7 @@ onMounted(() => {
   void poll()
   interval = setInterval(() => {
     clock.value = Date.now()
+    if (Math.floor(Date.now() / 1000) % 3 === 0) void checkShare()
     if (task.value === 'home' && !document.hidden && Date.now() % 12000 < 1100) heroIndex.value++
   }, 1000)
   heartbeat = setInterval(poll, 30000)
@@ -784,6 +905,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('offline', onOffline)
 })
 
+function showTaskStart(element: Element) {
+  if (task.value === 'home') window.scrollTo?.({ top: 0, behavior: 'instant' })
+  else
+    element.closest('.station-task-area')?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+}
 function discoverHero() {
   selectedSpot.value = hero.value || null
   void go('explore')
@@ -848,8 +974,8 @@ function backToAttractions() {
         <span>{{
           offline
             ? S(
-                '网络暂不可用，仍可浏览已缓存的景点资料；咨询、路线计算与领取需恢复连接。',
-                'Offline. Cached attraction information is available; consultation, routing and pickup require a connection.'
+                '服务站连接暂不可用，仍可浏览已缓存的景点资料和游园须知。请重试连接。',
+                'Station connection unavailable. Cached attractions and visitor information remain available. Please reconnect.'
               )
             : S(
                 '资料有更新，请重新规划后领取；当前展示保留供参考。',
@@ -864,6 +990,7 @@ function backToAttractions() {
             <DigitalAvatarPlayer
               v-if="catalog.guide"
               :key="catalog.guide.guide_id"
+              :volume="visitorVolume"
               ref="avatar"
               station-mode
               :guide-id="catalog.guide.guide_id"
@@ -884,6 +1011,9 @@ function backToAttractions() {
                 {{ S('重新连接数字人', 'Reconnect guide') }}
               </button>
             </div>
+            <button v-if="speaking || speechBusy" class="station-interrupt" @click="stopSpeech">
+              {{ S('停止讲解', 'Stop audio') }}
+            </button>
           </div>
           <button class="station-ask-button" :aria-pressed="task === 'chat'" @click="go('chat')">
             <ChatDotRound aria-hidden="true" />{{ S('和数字人聊一聊', 'Talk to the guide')
@@ -913,7 +1043,7 @@ function backToAttractions() {
             <span>{{ t(error) }}</span
             ><button @click="error = ''">{{ S('关闭', 'Dismiss') }}</button>
           </div>
-          <Transition name="station-page" mode="out-in">
+          <Transition name="station-page" mode="out-in" @after-enter="showTaskStart">
             <div v-if="task === 'home'" key="home" class="station-home-content">
               <div class="station-home-heading">
                 <h1>{{ S('今天，想怎样游览？', 'How would you like to explore?') }}</h1>
@@ -1108,34 +1238,87 @@ function backToAttractions() {
                   <strong>{{ metricTime(plan.route.total_minutes) }}</strong
                   ><span>{{ S('预计总用时', 'estimated total time') }}</span>
                 </div>
+                <div>
+                  <strong>{{ plan.route.stops.length }} {{ S('站', 'stops') }}</strong
+                  ><span
+                    >{{ S('终点', 'Finish') }} ·
+                    {{
+                      plan.preferences.end_area === 'return'
+                        ? stationName
+                        : t(plan.route.exit_leg?.to_name)
+                    }}</span
+                  >
+                </div>
+              </div>
+              <p v-if="routeUpdate" class="station-route-update" role="status">{{ routeUpdate }}</p>
+              <div class="station-route-tools">
+                <button
+                  class="station-secondary"
+                  :disabled="busy || offline || planStale"
+                  @click="ask(S('这条路线时间再短一点', 'Make this route shorter'))"
+                >
+                  {{ S('时间再短一点', 'Make it shorter') }}
+                </button>
+                <button class="station-secondary" @click="go('chat')">
+                  {{ S('让数字人帮我调整', 'Adjust with the guide') }}
+                </button>
+                <details>
+                  <summary>{{ S('换个出口', 'Change exit') }}</summary>
+                  <div class="station-choice-row">
+                    <button
+                      v-for="exit in exits"
+                      :key="exit.area"
+                      :disabled="busy || offline || planStale"
+                      :aria-pressed="plan.preferences.end_area === exit.area"
+                      @click="ask(S('改为' + exit.zh, 'Finish at ' + exit.en))"
+                    >
+                      {{ S(exit.zh, exit.en) }}
+                    </button>
+                  </div>
+                </details>
+              </div>
+              <div class="station-result-layout">
+                <RouteOverview :overview="plan.route" :compact="true" :map-only="true" />
+                <ol class="station-plan-stops">
+                  <li class="station-stop-origin">
+                    <b>⌖</b><span>{{ S('本站出发', 'Start here') }} · {{ stationName }}</span
+                    ><small>{{ metricTime(plan.route.entry_leg?.minutes) }} →</small>
+                  </li>
+                  <li v-for="stop in plan.route.stops" :key="stop.spot_id">
+                    <b>{{ stop.order }}</b
+                    ><span>{{ t(stop.spot_name) }}</span
+                    ><small>{{ S('停留', 'Visit') }} {{ metricTime(stop.visit_minutes) }}</small>
+                    <button
+                      class="station-remove-stop"
+                      :aria-label="S('移除' + stop.spot_name, 'Remove ' + t(stop.spot_name))"
+                      :disabled="busy || offline || planStale || plan.route.stops.length < 2"
+                      @click="ask(S('去掉' + stop.spot_name, 'Remove ' + t(stop.spot_name)))"
+                    >
+                      ×
+                    </button>
+                  </li>
+                  <li class="station-stop-origin">
+                    <b>↗</b
+                    ><span>{{
+                      plan.preferences.end_area === 'return'
+                        ? stationName
+                        : t(plan.route.exit_leg?.to_name)
+                    }}</span
+                    ><small>{{ metricTime(plan.route.exit_leg?.minutes) }}</small>
+                  </li>
+                </ol>
+              </div>
+              <details class="station-time-details">
+                <summary>{{ S('查看用时明细', 'Time breakdown') }}</summary>
                 <p>
                   {{ S('步行', 'Walking') }}
-                  {{ metricTime((plan.route.walking_minutes || 0) + (plan.route.exit_minutes || 0))
-                  }}<br />{{ S('停留', 'Visits') }} {{ metricTime(plan.route.visit_minutes) }} ·
+                  {{
+                    metricTime((plan.route.walking_minutes || 0) + (plan.route.exit_minutes || 0))
+                  }}
+                  · {{ S('停留', 'Visits') }} {{ metricTime(plan.route.visit_minutes) }} ·
                   {{ S('休息', 'Breaks') }} {{ metricTime(plan.route.rest_minutes) }}
                 </p>
-              </div>
-              <RouteOverview :overview="plan.route" :compact="true" :map-only="true" />
-              <ol class="station-plan-stops">
-                <li class="station-stop-origin">
-                  <b>⌖</b><span>{{ S('本站出发', 'Start here') }} · {{ stationName }}</span
-                  ><small>{{ metricTime(plan.route.entry_leg?.minutes) }} →</small>
-                </li>
-                <li v-for="stop in plan.route.stops" :key="stop.spot_id">
-                  <b>{{ stop.order }}</b
-                  ><span>{{ t(stop.spot_name) }}</span
-                  ><small>{{ S('停留', 'Visit') }} {{ metricTime(stop.visit_minutes) }}</small>
-                </li>
-                <li class="station-stop-origin">
-                  <b>↗</b
-                  ><span>{{
-                    plan.preferences.end_area === 'return'
-                      ? stationName
-                      : t(plan.route.exit_leg?.to_name)
-                  }}</span
-                  ><small>{{ metricTime(plan.route.exit_leg?.minutes) }}</small>
-                </li>
-              </ol>
+              </details>
               <p v-if="planStale" class="station-audio-note">
                 {{
                   S(
@@ -1165,10 +1348,23 @@ function backToAttractions() {
               key="info"
               :now="clock"
               :announcements="activeNotices"
+              @facilities="go('facilities')"
             />
             <div v-else-if="task === 'chat'" key="chat" class="station-chat">
               <div class="station-section-title">
                 <h1>{{ S('数字人咨询', 'Ask the digital guide') }}</h1>
+              </div>
+              <div v-if="plan && !planStale" class="station-chat-context">
+                <span
+                  >{{ S('正在讨论当前路线', 'Discussing your current route') }} ·
+                  {{ plan.route.stops.map((s) => t(s.spot_name)).join(' → ') }}</span
+                >
+                <button class="station-secondary" @click="go('result')">
+                  {{ S('查看路线', 'View route') }}
+                </button>
+              </div>
+              <div v-else-if="selectedSpot" class="station-chat-context">
+                {{ S('正在了解', 'Discussing') }} · {{ t(selectedSpot.spot_name) }}
               </div>
               <div class="station-quick-questions">
                 <button @click="suggestPlan">
@@ -1231,6 +1427,16 @@ function backToAttractions() {
               <p v-if="voiceError" class="station-audio-note" role="status">{{ voiceError }}</p>
               <p v-if="listenError" class="station-audio-note" role="status">{{ listenError }}</p>
               <div class="station-audio-controls">
+                <label class="station-volume"
+                  >{{ S('音量', 'Volume')
+                  }}<input
+                    v-model.number="visitorVolume"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    :aria-label="S('讲解音量', 'Guide volume')"
+                /></label>
                 <label
                   ><input type="checkbox" v-model="textOnly" />{{ S('仅文字', 'Text only') }}</label
                 ><button
@@ -1454,7 +1660,11 @@ function backToAttractions() {
           ×
         </button>
         <h2 id="station-share-title">
-          {{ S('手机扫码，继续这段旅程', 'Scan and continue on your phone') }}
+          {{
+            shareReceived
+              ? S('路线已成功带到手机', 'Your phone has received the route')
+              : S('手机扫码，带走这条路线', 'Scan to take this route')
+          }}
         </h2>
         <p>
           {{
@@ -1464,8 +1674,19 @@ function backToAttractions() {
             )
           }}
         </p>
+        <div v-if="plan" class="station-pickup-summary">
+          {{ plan.route.stops.map((s) => t(s.spot_name)).join(' → ') }}<br />{{
+            metricTime(plan.route.total_minutes)
+          }}
+          · {{ distance(plan.route.walking_meters) }}
+        </div>
+        <div v-if="shareReceived" class="station-pickup-success" role="status">
+          <Check aria-hidden="true" />{{
+            S('可结束本次使用，手机路线会保留', 'You can finish here. Your phone route is saved.')
+          }}
+        </div>
         <img
-          v-if="shareQr && remainingSeconds > 0"
+          v-else-if="shareQr && remainingSeconds > 0"
           :src="shareQr"
           :alt="S('扫码领取当前游览方案', 'Scan to receive this itinerary')"
         />
@@ -1476,7 +1697,7 @@ function backToAttractions() {
               : S('领取码已失效', 'This code has expired')
           }}
         </div>
-        <p class="station-share-clock" v-if="remainingSeconds > 0">
+        <p class="station-share-clock" v-if="remainingSeconds > 0 && !shareReceived">
           {{ Math.floor(remainingSeconds / 60) }}:{{
             String(remainingSeconds % 60).padStart(2, '0')
           }}
@@ -1484,7 +1705,7 @@ function backToAttractions() {
         </p>
         <p v-if="shareError" role="alert">{{ t(shareError) }}</p>
         <button
-          v-if="!shareQr || !remainingSeconds"
+          v-if="!shareReceived && (!shareQr || !remainingSeconds)"
           class="station-primary"
           :disabled="shareBusy"
           @click="share"
@@ -1492,7 +1713,7 @@ function backToAttractions() {
           {{ S('重新生成领取码', 'Generate a new code') }}</button
         ><a
           v-if="shareUrl && remainingSeconds > 0"
-          :href="shareUrl"
+          :href="sharePreviewUrl"
           target="_blank"
           rel="noopener noreferrer"
           >{{ S('在本机预览领取页', 'Preview pickup on this device') }} ↗</a

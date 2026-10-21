@@ -75,6 +75,9 @@ async function draw(){
 watch(()=>[props.spotIds,props.overview,props.pace],refresh,{immediate:true,deep:true})
 watch(()=>[displayed.value,props.currentId],()=>{activeLeg.value=Math.max(0,displayed.value?.stops.findIndex(s=>s.spot_id===props.currentId)??0);void draw()},{deep:true,immediate:true})
 watch(()=>[activeLeg.value,locale.value],draw)
+// The map container may mount after a page transition or a delayed overview.
+watch(mapEl, element => { if(element) void draw() }, {flush:'post'})
+watch(()=>props.showMap, () => { void draw() })
 onBeforeUnmount(()=>{disposed=true;version++;drawVersion++;controller?.abort();resize?.disconnect();map?.remove()})
 </script>
 <template>

@@ -172,3 +172,39 @@ def consultation(question, station, spots, language):
                   '我是固定在本站的数字接待员，可以介绍颐和园景点、从这里规划游览，也能帮您查找已发布的设施与出口。您可以说：“我有两小时，最后从东宫门离园。”')
     return dict(answer=answer, actions=actions, visuals=visuals, spot=spot, route_intent=route_intent,
                 destination_key='spot:'+spot['spot_name'] if wayfinding else None)
+
+
+def revise_plan_request(question, snapshot, spots):
+    """Only explicit route edits change the saved route; ordinary questions stay read-only."""
+    from .tour_language import query_aliases
+    q = query_aliases(question).lower()
+    original = snapshot['preferences']
+    values = extract_request(q, original)
+    if not re.search(r'最后|离园|改为|换.*出口|返回本站|回到这里|finish|end at|return here', q):
+        values['end_area'] = original['end_area']
+    if not re.search(r'我有|只有|安排|改为|控制在|预算|within|have|budget|make|set|change', q):
+        values['budget'] = original['budget']
+    ids = [s['spot_id'] for s in snapshot['route']['stops']]
+    changed = any(values.get(k) != original.get(k) for k in ('budget', 'end_area', 'avoid_steps'))
+    shorter = bool(re.search(r'太远|太长|短一点|少走|shorter|too (?:long|far)', q))
+    if shorter:
+        values['budget'] = max(20, min(original['budget'] - 15, snapshot['route']['total_minutes'] - 10))
+        if values['budget'] >= snapshot['route']['total_minutes']:
+            raise ValueError('这条路线已很短，可以直接移除不想去的景点')
+        changed = True
+    edited_stops = False
+    # Each clause is handled independently so “remove A, add B” stays unambiguous.
+    for clause in re.split(r'[，,。;；]|然后|再去|\band\b', q):
+        matched = [s['spot_id'] for s in spots if s['spot_name'].lower() in clause]
+        remove = bool(re.search(r"去掉|删掉|移除|不去|不要去|不想去|不想看|不看|remove|skip|drop|don't want to visit|do not want to visit", clause))
+        add = bool(re.search(r'加上|加入|增加|还想去|也想去|想去|add|include|want to visit', clause))
+        if matched and (remove or add):
+            edited_stops = changed = True
+            ids = [i for i in ids if i not in matched] if remove else list(dict.fromkeys(ids + matched))
+    if not changed:
+        return None
+    if edited_stops and not ids:
+        raise ValueError('路线至少保留一个景点，请先加入其他景点')
+    # A shorter automatic itinerary may choose fewer stops. Explicit selections stay pinned.
+    values['spot_ids'] = ids if edited_stops or not shorter else list(original.get('spot_ids', []))
+    return values
