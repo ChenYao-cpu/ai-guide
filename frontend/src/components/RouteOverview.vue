@@ -57,6 +57,10 @@ async function draw(){
       const label=document.createElement('span');label.textContent=t(stop.spot_name)+' · '+t('步行接入点')
       L.marker(point,{icon,title:t(stop.spot_name)}).bindPopup(label).addTo(group)
     })
+    if(route.entry_anchor){const entry=route.entry_anchor,point=wgs84ToGcj02(entry.latitude,entry.longitude);bounds.push(point)
+      const icon=L.divIcon({className:'route-entry-marker',html:'<span style="display:grid;place-items:center;width:32px;height:32px;border:3px solid white;border-radius:10px;background:#315c65;color:white;font:700 17px Arial">⌖</span>',iconSize:[38,38],iconAnchor:[19,19]})
+      const label=document.createElement('span');label.textContent=locale.value==='en'&&entry.label_en?entry.label_en:t(entry.label)
+      L.marker(point,{icon,title:label.textContent}).bindPopup(label).addTo(group)}
     if(route.exit_anchor){const gate=route.exit_anchor,point=wgs84ToGcj02(gate.latitude,gate.longitude);bounds.push(point)
       const icon=L.divIcon({className:'route-exit-marker',html:'<span style="display:grid;place-items:center;width:32px;height:32px;border:3px solid white;border-radius:10px;background:#23816b;color:white;font:700 17px Arial">↗</span>',iconSize:[38,38],iconAnchor:[19,19]})
       const label=document.createElement('span');label.textContent=t(gate.label)
@@ -84,7 +88,7 @@ onBeforeUnmount(()=>{disposed=true;version++;drawVersion++;controller?.abort();r
       <p v-if="!displayed.complete" class="route-error" role="alert">{{ $t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</p>
       <p v-if="showMap" class="route-map-note">{{ $t('路线沿园内步道绘制；数字标记为步行接入点。') }} <button v-if="mapError" type="button" @click="draw">{{ $t('重新加载地图') }}</button></p>
       <div v-if="showMap && selectedLeg" class="selected-road-leg">
-        <strong>{{ $t(selectedLeg.from_name) }} → {{ $t(selectedLeg.to_name) }}</strong>
+        <strong>{{ locale==='en'&&selectedLeg.from_name_en?selectedLeg.from_name_en:$t(selectedLeg.from_name) }} → {{ locale==='en'&&selectedLeg.to_name_en?selectedLeg.to_name_en:$t(selectedLeg.to_name) }}</strong>
         <span>{{ meters(selectedLeg.meters) }} · {{ selectedLeg.minutes ?? '—' }} {{ $t('分钟') }}<em v-if="selectedLeg.has_steps"> · {{ $t('含已标注台阶') }}</em></span>
         <details v-if="selectedLeg.sections?.length"><summary>{{ $t('查看途经路段') }}</summary><ol><li v-for="(section,index) in selectedLeg.sections" :key="index"><span>{{ roadName(section.road_name) }}<em v-if="section.steps"> · {{ $t('台阶') }}</em><em v-else-if="section.bridge"> · {{ $t('桥梁') }}</em></span><span>{{ meters(section.meters) }}</span></li></ol></details>
       </div>

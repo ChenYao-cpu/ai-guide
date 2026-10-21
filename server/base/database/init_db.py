@@ -63,7 +63,43 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(DB_ENGINE)
     logger.info("  → 检查字段迁移...")
     _migrate_add_missing_columns()
+    _migrate_user_numbers()
+    _shorten_legacy_visit_durations()
     logger.info("  → 数据库初始化完成")
+
+
+def _migrate_user_numbers():
+    """为历史账号补发展示编号；已有编号的账号保持不变。"""
+    from ..modules.user_number import backfill_user_numbers
+
+    try:
+        count = backfill_user_numbers(DB_ENGINE)
+    except Exception as exc:
+        logger.warning("用户编号补发失败，注册时会继续尝试自动取号: {}", exc)
+        return
+    if count:
+        logger.info("Assigned display user numbers to {} legacy accounts", count)
+
+
+def _shorten_legacy_visit_durations():
+    """一次性缩短旧停留估算；保留原值，重启不重复缩短。"""
+    from sqlalchemy import text
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(20261021, 10)"))
+        conn.execute(text("""CREATE TABLE IF NOT EXISTS tour_duration_migration (
+            migration_key TEXT PRIMARY KEY, original_values JSONB NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""))
+        applied = conn.execute(text("SELECT 1 FROM tour_duration_migration WHERE migration_key='shorter_visits_v1'")).first()
+        if applied:
+            return
+        conn.execute(text("""INSERT INTO tour_duration_migration (migration_key, original_values)
+            SELECT 'shorter_visits_v1', COALESCE(jsonb_object_agg(spot_id::text, visit_duration), '{}'::jsonb)
+            FROM scenic_spot_info WHERE delete=FALSE AND visit_duration>10"""))
+        result = conn.execute(text("""UPDATE scenic_spot_info
+            SET visit_duration=LEAST(15, GREATEST(5, CEIL(visit_duration / 2.0)::integer))
+            WHERE delete=FALSE AND visit_duration>10"""))
+        conn.execute(text("ALTER TABLE scenic_spot_info ALTER COLUMN visit_duration SET DEFAULT 10"))
+        logger.info("Shortened legacy visit estimates for {} spots", result.rowcount)
 
 
 def _migrate_add_missing_columns():
@@ -94,7 +130,7 @@ def _migrate_add_missing_columns():
         {
             "table": "scenic_spot_info",
             "columns": [
-                ("visit_duration", "INTEGER DEFAULT 20"),
+                ("visit_duration", "INTEGER DEFAULT 10"),
             ],
         },
         # ScenicSpotInfo: 面向推荐问题的结构化知识字段
@@ -113,6 +149,13 @@ def _migrate_add_missing_columns():
                 ("openid", "VARCHAR(255) DEFAULT NULL"),
             ],
         },
+        # UserInfo: 对外展示的用户编号（年月 + 4 位注册顺序，如 2026100001）
+        {
+            "table": "user_info",
+            "columns": [
+                ("user_no", "VARCHAR(10)"),
+            ],
+        },
     ]
     with DB_ENGINE.connect() as conn:
         for m in migrations:
@@ -129,3 +172,10 @@ def _migrate_add_missing_columns():
                         conn.commit()
                     except Exception:
                         conn.rollback()  # 列已存在则跳过
+        # 展示编号必须唯一；历史库刚补列，统一在补号前建唯一索引。
+        try:
+            conn.execute(sa_text("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_info_user_no ON user_info(user_no)"))
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            logger.warning("创建用户编号唯一索引失败: {}", exc)

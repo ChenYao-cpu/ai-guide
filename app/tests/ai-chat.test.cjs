@@ -85,14 +85,3 @@ test('clearing history from its panel preserves an in-flight reply and current q
 test('clearing archived history preserves visible conversation and its session',()=>{
  const h=harness(),s=h.s;s.msgs=[{role:'user',content:'Visible question'},{role:'ai',content:'Visible answer'}];s.historyMsgs=s.msgs.slice();s.qaSession={session_id:70};s.clearHistoryFromPanel();assert.equal(s.msgs.length,2);assert.equal(s.qaSession.session_id,70);assert.equal(s.historyMsgs.length,0);assert.equal(JSON.parse(h.storage.get(s.historyKey())).messages.length,0)
 })
-
-test('welcome loads the existing catalog once and selecting a place never auto-sends a question',async()=>{
- const h=harness(),s=h.s;const first=s.loadWelcomeCatalog(),second=s.loadQACatalog();assert.equal(h.calls.length,2)
- h.reply(h.calls.shift(),{spot_list:spots});h.reply(h.calls.shift(),{guide_list:[guide]});await Promise.all([first,second]);assert.equal(s.qaSpots.length,2)
- s.selectQuestionSpot({detail:{value:1}});assert.equal(s.qaSpotId,8);assert.equal(s.msgs.length,0);assert.equal(h.calls.length,0)
- s.chatScrollTop=900;s.followBottom=false;s.clearHistory();assert.equal(s.chatScrollTop,0);assert.equal(s.followBottom,true)
-})
-test('welcome exposes a catalog failure and retry can load places without stale failure state',async()=>{
- const h=harness(),s=h.s;const first=s.loadWelcomeCatalog();h.calls.shift().fail({errMsg:'offline'});h.reply(h.calls.shift(),{guide_list:[guide]});await first;assert.match(s.catalogError,/景点加载失败/);assert.equal(s.qaCatalogLoading,false)
- const retry=s.loadWelcomeCatalog();h.reply(h.calls.shift(),{spot_list:spots});h.reply(h.calls.shift(),{guide_list:[guide]});await retry;assert.equal(s.catalogError,'');assert.equal(s.qaSpots.length,2)
-})

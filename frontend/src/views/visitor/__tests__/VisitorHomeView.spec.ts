@@ -147,6 +147,19 @@ beforeEach(async () => {
 afterEach(() => { wrapper.unmount(); vi.unstubAllGlobals() })
 
 describe('independent visitor planning flows', () => {
+  it('previews a complete itinerary without selecting it, then applies its saved order', async () => {
+    expect(wrapper.find('.start-summary').text()).toContain('0 个景点')
+    await wrapper.find('.route-detail-button').trigger('click')
+    expect(wrapper.find('.route-detail').exists()).toBe(true)
+    expect(wrapper.find('.route-station-heading h4').text()).toBe('仁寿殿')
+    expect(wrapper.find('.start-summary').text()).toContain('0 个景点')
+    expect(wrapper.find('.route-card').classes()).not.toContain('selected')
+    await wrapper.find('.route-detail-footer button').trigger('click')
+    expect(wrapper.find('.route-detail').exists()).toBe(false)
+    expect(wrapper.find('.route-card').classes()).toContain('selected')
+    expect(wrapper.find('.start-summary').text()).toContain('1 个景点')
+    expect(api.spots).toHaveBeenCalledTimes(1)
+  })
   it('keeps Start tour busy until navigation completes and ignores repeated clicks', async () => {
     let finishNavigation!: () => void
     api.push.mockImplementationOnce(() => new Promise<void>(resolve => { finishNavigation = resolve }))
@@ -194,9 +207,9 @@ describe('independent visitor planning flows', () => {
     await wrapper.find('.route-card').trigger('click')
     await button('详情').trigger('click')
     const source = scenicDetails['仁寿殿']
-    expect(wrapper.find('.spot-story-card p').text()).toBe(source.history_detail)
+    expect(wrapper.find('.detail-history p').text()).toBe(source.history_detail)
     await button('English').trigger('click')
-    const paragraphs = wrapper.findAll('.spot-story-card p, .spot-guide-grid article p')
+    const paragraphs = wrapper.findAll('.detail-history > p, .detail-guide > p')
     expect(paragraphs).toHaveLength(5)
     for (const paragraph of paragraphs) {
       expect(paragraph.text()).not.toMatch(/[\u3400-\u9fff]/)
@@ -204,22 +217,22 @@ describe('independent visitor planning flows', () => {
     }
     expect(wrapper.find('button[aria-label="Deselect stop: Hall of Benevolence and Longevity"]').attributes('aria-pressed')).toBe('true')
     await button('中文').trigger('click')
-    expect(wrapper.find('.spot-story-card p').text()).toBe(source.history_detail)
-    expect(wrapper.findAll('.spot-guide-grid article').find(article => article.find('.spot-section-title').text() === '推荐取景')!.find('p').text()).toBe(source.photo_tips)
+    expect(wrapper.find('.detail-history p').text()).toBe(source.history_detail)
+    expect(wrapper.findAll('.detail-guide').find(article => article.find('summary').text() === '推荐取景')!.find('p').text()).toBe(source.photo_tips)
     expect(api.spots).toHaveBeenCalledTimes(1)
   })
-  it('switches the entire planner while preserving selected stop IDs and nickname', async () => {
+  it('switches the entire planner while preserving selected stop IDs without a nickname field', async () => {
     await wrapper.find('.route-card').trigger('click')
-    await wrapper.find('input[aria-label="导览昵称"]').setValue('原始昵称')
+    expect(wrapper.find('input[aria-label="导览昵称"]').exists()).toBe(false)
     await button('English').trigger('click')
     expect(wrapper.find('.visitor-intro h2').text()).toBe('Plan your visit')
     expect(wrapper.find('.route-card').text()).toContain('Hall of Benevolence and Longevity')
-    expect((wrapper.find('input[aria-label="Tour Nickname"]').element as HTMLInputElement).value).toBe('原始昵称')
+    expect(wrapper.find('input[aria-label="Tour Nickname"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Deselect stop: Hall of Benevolence and Longevity"]').attributes('aria-pressed')).toBe('true')
     expect(api.spots).toHaveBeenCalledTimes(1)
     await button('中文').trigger('click')
     expect(wrapper.find('button[aria-label="取消选择 仁寿殿"]').attributes('aria-pressed')).toBe('true')
-    expect((wrapper.find('input[aria-label="导览昵称"]').element as HTMLInputElement).value).toBe('原始昵称')
+    expect(wrapper.find('input[aria-label="导览昵称"]').exists()).toBe(false)
   })
 
   it('uses the mobile tour destination when mounted by the mobile entry', async () => {
@@ -276,6 +289,7 @@ describe('independent visitor planning flows', () => {
     await flushPromises()
     const params = new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams
     expect(params.get('guide_id')).toBe('11')
+    expect(params.get('name')).toBe('游客的导览')
     expect(params.get('route_id')).toBe('7')
     expect(params.get('spot_ids')).toBe('[1]')
     expect(params.get('visitor_preferences')).toBe('')
@@ -348,5 +362,30 @@ describe('independent visitor planning flows', () => {
     const params = new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams
     expect(params.get('route_id')).toBe('0')
     expect(params.get('spot_ids')).toBe('[1,2]')
+  })
+})
+
+
+describe('editable attraction itinerary',()=>{
+  it('reordering updates card numbering and the actual tour request',async()=>{
+    await wrapper.findAll('.spot-choice')[0].trigger('click')
+    await wrapper.findAll('.spot-choice')[1].trigger('click')
+    await wrapper.find('button[aria-label="上移 昆明湖"]').trigger('click')
+    expect(wrapper.findAll('.itinerary-stop-name').map(item=>item.text())).toEqual(['昆明湖','仁寿殿'])
+    expect(wrapper.findAll('.spot-choice-check').map(item=>item.text())).toEqual(['2','1'])
+    await chooseGuide('小颐');await button('开始导览').trigger('click');await flushPromises()
+    const params=new URL(fetchMock.mock.calls[0][0],'http://localhost').searchParams
+    expect(params.get('spot_ids')).toBe('[2,1]')
+    expect(params.get('route_id')).toBe('0')
+  })
+  it('removing a stop renumbers the remaining itinerary and clears a preset route',async()=>{
+    await wrapper.find('.route-card').trigger('click')
+    await wrapper.findAll('.spot-choice')[1].trigger('click')
+    await wrapper.find('button[aria-label="移除 仁寿殿"]').trigger('click')
+    expect(wrapper.findAll('.itinerary-stop-name').map(item=>item.text())).toEqual(['昆明湖'])
+    expect(wrapper.findAll('.spot-choice-check')[1].text()).toBe('1')
+    expect(wrapper.find('.route-card').classes()).not.toContain('selected')
+    await chooseGuide('小颐');await button('开始导览').trigger('click');await flushPromises()
+    expect(new URL(fetchMock.mock.calls[0][0],'http://localhost').searchParams.get('spot_ids')).toBe('[2]')
   })
 })

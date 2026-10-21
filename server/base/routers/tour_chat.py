@@ -301,7 +301,7 @@ async def get_visitor_spots():
             "latitude": s.latitude or 0.0,
             "longitude": s.longitude or 0.0,
             "trigger_radius": s.trigger_radius or 50.0,
-            "visit_duration": s.visit_duration or 20,
+            "visit_duration": s.visit_duration or 10,
             "best_season": s.best_season or "",
             "history_detail": s.history_detail or "",
             "photo_tips": s.photo_tips or "",
@@ -312,10 +312,9 @@ async def get_visitor_spots():
     return make_return_data(True, ResultCode.SUCCESS, "成功", {"spot_list": spot_list, "total": len(spot_list)})
 
 
-@router.post("/set-random-durations", summary="为景点随机分配游览时长（10~40分钟）")
+@router.post("/set-random-durations", summary="将景点建议停留时间重置为10分钟")
 async def set_random_durations():
-    """为所有景点随机设置 visit_duration（10~40 分钟）"""
-    import random
+    """将所有景点的建议停留时间重置为10分钟（兼容旧接口路径）"""
     from sqlmodel import Session
     from ..database.init_db import DB_ENGINE
     from ..models.tour_models import ScenicSpotInfo
@@ -327,12 +326,12 @@ async def set_random_durations():
 
         updated = 0
         for s in (spots or []):
-            s.visit_duration = random.randint(10, 40)
+            s.visit_duration = 10
             session.add(s)
             updated += 1
         session.commit()
 
-    return make_return_data(True, ResultCode.SUCCESS, f"已为 {updated} 个景点设置随机游览时长", {"updated": updated})
+    return make_return_data(True, ResultCode.SUCCESS, f"已为 {updated} 个景点设置10分钟建议停留时间", {"updated": updated})
 
 
 @router.post("/ai-chat-recommend", summary="自然语言个性化路线推荐")
@@ -446,6 +445,7 @@ async def get_visitor_routes():
                 continue
 
             from ..modules.route_presentation import route_overview
+            from ..modules.recommended_routes import route_editorial
             overview=route_overview([s.model_dump() for s in route_members])
 
             route_list.append({
@@ -463,6 +463,7 @@ async def get_visitor_routes():
                 "spot_ids": spot_ids,
                 "spot_names": spot_names,
                 "spot_count": len(spot_ids),
+                **route_editorial(r.name, [s.model_dump() for s in route_members], overview),
             })
 
     route_list.sort(key=lambda r: (r['route_id'] not in summer_palace_route_ids, r['route_id']))
@@ -752,7 +753,7 @@ async def _tour_chat(chat_item: TourChatItem, background_tasks: BackgroundTasks)
         answer_mode = "database"
     elif _llm_is_configured():
         try:
-            guide_response = await get_llm_res(prompt,timeout=25)
+            guide_response = await asyncio.wait_for(get_llm_res(prompt,timeout=15), timeout=16)
             answer_mode = "llm_rag" if rag_applied else "llm_context"
         except Exception as exc:
             logger.warning("LLM unavailable, using local knowledge fallback: {}", type(exc).__name__)

@@ -6,6 +6,7 @@ from seed_summer_palace_demo import ROOT, DB_ENGINE, ScenicSpotInfo, KnowledgeDo
 def main():
     locations=json.loads((ROOT/'data/summer_palace_locations.json').read_text(encoding='utf-8'))['spots']
     profiles=json.loads((ROOT/'data/summer_palace_profiles.json').read_text(encoding='utf-8'))['profiles']
+    visit_minutes=json.loads((ROOT/'data/summer_palace_visit_durations.json').read_text(encoding='utf-8'))['minutes']
     additions=[
         ('乐寿堂','historical',22,'东部生活区的院落建筑，可对照仁寿殿理解理政与生活空间的区别。'),
         ('玉澜堂','historical',15,'位于东部生活区，以院落与殿堂布局呈现帝后生活空间。'),
@@ -35,7 +36,7 @@ def main():
             profile=profiles[name]
             spot=ScenicSpotInfo(spot_name=name,category=category,city='北京',user_id=owner.user_id,
                 latitude=locations[name]['latitude'],longitude=locations[name]['longitude'],location=locations[name]['location'],
-                tags=';'.join(profile['reasons'].values()),visit_duration=minutes,trigger_radius=55,
+                tags=';'.join(profile['reasons'].values()),visit_duration=visit_minutes[name],trigger_radius=55,
                 description=description,history_detail=description,photo_tips=profile['reasons'].get('photography','观察建筑与周边环境的关系。'),
                 service_facilities='休息点、卫生间与开放情况请以园内标识为准。',
                 tour_tips='有台阶或高差，登高请量力而行。' if profile['stairs'] else '按园内步道游览，临水区域注意安全。',

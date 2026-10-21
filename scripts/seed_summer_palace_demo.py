@@ -151,7 +151,9 @@ SPOTS = [
 
 # 与已有数据库修正使用同一份可溯源的 WGS84 点位，避免重新导入退回近似坐标。
 _locations = json.loads((ROOT / "data/summer_palace_locations.json").read_text(encoding="utf-8"))["spots"]
+_visit_minutes = json.loads((ROOT / "data/summer_palace_visit_durations.json").read_text(encoding="utf-8"))["minutes"]
 for _spot in SPOTS:
+    _spot["visit_duration"] = _visit_minutes[_spot["spot_name"]]
     for _key in ("latitude", "longitude", "location"):
         _spot[_key] = _locations[_spot["spot_name"]][_key]
 

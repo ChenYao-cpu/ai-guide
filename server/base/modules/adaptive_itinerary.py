@@ -89,7 +89,7 @@ def repair_route(route, index, catalog, minutes, pace='standard', end_area='auto
     vertices = eligible+[anchor]
     distances = [[distance_between(a, b, avoid_steps) for b in vertices] for a in vertices]
     exits = [gate_distance(s, end_area, avoid_steps) if end_area != 'auto' else 0 for s in vertices]
-    visits = [max(1, int(s.get('visit_duration') or 20)) for s in eligible]
+    visits = [max(1, int(s.get('visit_duration') or 10)) for s in eligible]
     values = [value(s) for s in eligible]
     required_mask = sum(1 << i for i, s in enumerate(eligible) if s['spot_id'] in required)
 

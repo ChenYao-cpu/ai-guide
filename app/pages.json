@@ -7,6 +7,24 @@
   },
   "pages": [
     {
+      "path": "pages/onboarding/onboarding",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f0ebff",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/tabs/tabs",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8fafc",
+        "disableScroll": true
+      }
+    },
+    {
       "path": "pages/auth/auth",
       "style": {
         "navigationStyle": "custom",

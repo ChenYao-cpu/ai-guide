@@ -1,0 +1,10 @@
+/* Fixed terminals and pickup pages have their own responsive canvas. */
+html:has(.station-app),
+body:has(.station-app),
+#app:has(.station-app),
+html:has(.station-receive),
+body:has(.station-receive),
+#app:has(.station-receive) {
+  min-width: 0 !important;
+  width: 100% !important;
+}

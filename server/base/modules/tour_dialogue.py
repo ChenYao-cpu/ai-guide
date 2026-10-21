@@ -111,9 +111,9 @@ def _topic_text(topic, spot, dossier, next_spot):
     name=spot.get("spot_name","当前景点")
     if topic=="next":
         if not next_spot: return "这条路线已经到最后一站了，可以结束导览，或回路线页选择新的路线。"
-        return f"路线的下一站是{next_spot['spot_name']}，建议停留约{next_spot.get('visit_duration',20)}分钟。"+clean_sentences(next_spot.get("description",""),1,150)
+        return f"路线的下一站是{next_spot['spot_name']}，建议停留约{next_spot.get('visit_duration',10)}分钟。"+clean_sentences(next_spot.get("description",""),1,150)
     if topic=="location": return f"{name}位于{spot.get('location') or '尚未核实的位置'}。" if spot.get('location') else "这处景点的具体位置还没有核实，请看园内导览牌确认。"
-    if topic=="duration": return f"建议在{name}停留约{spot.get('visit_duration',20)}分钟，这是策展估算，不含排队。拍照或休息多时可适当延长。"
+    if topic=="duration": return f"建议在{name}停留约{spot.get('visit_duration',10)}分钟，这是策展估算，不含排队。拍照或休息多时可适当延长。"
     if dossier:
         if topic=="highlights": return " ".join(dossier["highlights"])
         field={'overview':'description','history':'history_detail','photography':'photo_tips','accessibility':'tour_tips'}.get(topic)

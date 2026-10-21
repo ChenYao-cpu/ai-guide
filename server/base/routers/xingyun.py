@@ -210,6 +210,9 @@ def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
 
 
 @router.api_route("/session/{guide_id}", methods=["POST", "DELETE"])
+async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False,
+                        x_tour_access: str = Header(default=""), authorization: str = Header(default=""),
+                        station_visit_id: str = '', x_station_token: str = Header(default='')):
 async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False, language: str = "zh",
                         x_tour_access: str = Header(default=""), authorization: str = Header(default="")):
     raw = await request.body()
@@ -222,7 +225,8 @@ async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_
     except (ValueError, TypeError):
         raise HTTPException(400, "无效的会话请求")
     with Session(DB_ENGINE) as db:
-        access_hash = hashlib.sha256(x_tour_access.encode()).hexdigest() if x_tour_access else ""
+        client_token = x_station_token if station_visit_id else x_tour_access
+        access_hash = hashlib.sha256(client_token.encode()).hexdigest() if client_token else ""
         if request.method == "DELETE":
             remote_id, remote_request = body.get("session_id"), body.get("request_id")
             if not remote_id and not remote_request:
@@ -247,7 +251,14 @@ async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_
             guide = db.get(DigitalGuideInfo, guide_id)
             if not selectable(db, guide) or guide.render_mode != "xingyun":
                 raise HTTPException(409, "该数字导游未上架或尚未配置星云")
-            if chat_speech:
+            if station_visit_id:
+                from .service_stations import visit_get, guide_for
+                if tour_id or chat_speech: raise HTTPException(422, '服务站凭证不可与游览会话混用')
+                visit, station = visit_get(db, station_visit_id, x_station_token)
+                expected = guide_for(db, station)
+                if not expected or expected.guide_id != guide_id: raise HTTPException(403, '此服务站未配置该数字人')
+                owner_id = guide.user_id or 0
+            elif chat_speech:
                 from ..models.xingyun import XingyunBootstrapState
                 scheme, _, token = authorization.partition(' ')
                 if scheme.lower() != 'bearer' or not token:
