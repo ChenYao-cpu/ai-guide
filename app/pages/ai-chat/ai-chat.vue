@@ -57,7 +57,7 @@
         <view class="welcome-topics">
           <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('intro')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-daolan"></text></view><text class="topic-title">{{ $t('介绍这个景点') }}</text></button>
           <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('story')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-lishiwenhua"></text></view><text class="topic-title">{{ $t('这里有什么历史故事？') }}</text></button>
-          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button>
+          <view class="welcome-photo-row"><button class="welcome-topic welcome-topic-photo" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button></view>
         </view>
       </view>
       <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
@@ -402,7 +402,8 @@ export default {
       try{
         for(let offset=0;offset<pending.length;offset+=4){
           const batch=pending.slice(offset,offset+4)
-          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>p.text),target}})
+          // Quote source questions so the model translates them instead of answering them.
+          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>JSON.stringify(p.text)),target}})
           if(this.storageOwner()!==owner||this.historyMsgs!==list)return
           const translations=res.data&&res.data.data&&res.data.data.translations
           if(!Array.isArray(translations))throw new Error('Invalid translation response')
@@ -966,6 +967,7 @@ export default {
 .welcome-description{display:block;max-width:100%;margin-top:14rpx;text-align:center;font-size:25rpx;line-height:1.7;color:#9a98ae}
 .welcome-topics{display:flex;flex-wrap:wrap;align-items:stretch;gap:18rpx;width:100%;margin-top:48rpx}
 .welcome-topic{position:relative;max-width:100%;min-width:0;min-height:88rpx;margin:0;padding:16rpx 22rpx;border:1rpx solid rgba(255,255,255,.95);border-radius:32rpx;background:rgba(255,255,255,.85);box-shadow:0 6rpx 20rpx rgba(116,85,196,.06),inset 0 2rpx 6rpx rgba(255,255,255,.85);display:flex;align-items:center;gap:14rpx;text-align:left;line-height:1.45;box-sizing:border-box}
+.welcome-photo-row{width:100%;display:flex;justify-content:center}.welcome-topic-photo{justify-content:center;text-align:center}
 .welcome-topic::after{border:0}.welcome-topic[disabled]{opacity:.55}.topic-icon-wrap{width:48rpx;height:48rpx;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1edff}.topic-icon{font-size:31rpx;color:#9b82ee}.topic-title{min-width:0;font-size:26rpx;font-weight:500;color:#291b58;white-space:normal}
 .welcome-loading,.welcome-unavailable{width:100%;margin-bottom:20rpx;padding:14rpx 20rpx;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:16rpx;border-radius:20rpx;background:rgba(255,255,255,.6);color:#8b829d;font-size:23rpx;line-height:1.5;white-space:normal;text-align:center}
 .welcome-unavailable button{flex-shrink:0;margin:0;padding:6rpx 18rpx;font-size:23rpx;line-height:1.7;border-radius:14rpx;color:#7961bc;background:#fff}

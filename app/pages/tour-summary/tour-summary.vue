@@ -71,8 +71,7 @@
           <view v-for="(s, i) in spotTimeline" :key="i" class="tl-item" :class="{last: i === spotTimeline.length - 1}">
             <view class="tl-marker">
               <view class="tl-dot" :class="{visited: i <= currentSpotIdx}">
-                <text v-if="i <= currentSpotIdx" class="tl-check">✓</text>
-                <text v-else class="tl-num">{{ i + 1 }}</text>
+                <text class="tl-num">{{ i + 1 }}</text>
               </view>
               <view class="tl-line" v-if="i < spotTimeline.length - 1"></view>
             </view>

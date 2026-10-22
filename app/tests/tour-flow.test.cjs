@@ -3,12 +3,25 @@ const root=path.resolve(__dirname,'..')
 function component(file){
  const storage={user_id:17,token:'test'},toasts=[],calls=[],navigation=[]
  const c={getCurrentPages:()=>[{route:"pages/mine/history"},{route:"pages/tour-summary/tour-summary"}],console,Date,Promise,setTimeout,clearTimeout,setInterval,clearInterval,BASE_URL:'http://local/api/v1',LANGUAGE_STORAGE_KEY:'language',assetUrl:x=>x,isBeijingCity:()=>true,selectedOrder:(order,ids)=>order.filter(id=>ids[id]),previewOptions:ids=>({spot_ids:ids}),roadMap:()=>null,FloatingTourButton:{},RouteTiming:{},ScenicSheet:{},TabBarNav:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},RouteOverview:{},TourRouteRepair:{},uni:{getStorageSync:k=>storage[k],setStorageSync:(k,v)=>{storage[k]=v},showToast:o=>toasts.push(o),getSystemInfoSync:()=>({}),request:o=>{calls.push(o)},reLaunch:o=>navigation.push(o),navigateTo:o=>navigation.push(o),navigateBack:()=>navigation.push({back:true})}}
+ c.AuthPage={}
  vm.createContext(c)
  const source=fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
  vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.options='),c)
  const o=c.options,s={t:x=>x,$nextTick:fn=>fn?.()};Object.assign(s,o.data.call(s));for(const [k,f] of Object.entries(o.methods))s[k]=f.bind(s);for(const [k,f] of Object.entries(o.computed||{}))Object.defineProperty(s,k,{get:()=>f.call(s)})
  return{s,o,storage,toasts,calls,navigation,uni:c.uni}
 }
+
+test('language settings quote history as translation data and preserve the source for switching back',()=>{
+ for(const [target,source,translated] of [['en','请介绍颐和园的历史。','Please introduce the history of the Summer Palace.'],['zh','Please tell me about the history of the Summer Palace.','请告诉我颐和园的历史。']]){
+  const {s,storage,calls}=component('pages/mine/mine.vue'),key='ai_chat_state:'+encodeURIComponent('id:17')
+  storage[key]=JSON.stringify({messages:[{role:'user',content:source}]})
+  s.translateAiChatHistory(target);const call=calls.find(c=>/translate-texts$/.test(c.url))
+  assert.equal(call.data.target,target);assert.equal(JSON.parse(call.data.texts[0]),source)
+  call.success({statusCode:200,data:{success:true,data:{translations:[translated]}}})
+  const message=JSON.parse(storage[key]).messages[0]
+  assert.equal(message.content,translated);assert.equal(message.lang,target);assert.equal(message.translations[target==='en'?'zh':'en'],source)
+ }
+})
 test('view itinerary is the only forward step; returning preserves stops, order, guide and route scroll',()=>{
  const {s,o}=component('pages/tour-guide/tour-guide.vue');s.pickedIds={12:true,3:true};s.orderedIds=[12,3];s.pickedGuide={guide_id:2};s.pickedRouteId=8;s.onPlanningScroll({detail:{scrollTop:840}})
  s.goSelectGuide();assert.equal(s.tab,'personal');assert.equal(s.planningScrollTop,0);assert.deepEqual(Array.from(s.selectedIds),[12,3]);s.onPlanningScroll({detail:{scrollTop:200}})
@@ -47,6 +60,17 @@ test('ending a tour opens summary only after server confirmation, deduplicates a
  const {s,calls}=component('pages/tour/tour.vue');s.sid=71;const left=[];s.leaveTour=url=>left.push(url)
  const first=s.endTour();s.endTour();assert.equal(calls.length,1);assert.equal(left.length,0);calls[0].success({statusCode:200,data:{success:false}});await first;assert.equal(left.length,0);assert.equal(s.endingTour,false)
  const retry=s.endTour();calls[1].success({statusCode:200,data:{success:true}});await retry;assert.equal(left[0],'/pages/tour-summary/tour-summary?sessionId=71')
+})
+
+test('avatar connecting indicator stops on success, error and page exit and resumes on retry',()=>{
+ const {s}=component('pages/tour/tour.vue');s.guideProvider='xingyun';s.tourVisible=true;s.leavingTour=false;s.xingyunConnected=false;s.xingyunFailed=false
+ assert.equal(s.avatarConnecting,true);s.xingyunActive=true;assert.equal(s.avatarConnecting,true)
+ s._xingyunGateway='mock-gateway';s.onXingyunState({state:'connected',gateway:'other-gateway'});assert.equal(s.avatarConnecting,true)
+ s.onXingyunState({state:'connected',gateway:'mock-gateway'});assert.equal(s.avatarConnecting,false)
+ s.onXingyunState({state:'error',gateway:'mock-gateway'});assert.equal(s.avatarConnecting,false)
+ s.xingyunFailed=false;assert.equal(s.avatarConnecting,true)
+ s.leavingTour=true;assert.equal(s.avatarConnecting,false);s.leavingTour=false;s.tourVisible=false;assert.equal(s.avatarConnecting,false)
+ s.tourVisible=true;s.guideProvider='audio';assert.equal(s.avatarConnecting,false)
 })
 
 test('real live-info contract exposes ended status at the root, without nested status or end_time',()=>{
