@@ -155,7 +155,8 @@ export default {
         url: BASE_URL + '/tour-session/translate-texts', method: 'POST',
         header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (uni.getStorageSync('token') || '') },
         timeout: 90000,
-        data: { texts: pending.map(function (x) { return x.text }), target: target },
+        // Quote source questions so switching language translates rather than answers them.
+        data: { texts: pending.map(function (x) { return JSON.stringify(x.text) }), target: target },
         success: function (res) {
           try {
             var translations = res.data && res.data.data && res.data.data.translations

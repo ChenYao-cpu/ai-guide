@@ -223,7 +223,7 @@ export default {
 .tabs-shell{width:100%;height:100vh;overflow:hidden;background:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%)}
 .pager-viewport{width:100%;height:100vh;overflow:hidden;touch-action:pan-y}
 .pager-track{display:flex;width:300%;height:100%;will-change:transform}
-.panel-slot{width:33.3333%;height:100%;overflow:hidden;flex-shrink:0}
+.panel-slot{width:33.3333%;height:100%;overflow:hidden;flex-shrink:0;contain:layout}
 </style>
 <style>
 /* 三个标签页共用 tabs-shell 上的一层渐变，避免各自的 fixed 光晕在分页轨道里错位 */

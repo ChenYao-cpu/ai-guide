@@ -46,10 +46,11 @@
       </view>
       <template v-if="tourVisible && !leavingTour && !(appXingyun && guideProvider==='xingyun' && (xingyunConnected || xingyunActive))">
       <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
-      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text class="avatar-notice">{{ guideProvider==='xingyun' ? t(xingyunFailed ? '连接失败' : '连接中…') : t('形象未配置') }}</text></view>
+      <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text v-if="guideProvider!=='xingyun'" class="avatar-notice">{{ t('形象未配置') }}</text></view>
       </template>
-      <view class="stage-status" :class="{on:speaking}">
-        <text>{{ t(speaking ? '讲解中' : appXingyun&&guideProvider==='xingyun' ? (xingyunConnected ? '已连接' : xingyunFailed ? '连接失败' : '连接中…') : '待命中') }}</text>
+      <view v-if="avatarConnecting || speaking || xingyunFailed" class="stage-status" :class="{on:speaking}">
+        <view v-if="avatarConnecting" class="avatar-loading" role="status" :aria-label="t('连接中…')"><view v-for="dot in 3" :key="dot" class="avatar-loading-dot"></view></view>
+        <text v-else>{{ t(xingyunFailed ? '连接失败' : '讲解中') }}</text>
       </view>
     </view>
 
@@ -184,6 +185,7 @@ export default {
     'spotCards.length': function() { this._progressPos=0; this.progressScrollLeft=0; this.fadeLeft=false; this.fadeRight=false; this.progressContentW=0; this.progressActive=this.spotIdx; this.measureProgress() },
   },
   computed: {
+    avatarConnecting: function() { return this.guideProvider==='xingyun' && !this.xingyunConnected && !this.xingyunFailed && this.tourVisible && !this.leavingTour },
     languageBusy: function() { return this.loading || this.recording || this.voicePressing || this.transcribing },
     guideDisplayName: function() { if (this.tourLanguage === 'en' && this.guideNameEn) return this.guideNameEn; return this.guideName.replace(/^默认星云(?:数字人)?导游(?:数字人)?\s*/, '').trim() || this.guideName },
     spotName: function() {
@@ -671,6 +673,11 @@ export default {
 .stage-status{position:absolute;bottom:12rpx;left:50%;right:auto;transform:translateX(-50%);z-index:2;padding:6rpx 14rpx;border-radius:10rpx;background:rgba(0,0,0,.35);backdrop-filter: none}
 .stage-status text{color:#fff;font-size:22rpx;white-space:nowrap}
 .stage-status.on{background:rgba(30,30,50,.35)}
+.avatar-loading{height:28rpx;display:flex;align-items:center;justify-content:center;gap:8rpx;padding:0 6rpx}
+.avatar-loading-dot{width:9rpx;height:9rpx;border-radius:50%;background:#fff;animation:avatar-loading-bounce 1.2s ease-in-out infinite}
+.avatar-loading-dot:nth-child(2){animation-delay:.16s}.avatar-loading-dot:nth-child(3){animation-delay:.32s}
+@keyframes avatar-loading-bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6rpx);opacity:1}}
+@media(prefers-reduced-motion:reduce){.avatar-loading-dot{animation:none;opacity:.8}}
 .guide-img{width:80%;height:80%;background:transparent}
 .guide-img.speaking{animation:guideTalk .3s ease-in-out infinite}
 @keyframes guideBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}

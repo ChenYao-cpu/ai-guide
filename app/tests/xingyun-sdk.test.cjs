@@ -44,7 +44,7 @@ test('SDK load failure can be retried and an empty script is not treated as succ
 })
 
 for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue','voice']]){
-  test(file+' initializes the original API-provided SDK and surfaces failures',async()=>{
+  test(file+' initializes the packaged Android-compatible SDK and surfaces failures',async()=>{
     const source=fs.readFileSync(path.join(root,'components',file),'utf8').match(new RegExp('<script module="'+moduleName+'" lang="renderjs">([\\s\\S]*?)<\\/script>'))[1]
     const instances=[],events=[]
     const context={loadXingyunSdk:async()=>{},window:{XmovAvatar:class{
@@ -56,7 +56,7 @@ for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue'
     vm.runInContext(source.replace(/^import .*$/m,'').replace('export default','globalThis.component='),context)
     const owner={callMethod:(method,event)=>events.push(event)}
     await context.component.methods.apply({command:'connect',id:1,gateway:'http://local/session',accessToken:'test',text:moduleName==='voice'?'test speech':'',token:'test'},null,owner)
-    assert.equal(instances.length,1);assert.equal(instances[0].options.hardwareAcceleration,undefined)
+    assert.equal(instances.length,1);assert.equal(instances[0].options.hardwareAcceleration,'prefer-hardware')
     instances[0].options.onMessage({code:1234,message:'Decoder unavailable'})
     assert.equal(events.at(-1).state,'error');assert.match(events.at(-1).message,/Decoder unavailable/)
     context.component.beforeUnmount()
@@ -72,5 +72,6 @@ for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue'
 test('tour restores old project framing without per-frame logging',()=>{
 const source=fs.readFileSync(path.join(root,'components/tour-xingyun.vue'),'utf8');
 assert.ok(!source.includes('onRenderChange:'));assert.ok(source.includes('transform:translateX(-10%)'));
-assert.ok(source.includes('script.src=value.sdkUrl'));
+assert.ok(source.includes('await loadXingyunSdk()'));
+assert.ok(!source.includes('script.src=value.sdkUrl'));
 });

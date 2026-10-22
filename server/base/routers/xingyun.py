@@ -210,11 +210,9 @@ def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
 
 
 @router.api_route("/session/{guide_id}", methods=["POST", "DELETE"])
-async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False,
+async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False, language: str = "zh",
                         x_tour_access: str = Header(default=""), authorization: str = Header(default=""),
                         station_visit_id: str = '', x_station_token: str = Header(default='')):
-async def session_proxy(guide_id: int, request: Request, tour_id: int = 0, chat_speech: bool = False, language: str = "zh",
-                        x_tour_access: str = Header(default=""), authorization: str = Header(default="")):
     raw = await request.body()
     if len(raw) > 65536:
         raise HTTPException(413, "会话请求过大")

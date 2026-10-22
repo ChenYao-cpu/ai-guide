@@ -39,7 +39,7 @@
                   <view class="route-cover-shade"></view>
                   <view class="rc-top"><text class="rc-time">{{ r.estimated_time_minutes ? r.estimated_time_minutes+t('分钟') : t('时长待配置') }}</text></view>
                   <view class="rc-bottom">
-                    <text class="rc-name">{{ t(r.city) ? t(r.city)+' · ' : '' }}{{ t(r.name) }}</text>
+                    <text class="rc-name">{{ t(r.name) }}</text>
                     <text class="rc-meta">{{ (r.spot_ids||[]).length }}{{ t("个景点") }}</text>
                   </view>
                 </view>
@@ -146,7 +146,7 @@
       <view class="sheet-content route-detail-panel" @tap.stop="">
         <view v-if="routeDetail.cover_image" class="route-detail-background"><image :src="fixImg(routeDetail.cover_image)" class="route-detail-photo" mode="aspectFill" /><view class="route-detail-wash"></view></view>
         
-        <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.city) ? t(routeDetail.city)+' · ' : '' }}{{ t(routeDetail.name) }}</text></view>
+        <view class="dp-hd"><text class="dp-title">{{ t(routeDetail.name) }}</text></view>
         <scroll-view scroll-y :bounces="false" :show-scrollbar="false" class="dp-body" @scroll="$refs.routeSheet.setScroll($event)"><view class="dp-content">
           <view class="rd-tag">{{ (routeDetail.spot_ids||[]).length }}{{ t('个景点 ·') }} {{ routeTotalTime ? routeTotalTime+t('分钟') : t('时长待配置') }}</view>
           <text class="rd-desc">{{ t(routeDetail.description)||'' }}</text>
@@ -203,7 +203,7 @@ var api={
 export default {
   components:{FloatingTourButton,RouteTiming,ScenicSheet},
   watch:{
-    showItinerary:function(v){ uni.$emit('dock:sync',{source:'tour',hide:!!v}) },
+    dockHiddenByOverlay:function(v){ uni.$emit('dock:sync',{source:'tour',hide:!!v}) },
   },
   onReady:function(){
     this.pageReady=true
@@ -217,6 +217,7 @@ export default {
     mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
   }},
   computed:{
+    dockHiddenByOverlay:function(){return !!(this.showItinerary||this.routeDetail||this.detailSpot||this.showMapPreview||this.guidePicker||this.previewingGuide)},
     canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending&&!this.starting&&this.itineraryState.key===this.itineraryKey&&!this.itineraryState.busy&&!this.itineraryState.error&&!!this.itineraryState.data?.complete},
     selectedIds:function(){return selectedOrder(this.orderedIds,this.pickedIds)},
     itineraryOptions:function(){return previewOptions(this.selectedIds,this.personalPlan,this.personalPlan?.pace||'standard')},
@@ -357,7 +358,8 @@ export default {
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
         if(rr&&rr.data){var rd=rr.data;s.routes=(rd.data&&rd.data.route_list)?rd.data.route_list:(rd.route_list||[])}
         s.spots=s.spots.filter(function(x){return isBeijingCity(x.city)})
-        s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)})
+        s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)}).slice(0,3)
+        s.routeIndex=Math.min(s.routeIndex,Math.max(0,s.routes.length-1))
         var ordered=prioritizeSummerPalace(s.spots,s.routes);s.spots=ordered.spots;s.routes=ordered.routes
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}
         if(gr&&sr&&rr)s.dataLoaded=true
@@ -380,7 +382,7 @@ export default {
 .planning-header{position:relative;z-index:1;padding:16rpx 120rpx 28rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12rpx}
 .planning-title{text-align:center;font-size:40rpx;font-weight:700;color:var(--ng-text)}
 .planning-subtitle{text-align:center;font-size:25rpx;line-height:1.5;color:var(--ng-secondary)}
-.planning-back{position:absolute;left:16rpx;top:4rpx;margin:0;padding:6rpx 16rpx;font-size:26rpx;line-height:1.8;color:var(--ng-accent-text,#5141ad);background:var(--ng-surface);border-radius:14rpx}.planning-back::after,.selection-next::after{border:0}
+.planning-back{position:absolute;left:16rpx;top:4rpx;margin:0;padding:6rpx 0;font-size:24rpx;line-height:1.8;color:var(--ng-accent-text,#5141ad);background:transparent;border:0;border-radius:0;box-shadow:none;text-decoration:underline;text-underline-offset:6rpx}.planning-back[disabled]{background:transparent;opacity:.5}.planning-back::after,.selection-next::after{border:0}
 .main.itinerary-active{z-index:2200}
 .header-spacer{padding:0!important;border-bottom:0!important;pointer-events:none}
 .map-preview{margin:0 0 0 auto;padding:8rpx 24rpx;line-height:1.6;min-height:0;font-size:25rpx;color:#6840c2;background:#f1eaff;border-radius:14rpx}
@@ -494,7 +496,10 @@ export default {
 .route-detail-panel .dp-tag,.route-detail-panel .rd-tag{font-size:27.6rpx}
 .route-detail-panel .tlc-name{font-size:33.35rpx}
 .route-detail-panel .tlc-cat,.route-detail-panel .tlc-trans text{font-size:26.45rpx}
-.route-detail-panel .tl-card{background:rgba(255,255,255,.84);backdrop-filter:blur(8px)}
+/* Avoid filtered layers being clipped as cards enter Android's scroll viewport. */
+.route-detail-panel .tl-card{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:0}
+.route-detail-panel .tlc-info{min-width:0}
+.route-detail-panel .tlc-name{overflow-wrap:anywhere}
 /* 顶部标签与底部导航共用放大后的响应式字号。 */
 .page.aurora-page{--tab-label-size:16.1px}
 @media(min-width:390px){.page.aurora-page{--tab-label-size:17.25px}}
