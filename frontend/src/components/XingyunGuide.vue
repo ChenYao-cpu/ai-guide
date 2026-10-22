@@ -3,7 +3,7 @@
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { request_handler } from '@/api/base'
 import { avatarHeaders } from '@/api/xingyunTour'
-const props = defineProps<{ guideId?: number; tourId?: number; framing?: 'full' | 'half'; posterImage?: string }>()
+const props = defineProps<{ guideId?: number; tourId?: number; stationVisit?:{visit_id:string;access_token:string}; stationMode?: boolean; framing?: 'full' | 'half'; posterImage?: string }>()
 
 type Avatar = {
   init(options: Record<string, unknown>): Promise<void>
@@ -29,7 +29,7 @@ let avatar: Avatar | undefined
 let active = true
 let generation = 0
 let configPromise: Promise<void> = Promise.resolve()
-watch(() => [props.guideId, props.tourId,configRevision.value], () => {
+watch(() => [props.guideId, props.tourId, props.stationVisit?.visit_id,configRevision.value], () => {
   wanted=true;retryCount.value=0
   release(); configured.value = false; provider.value = ''
   querying.value = true
@@ -43,7 +43,7 @@ watch(() => [props.guideId, props.tourId,configRevision.value], () => {
       configured.value = data.configured
       provider.value = data.provider
       message.value = data.configured ? t("尚未连接实时数字人，请点击连接") : t("该数字人未上架或未完成应用绑定")
-      if (configured.value && props.tourId) {
+      if (configured.value && (props.tourId || props.stationVisit)) {
         void nextTick().then(() => {
           if (active && current === generation) void connect()
         })
@@ -111,8 +111,8 @@ async function connect() {
     const instance = new SDK({
       containerId: '#' + containerId,
       appId: 'server-proxy', appSecret: 'server-proxy',
-      gatewayServer: new URL('/xingyun/session/' + props.guideId + '?tour_id=' + (props.tourId || 0), location.origin).href,
-      headers: avatarHeaders(props.tourId || 0),
+      gatewayServer: new URL('/xingyun/session/' + props.guideId + '?tour_id=' + (props.tourId || 0) + (props.stationVisit?'&station_visit_id='+encodeURIComponent(props.stationVisit.visit_id):''), location.origin).href,
+      headers: props.stationVisit ? {'X-Station-Token':props.stationVisit.access_token} : avatarHeaders(props.tourId || 0),
       proxyWidget: {
         subtitle_on: () => {},
         subtitle_off: () => {},
@@ -170,12 +170,12 @@ onBeforeUnmount(() => { active = false;wanted=false;window.removeEventListener('
 defineExpose({ speak, stop, isReady: () => ready.value })
 </script>
 <template>
-  <section v-show="provider === 'xingyun' || querying" class="xingyun-guide" :class="{ activated: ready || loading, half: framing === 'half' }">
+  <section v-show="provider === 'xingyun' || querying" class="xingyun-guide" :class="{ activated: ready || loading, half: framing === 'half', 'station-mode':stationMode }">
     <div class="xingyun-frame" :aria-busy="querying || loading">
       <div :id="containerId" class="xingyun-canvas" :style="{ visibility: ready ? 'visible' : 'hidden' }" :aria-hidden="!ready" />
       <p v-if="!ready" class="xingyun-loading" role="status">{{ $t(querying || loading ? '数字人正在加载中' : statusText) }}</p>
     </div>
-    <div class="xingyun-controls">
+    <div v-if="!stationMode || !ready" class="xingyun-controls">
       <span v-if="retryPending" role="status">{{ $t('正在准备自动重连') }} {{ retryCount }} / 2 · </span>
       <button v-if="!ready && !loading && !querying && provider==='xingyun'" @click="retry">{{ $t("连接数字人") }}</button>
       <button v-if="ready" @click="wanted=false; release(); message='数字人连接已关闭'">{{ $t("断开连接") }}</button>
@@ -189,5 +189,8 @@ defineExpose({ speak, stop, isReady: () => ready.value })
    into the available stage instead of cropping it or inheriting those offsets. */
 .xingyun-guide:not(.half) .xingyun-canvas :deep(canvas){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;transform:none!important;object-fit:contain!important;object-position:50% 50%!important}
 .xingyun-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center;font-size:18px;line-height:1.6;color:var(--text-secondary)}
+.xingyun-guide.station-mode:not(.half) .xingyun-frame{padding:12px 6px 8px}
+.xingyun-guide.station-mode:not(.half) .xingyun-canvas{inset:12px 6px 8px!important;width:calc(100% - 12px)!important;height:calc(100% - 20px)!important}
+.station-mode .xingyun-controls:empty{display:none}
 .xingyun-guide{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;justify-content:center;flex:1}.xingyun-guide.activated{flex:1;min-height:180px}.xingyun-frame{flex:1;min-height:120px;width:100%;position:relative;overflow:hidden}.xingyun-canvas{position:absolute;inset:0;width:100%;height:100%}.half .xingyun-canvas{transform:scale(1.75);transform-origin:50% 0}.xingyun-controls{flex-shrink:0;text-align:center;padding:8px;font-size:12px;color: var(--text-secondary)}.xingyun-controls button{padding:8px 14px;border: 1px solid var(--glass-line);border-radius:8px;color: var(--champagne-text);background: var(--glass);cursor:pointer}.xingyun-controls p{margin:6px 0}
 </style>

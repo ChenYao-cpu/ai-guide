@@ -24,7 +24,7 @@ import { request_handler } from '@/api/base'
 const router = useRouter()
 const route = useRoute()
 type EntryMode = 'visitor' | 'admin'
-const entryMode = ref<EntryMode>(route.query.redirect ? 'admin' : 'visitor')
+const entryMode = ref<EntryMode>('admin')
 const isLogining = ref(false)
 const serviceState = ref<'checking' | 'ready' | 'offline'>('checking')
 const rememberAccount = ref(true)
@@ -172,7 +172,7 @@ const onSubmit = async () => {
     isLogining.value = false
   }
 }
-const enterAsVisitor = () => router.push('/visitor/home')
+const enterAsVisitor = () => router.push('/station/summer-palace-east')
 const handleForgotPassword = () => ElMessage.info(t('请联系系统管理员重置密码'))
 onMounted(() => {
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
             @keydown.right.prevent="selectEntry('admin', true)"
             @keydown.end.prevent="selectEntry('admin', true)"
           >
-            <el-icon><Guide /></el-icon><span>{{ $t('游客导览') }}</span>
+            <el-icon><Guide /></el-icon><span>{{ $t('景区服务站') }}</span>
           </button>
           <button
             id="entry-tab-admin"
@@ -394,8 +394,8 @@ onBeforeUnmount(() => {
             tabindex="0"
           >
             <div class="entry-heading">
-              <h1>{{ $t('游客导览') }}</h1>
-              <p>{{ $t('选好路线，跟随数字人出发。') }}</p>
+              <h1>{{ $t('景区数字人服务站') }}</h1>
+              <p>{{ $t('在本站咨询规划，扫码带走游览方案。') }}</p>
             </div>
             <div class="visitor-scene" aria-hidden="true">
               <svg viewBox="0 0 400 170" fill="none">
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
               >
             </div>
             <el-button type="primary" class="entry-primary" @click="enterAsVisitor"
-              >{{ $t('进入游客导览') }}<el-icon><ArrowRight /></el-icon
+              >{{ $t('进入景区服务站') }}<el-icon><ArrowRight /></el-icon
             ></el-button>
           </section>
           <section

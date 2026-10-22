@@ -2,8 +2,8 @@
   "name": "智游知境",
   "appid": "__UNI__57BB466",
   "description": "AI数字人景区导览小程序",
-  "versionName": "1.4.4",
-  "versionCode": "144",
+  "versionName": "1.4.7",
+  "versionCode": "147",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true,
@@ -68,6 +68,15 @@
     ],
     "__usePrivacyCheck__": true,
     "lazyCodeLoading": "requiredComponents"
+  },
+  "h5": {
+    "title": "智游知境",
+    "router": {
+      "mode": "hash"
+    },
+    "devServer": {
+      "port": 8080
+    }
   },
   "vueVersion": "3"
 }

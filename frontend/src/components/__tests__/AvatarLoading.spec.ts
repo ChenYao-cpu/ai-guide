@@ -27,6 +27,25 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals();vi.useRealTimers() })
 
 describe('数字人加载呈现', () => {
+  it('服务站凭证到位后直接加载实体，始终不展示静态封面', async () => {
+    http.get.mockImplementation((url: string) => Promise.resolve(url.startsWith('/avatar/')
+      ? { data: { data: { preferredMode: 'xingyun', realistic: { ready: false }, cartoon: { ready: false } } } }
+      : { data: { configured: true, provider: 'xingyun' } }))
+    wrapper = mount(DigitalAvatarPlayer, { props: { guideId: 37, stationMode: true, posterImage: '/poster.png', width: 640 } })
+    await flushPromises()
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.find('.avatar-loading').text()).toBe('数字人正在加载中')
+    expect(wrapper.find('.xingyun-guide').exists()).toBe(false)
+    await wrapper.setProps({ stationVisit: { visit_id: 'station1', access_token: 'private-token' } })
+    await flushPromises()
+    expect(callbacks.headers).toEqual({ 'X-Station-Token': 'private-token' })
+    expect(callbacks.gatewayServer).toContain('station_visit_id=station1')
+    callbacks.onInitEvent(4000)
+    await flushPromises()
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('visibility: visible')
+    expect(wrapper.find('.xingyun-controls').exists()).toBe(false)
+  })
   it('断线后有限重连，旧实例迟到的就绪事件无效',async()=>{
     vi.useFakeTimers({toFake:['setTimeout','clearTimeout']})
     wrapper=mount(XingyunGuide,{props:{guideId:37,tourId:90}});await flushPromises()

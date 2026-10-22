@@ -15,6 +15,7 @@ import '@/style/soft-ui.scss'
 import '@/style/soft-ui-charts'
 import '@/style/tour-backdrop.scss'
 import '@/style/admin-readability.scss'
+import '@/style/station-shell.scss'
 
 document.documentElement.dataset.uiTheme = 'soft-ui'
 
@@ -23,13 +24,13 @@ import router from './router'
 import { installI18n } from './i18n'
 
 // ── PWA Service Worker 注册 ──
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(
       (registration) => {
         console.log('[PWA] Service Worker registered:', registration.scope)
         // 请求后台位置同步权限（如果支持）
-        if ('periodicSync' in registration) {
+        if (location.pathname.startsWith('/m/') && 'periodicSync' in registration) {
           (registration as any).periodicSync.register('location-update', {
             minInterval: 5 * 60 * 1000, // 最短5分钟
           }).catch(() => { /* 浏览器不支持 */ })

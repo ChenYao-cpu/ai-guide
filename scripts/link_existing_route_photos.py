@@ -12,6 +12,14 @@ from sqlalchemy import URL, create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Documented route covers (docs/resource-pack.md, app/docs/xc-update-20261022.md):
+# a route's cover is not simply its first spot, so prefer the designated spot photo.
+COVER_SPOT = {
+    '皇家园林经典文化线': '佛香阁',
+    '昆明湖摄影漫游线': '昆明湖',
+    '亲子湖山体验线': '长廊',
+}
+
 
 def main():
     load_dotenv(ROOT / '.env', override=True)
@@ -25,10 +33,13 @@ def main():
         for row in db.execute(text('SELECT spot_id,image_path FROM scenic_spot_info WHERE NOT delete')).mappings():
             if row['image_path'] and not (ROOT / 'static' / row['image_path']).is_file():
                 missing.append(dict(row))
-        for route in db.execute(text("SELECT route_id,cover_image,cover_generated FROM tour_route WHERE NOT delete AND COALESCE(cover_image,'')='' ")).mappings():
-            photos = db.execute(text('''SELECT s.spot_id,s.image_path FROM tour_route_spot rs
+        for route in db.execute(text("SELECT route_id,name,cover_image,cover_generated FROM tour_route WHERE NOT delete AND COALESCE(cover_image,'')='' ")).mappings():
+            photos = list(db.execute(text('''SELECT s.spot_id,s.spot_name,s.image_path FROM tour_route_spot rs
                 JOIN scenic_spot_info s ON s.spot_id=rs.spot_id
-                WHERE rs.route_id=:id AND NOT s.delete ORDER BY rs.spot_order,rs.id'''), {'id': route['route_id']}).mappings()
+                WHERE rs.route_id=:id AND NOT s.delete ORDER BY rs.spot_order,rs.id'''), {'id': route['route_id']}).mappings())
+            preferred = COVER_SPOT.get(route['name'])
+            if preferred:
+                photos.sort(key=lambda photo: 0 if photo['spot_name'] == preferred else 1)
             for photo in photos:
                 path = (ROOT / 'static' / (photo['image_path'] or '')).resolve()
                 if photo['image_path'] and path.is_relative_to(ROOT / 'static') and path.is_file():

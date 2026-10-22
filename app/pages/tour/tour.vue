@@ -10,16 +10,15 @@
     <!-- 游览进度时间轴 -->
     <view class="tour-progress nav-progress" v-if="spotCards.length">
       <scroll-view scroll-x enable-flex scroll-with-animation class="tp-track" :class="{'fade-left':fadeLeft,'fade-right':fadeRight}" :scroll-left="progressScrollLeft" :show-scrollbar="false" @scroll="onProgressScroll" @touchend="onProgressRelease">
-        <view class="tp-nodes" :class="{'tp-centered': spotCards.length <= 4}">
+        <view class="tp-nodes" :class="{'tp-centered': spotCards.length <= 3}">
           <view v-for="(s, idx) in spotCards" :key="s.spot_id" :id="'tpn-'+idx" class="tp-node" :class="{done:idx<spotIdx, active:idx===progressActive}" @tap="selectProgressSpot(idx)">
             <view class="tp-dot"></view>
             <text class="tp-label">{{ t(s.spot_name) }}</text>
           </view>
         </view>
       </scroll-view>
-
     </view>
-      <view v-if="spotCards.length <= 1" class="nav-spacer"></view>
+      <view v-if="spotCards.length > 3" class="tp-more-slot" aria-hidden="true"><text v-if="fadeRight" class="tp-more">···</text></view>
       <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
     </view>
 
@@ -324,10 +323,13 @@ export default {
     },
     measureProgress:function(){
       var info=uni.getSystemInfoSync()
-      var rpx=(info.windowWidth||375)/750
-      this.progressNodeW=130*rpx
-      this.progressTrackW=Math.max(0,(info.windowWidth||375)-176*rpx)
-      this.progressContentW=this.spotCards.length*this.progressNodeW
+      var screenW=info.windowWidth||375
+      var rpx=screenW/750
+      // 3 个以内等分居中不滚动；超过 3 个时一屏三列，另留 40rpx 放“···”提示
+      var few=this.spotCards.length<=3
+      this.progressNodeW=few?Math.max(1,(screenW-176*rpx)/Math.max(1,this.spotCards.length)):174*rpx
+      this.progressTrackW=Math.max(0,screenW-(few?176:228)*rpx)
+      this.progressContentW=few?this.progressTrackW:this.spotCards.length*this.progressNodeW
       this.updateProgressFade()
     },
     updateProgressFade:function(){
@@ -627,7 +629,7 @@ export default {
 .page{height:100vh;display:flex;flex-direction:column;background-color:var(--ng-surface);position:relative;overflow:hidden}
 .avatar-runtime-status,.xingyun-open,.tour-progress,.spot-media{position:relative;z-index:1}
 .nav-spacer{flex:1;min-width:0}
-.nav .nav-progress{flex:1;min-width:0;padding:4rpx 0}
+.nav .nav-progress{position:relative;flex:1;min-width:0;padding:4rpx 0}
 .nav-progress .tp-nodes{min-width:0;justify-content:flex-start}
 .nav-progress .tp-stats{justify-content:center;flex-wrap:wrap;gap:4rpx 12rpx}
 .nav-progress .tp-stat{font-size:18rpx}
@@ -777,8 +779,13 @@ export default {
 
 .page .guide-stage{background:transparent}
 .nav-progress .tp-nodes{display:inline-flex;align-items:stretch;width:max-content;min-width:100%}
-.nav-progress .tp-node{width:130rpx;min-width:130rpx;flex:0 0 130rpx;padding:0;box-sizing:border-box}
-.nav-progress .tp-nodes.tp-centered{justify-content:center}
+.nav-progress .tp-node{width:174rpx;min-width:174rpx;flex:0 0 174rpx;padding:0 4rpx;box-sizing:border-box}
+.nav-progress .tp-nodes.tp-centered{justify-content:center;width:100%}
+.nav-progress .tp-nodes.tp-centered .tp-node{width:auto;min-width:0;flex:1 1 0;padding:0 4rpx}
+.nav-progress .tp-nodes.tp-centered .tp-label{max-width:100%;white-space:normal;word-break:break-word;overflow:visible;text-overflow:clip;line-height:1.2;font-size:17rpx}
+.nav-progress .tp-label{max-width:100%;white-space:normal;word-break:break-word;overflow:visible;text-overflow:clip;line-height:1.2;font-size:17rpx}
+.tp-more-slot{flex:0 0 40rpx;width:40rpx;display:flex;align-items:center;justify-content:center;align-self:center}
+.tp-more{font-size:28rpx;line-height:1;letter-spacing:2rpx;color:var(--ng-secondary);opacity:.9}
 .nav-progress .tp-node>.tp-dot{margin:0 auto}
 .tp-track.fade-left.fade-right{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 calc(100% - 44rpx),transparent 100%)}
 .tp-track.fade-left:not(.fade-right){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%)}

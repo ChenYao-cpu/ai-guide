@@ -445,6 +445,7 @@ async def get_visitor_routes():
                 continue
 
             from ..modules.route_presentation import route_overview
+            from ..modules.recommended_routes import route_editorial
             overview=route_overview([s.model_dump() for s in route_members])
 
             route_list.append({
@@ -462,6 +463,7 @@ async def get_visitor_routes():
                 "spot_ids": spot_ids,
                 "spot_names": spot_names,
                 "spot_count": len(spot_ids),
+                **route_editorial(r.name, [s.model_dump() for s in route_members], overview, r.cover_image),
             })
 
     route_list.sort(key=lambda r: (r['route_id'] not in summer_palace_route_ids, r['route_id']))

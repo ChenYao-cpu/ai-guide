@@ -18,6 +18,19 @@ test('view itinerary is the only forward step; returning preserves stops, order,
 test('empty selection and in-flight tour creation cannot enter another planning step',()=>{
  const {s}=component('pages/tour-guide/tour-guide.vue');s.goSelectGuide();assert.equal(s.tab,'route');s.pickedIds={3:true};s.orderedIds=[3];s.starting=true;s.goSelectGuide();assert.equal(s.tab,'route')
 })
+
+test('category filters and search preserve the whole itinerary and category totals',()=>{
+ const {s}=component('pages/tour-guide/tour-guide.vue');s.spots=[{spot_id:1,spot_name:'仁寿殿',city:'北京',category:'historical'},{spot_id:2,spot_name:'昆明湖',city:'北京',category:'natural'},{spot_id:3,spot_name:'长廊',city:'北京',category:'cultural'},{spot_id:4,spot_name:'园中景点',city:'北京',category:'natural'}];s.pickedIds={1:true,3:true};s.orderedIds=[3,1];s.pickedRouteId=8
+ s.spotCat='natural';assert.deepEqual(Array.from(s.filteredSpots,x=>x.spot_id),[2,4]);assert.equal(s.pickedCount,2);assert.deepEqual(Array.from(s.selectedIds),[3,1]);assert.equal(s.pickedRouteId,8)
+ s.keyword=' 昆明 ';assert.deepEqual(Array.from(s.filteredSpots,x=>x.spot_id),[2]);assert.deepEqual(Array.from(s.spotCats,x=>[x.value,x.count]),[['all',4],['historical',1],['natural',2],['cultural',1]])
+ s.spotCat='all';s.keyword='文化古迹';assert.deepEqual(Array.from(s.filteredSpots,x=>x.spot_id),[3]);s.keyword='';assert.equal(s.filteredSpots.length,4);assert.deepEqual(Array.from(s.selectedIds),[3,1])
+})
+
+test('category search supports translated labels, missing categories and array tags',()=>{
+ const {s}=component('pages/tour-guide/tour-guide.vue');s.t=value=>({'自然风光':'Nature','昆明湖':'Kunming Lake','其他':'Other'}[value]||value);s.spots=[{spot_id:2,spot_name:'昆明湖',category:'natural',tags:['湖水','摄影']},{spot_id:5,spot_name:'景点甲'},{spot_id:6,spot_name:'景点乙',category:''},{spot_id:7,spot_name:'新景点',category:'new-kind'}]
+ s.keyword='nature';assert.equal(s.filteredSpots[0].spot_id,2);s.keyword='kunming';assert.equal(s.filteredSpots[0].spot_id,2);s.keyword='摄影';assert.equal(s.filteredSpots[0].spot_id,2)
+ s.keyword='';s.spotCat='other';assert.deepEqual(Array.from(s.filteredSpots,x=>x.spot_id),[5,6]);assert.equal(s.catLabel(null),'Other');assert.equal(s.catLabel('new-kind'),'new-kind');assert.equal(s.spotCats.find(x=>x.value==='other').count,2)
+})
 test('local ratings persist per signed-in account and per tour and can be updated',()=>{
  const {s,storage}=component('pages/tour-summary/tour-summary.vue');s.sid=71;s.ratingOwner=s.ratingAccount();s.sessionData={status:{live_status:2}};s.ratingScore=4;s.saveRating();assert.equal(s.savedRating,4);s.loadRating();assert.equal(s.ratingScore,4)
  s.ratingScore=5;s.saveRating();s.loadRating();assert.equal(s.savedRating,5)

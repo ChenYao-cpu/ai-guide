@@ -320,5 +320,18 @@
   "我的评分：{score}分": "My rating: {score} out of 5",
   "未评分": "Not rated",
   "查看评分": "View rating",
-  "去评分": "Rate this tour"
+  "去评分": "Rate this tour",
+  "正在加载景点…": "Loading places…",
+  "景点加载失败，请检查网络后重试": "Could not load places. Check your connection and try again.",
+  "从这些话题开始": "What would you like to know?",
+  "景点介绍": "About the place",
+  "认识建筑与看点": "Explore its sights and architecture",
+  "历史故事": "Local stories",
+  "听听这里的往事": "Discover stories from the past",
+  "拍照建议": "Photo tips",
+  "找角度，留住好风景": "Find a memorable angle",
+  "拍照或上传图片": "Take or upload a photo",
+  "试试其他分类或关键词": "Try another category or search term",
+  "可以选择下方的快捷提问，或直接向我提问~": "Choose a quick question below, or ask me directly.",
+  "查看完整行程": "View itinerary"
 }
