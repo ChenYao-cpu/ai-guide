@@ -219,6 +219,7 @@ class ChatInput(BaseModel):
     language: Literal['zh', 'en'] = 'zh'
     preferences: PlanInput = Field(default_factory=PlanInput)
     spot_id: int | None = None
+    plan_id: str | None = Field(default=None, max_length=64)
 
 
 @router.post('/visits/{visit_id}/chat')
@@ -232,11 +233,35 @@ async def chat(visit_id: str, body: ChatInput, x_station_token: str = Header(def
         # Read-only facts; no tourist tour is created or advanced by consulting.
         question = body.question.strip()
         if not question: raise HTTPException(422, '请输入问题')
+        current_plan = None
+        if body.plan_id:
+            from ..modules.station_service import revise_plan_request
+            current_plan = db.get(StationPlan, body.plan_id)
+            if not current_plan or current_plan.visit_id != visit_id or current_plan.expires_at <= utcnow():
+                raise HTTPException(404, '当前路线已失效，请重新规划')
+            try:
+                revised = revise_plan_request(question, current_plan.snapshot, spots)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            if revised is not None:
+                revised['language'] = body.language
+                updated = store_plans(db, visit, station, PlanInput(**revised))
+                first = updated[0]['route']
+                answer = (f"Your route is updated: {len(first['stops'])} stops, approximately {first['total_minutes']} minutes. Review the new route below." if body.language == 'en' else
+                          f"已更新路线：{len(first['stops'])}个景点，预计{first['total_minutes']}分钟。请查看下方的新路线。")
+                visit.messages = (visit.messages + [{'role': 'user', 'content': question}, {'role': 'assistant', 'content': answer}])[-12:]
+                db.add(visit); db.commit()
+                return dict(answer=answer, actions=['plan'], source='local', preferences=revised, plans=updated)
         context_question = question
         if body.spot_id:
             current = next((s for s in spots if s['spot_id'] == body.spot_id), None)
             if current: context_question = current['spot_name'] + ' ' + question
         result = consultation(context_question, station, spots, body.language)
+        route_context = current_plan.snapshot['route'] if current_plan else None
+        if route_context and not result['spot'] and 'facilities' not in result['actions']:
+            names = ' → '.join(s['spot_name'] for s in route_context['stops'])
+            result['answer'] = (f"Your current itinerary has {len(route_context['stops'])} stops and takes about {route_context['total_minutes']} minutes. Ask to add or remove a named attraction, make it shorter, or change the exit." if body.language == 'en' else
+                f"当前路线是：{names}，预计{route_context['total_minutes']}分钟。您可以说“去掉某个景点”“还想去十七孔桥”或“最后改为北宫门”，我会重新计算。")
         recent = visit.messages[-6:]
         name = station.name
         spot = result.pop('spot')
@@ -244,6 +269,7 @@ async def chat(visit_id: str, body: ChatInput, x_station_token: str = Header(def
     result['source'] = 'local'
     if not result['route_intent'] and 'facilities' not in result['actions'] and _llm_is_configured():
         facts = {k: spot.get(k) for k in ('spot_name', 'description', 'history_detail', 'photo_tips', 'tour_tips')} if spot else {}
+        if route_context: facts['current_route'] = {k: route_context.get(k) for k in ('stops', 'total_minutes', 'walking_meters', 'exit_leg')}
         try:
             prompt = [{'role': 'system', 'content': 'You are a receptionist at a FIXED Summer Palace service station: ' + name +
                 '. Answer in ' + ('English' if body.language == 'en' else 'Chinese') +
@@ -256,7 +282,7 @@ async def chat(visit_id: str, body: ChatInput, x_station_token: str = Header(def
             result['source'] = 'local_fallback'
     if body.language == 'en' and spot and result['source'] != 'model' and not english_answer(result['answer']):
         result['answer'] = english_local_answer(spot, fallback)
-    result['preferences'] = PlanInput(**extract_request(question, body.preferences.model_dump())).model_dump()
+    result['preferences'] = PlanInput(**(current_plan.snapshot['preferences'] if current_plan else extract_request(question, body.preferences.model_dump()))).model_dump()
     result['spot_id'] = spot['spot_id'] if spot else body.spot_id
     result.pop('route_intent')
     # Recheck credentials after model generation so an ended visit cannot reappear.
@@ -335,6 +361,22 @@ def share_plan(visit_id: str, body: ShareInput, x_station_token: str = Header(de
             snapshot=plan.snapshot, expires_at=utcnow() + timedelta(minutes=15))
         db.add(row); db.commit()
         return dict(token=token, expires_at=row.expires_at.isoformat() + 'Z')
+
+
+class ClaimStatusInput(BaseModel):
+    token: str = Field(min_length=32, max_length=100)
+
+
+@router.post('/visits/{visit_id}/share-status')
+def share_status(visit_id: str, body: ClaimStatusInput, response: Response, x_station_token: str = Header(default='')):
+    response.headers['Cache-Control'] = 'no-store'
+    with Session(DB_ENGINE) as db:
+        visit, _ = visit_get(db, visit_id, x_station_token)
+        row = db.get(StationClaim, digest(body.token))
+        plan = db.get(StationPlan, row.plan_id) if row else None
+        if not row or not plan or plan.visit_id != visit.visit_id:
+            raise HTTPException(404, '领取码不存在')
+        return dict(status='received' if row.mobile_session_id else 'expired' if row.expires_at <= utcnow() else 'waiting')
 
 
 class ClaimInput(BaseModel):

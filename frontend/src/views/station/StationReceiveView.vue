@@ -19,7 +19,12 @@ const router = useRouter(),
 const S = (zh: string, en: string) => (locale.value === 'en' ? en : zh)
 let token = '',
   receipt = ''
-onMounted(async () => {
+onMounted(() => {
+  void loadPreview()
+})
+async function loadPreview() {
+  loading.value = true
+  error.value = ''
   token = new URLSearchParams(location.hash.slice(1)).get('claim') || ''
   if (!token) {
     error.value = S(
@@ -51,7 +56,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 async function receive() {
   if (receiving.value) return
   receiving.value = true
@@ -59,12 +64,16 @@ async function receive() {
   try {
     const data = await receiveStationClaim(token, receipt)
     sessionId.value = data.session_id
-    if (data.avatar_access_token)
-      sessionStorage.setItem('xingyun-tour-' + data.session_id, data.avatar_access_token)
-    sessionStorage.setItem(
-      'zhiyou-active-tour',
-      JSON.stringify({ id: data.session_id, spot: '', at: Date.now() })
-    )
+    try {
+      if (data.avatar_access_token)
+        sessionStorage.setItem('xingyun-tour-' + data.session_id, data.avatar_access_token)
+      sessionStorage.setItem(
+        'zhiyou-active-tour',
+        JSON.stringify({ id: data.session_id, spot: '', at: Date.now() })
+      )
+    } catch {
+      /* Route pickup remains valid even if browser storage is full. */
+    }
     // Remove the pickup token from history once the independently owned tour opens.
     await router.replace('/m/tour/' + data.session_id)
   } catch (e) {
@@ -104,8 +113,8 @@ async function receive() {
       <p class="receive-note">
         {{
           S(
-            '这是大屏上确认的方案，已包含本站出发与终点步行。开放、票务和排队以现场为准。',
-            'This is the plan confirmed at the screen, including walking from the station to your destination. Check access, tickets and queues on site.'
+            '这是大屏上确认的方案，已包含本站出发与终点步行。开放与排队以现场为准。',
+            'This is the plan confirmed at the screen, including walking from the station to your destination. Check access and queues on site.'
           )
         }}
       </p>
@@ -132,6 +141,9 @@ async function receive() {
     <section v-else role="alert">
       <h1>{{ S('暂时无法领取', 'Unable to receive this plan') }}</h1>
       <p>{{ t(error) }}</p>
+      <button :disabled="loading" @click="loadPreview">
+        {{ S('重新连接领取页', 'Retry pickup') }}
+      </button>
       <a href="/m/home">{{ S('打开手机端，自行规划', 'Open mobile planning') }} ↗</a>
     </section>
   </main>
