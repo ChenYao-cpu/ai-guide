@@ -5,7 +5,7 @@ import { request_handler } from '@/api/base'
 import XingyunGuide from './XingyunGuide.vue'
 const xingyunRef = ref<InstanceType<typeof XingyunGuide> | null>(null)
 const xingyunConnected = ref(false)
-const props = defineProps<{ volume?:number; guideId?: number; tourId?: number; stationMode?:boolean; stationVisit?:{visit_id:string;access_token:string}; framing?: 'full' | 'half'; posterImage?: string; sourceVideo?: string; width?: number; height?: number; audioElement?: HTMLAudioElement | null; speaking?: boolean; busy?: boolean }>()
+const props = defineProps<{ guideId?: number; tourId?: number; stationMode?:boolean; stationVisit?:{visit_id:string;access_token:string}; framing?: 'full' | 'half'; posterImage?: string; sourceVideo?: string; width?: number; height?: number; audioElement?: HTMLAudioElement | null; speaking?: boolean; busy?: boolean }>()
 const emit = defineEmits<{ playing: [value: boolean]; connected: [value: boolean] }>()
 const posterUrl = computed(() => (props.posterImage || '').replace(/\\/g, '/').replace(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?=\/api\/v1\/files)/, ''))
 type AvatarJob = { job_id?: string; access_token?: string; status?: string; message?: string }
@@ -48,7 +48,7 @@ defineExpose({getMode:async()=>{await capabilityReady;return xingyunRef.value?.i
     <div class="viewport" :style="{minHeight:0+'px'}">
       <div v-if="!state" class="avatar-loading" role="status">{{ $t(capabilityLoading ? '数字人正在加载中' : message) }}<button v-if="!capabilityLoading" type="button" @click="capabilityRevision++">{{ $t('重试') }}</button></div>
       <div v-if="stationMode && state?.preferredMode === 'xingyun' && !stationVisit" class="avatar-loading" role="status">{{ $t('数字人正在加载中') }}</div>
-      <XingyunGuide v-if="!stationMode || !!stationVisit" v-show="state?.preferredMode === 'xingyun' && (!!tourId || !!stationVisit)" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :station-visit="stationVisit" :station-mode="stationMode" :volume="volume" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
+      <XingyunGuide v-if="!stationMode || !!stationVisit" v-show="state?.preferredMode === 'xingyun' && (!!tourId || !!stationVisit)" ref="xingyunRef" :guide-id="guideId" :tour-id="tourId" :station-visit="stationVisit" :station-mode="stationMode" :framing="framing || 'full'" @playing="emit('playing', $event)" @connected="xingyunConnected=$event; emit('connected', $event)" />
       <TourAvatar3D v-show="!xingyunConnected" :natural-standing="true" v-if="mode==='3d'&&state?.threeD?.modelUrl" :model-url="sceneUrl||state.threeD.modelUrl" :audio-element="audioElement" :width="Math.max(200,(width||360)-30)" :height="height||440" @ready="sceneReady" @error="sceneError" />
       <video v-show="!xingyunConnected" v-else-if="videoUrl" :key="'speech-'+videoUrl" :muted="false" :loop="false" playsinline :src="videoUrl" controls autoplay @play="emit('playing',true)" @pause="emit('playing',false)" @ended="emit('playing',false)" @error="message='视频播放失败，请检查网络';emit('playing',false)" />
       <img v-show="!xingyunConnected" v-else-if="!stationMode && posterUrl && state && state.preferredMode !== 'xingyun'" :src="posterUrl" :alt='$t("所选数字人全身形象")' style="width:100%;height:100%;min-height:0;object-fit:contain" />
