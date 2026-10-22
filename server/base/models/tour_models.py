@@ -180,6 +180,8 @@ class DigitalGuideInfo(SQLModel, table=True):
     poster_image: str = ""
     base_mp4_path: str = ""  # 数字人基础循环视频
     base_video_metadata: str = ""  # 服务端校验后的素材信息 JSON
+    live2d_model_path: str = ""  # Live2D 模型路径（星云/H5 渲染使用）
+    model3d_path: str = ""  # 3D 模型路径
     render_mode: str = "realistic"
     is_enabled: bool = True  # 管理员上架后才对游客开放
 

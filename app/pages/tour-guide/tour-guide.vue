@@ -11,7 +11,7 @@
     <scroll-view scroll-y class="page-scroll" :scroll-top="planningScrollTop" @scroll="onPlanningScroll" :style="viewportH?{height:viewportH+'px'}:null" :show-scrollbar="false">
     <view class="nav header-spacer" aria-hidden="true" :style="{height:statusH+'px'}"></view>
     <view class="planning-header">
-      <button v-if="tab==='personal'" class="planning-back" :disabled="starting||recommending" @tap="switchPlanningTab('route')">‹ {{ t('返回选路线') }}</button>
+      <button v-if="tab==='personal'" class="planning-back" :disabled="starting||recommending" :aria-label="t('返回选路线')" @tap="switchPlanningTab('route')"><text class="iconfont icon-zuoyoujiantou"></text></button>
       <text class="planning-title">{{ t(tab==='route' ? '游览路线' : '个性化行程') }}</text>
       <text class="planning-subtitle">{{ t(tab==='route' ? '选择想去的景点，查看行程后选择数字人' : '确认行程，选择数字人后开始导览') }}</text>
     </view>
