@@ -3,13 +3,12 @@
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { request_handler } from '@/api/base'
 import { avatarHeaders } from '@/api/xingyunTour'
-const props = defineProps<{ volume?: number; guideId?: number; tourId?: number; stationVisit?:{visit_id:string;access_token:string}; stationMode?: boolean; framing?: 'full' | 'half'; posterImage?: string }>()
+const props = defineProps<{ guideId?: number; tourId?: number; stationVisit?:{visit_id:string;access_token:string}; stationMode?: boolean; framing?: 'full' | 'half'; posterImage?: string }>()
 
 type Avatar = {
   init(options: Record<string, unknown>): Promise<void>
   speak(text: string, start: boolean, end: boolean): void
   interactiveidle(): void
-  setVolume(volume: number): void
   destroy(): void
 }
 type Constructor = new (options: Record<string, unknown>) => Avatar
@@ -155,12 +154,6 @@ async function connect() {
     if (current === generation) { release(); message.value = error instanceof Error ? error.message : t("数字人连接失败");scheduleRetry() }
   } finally { if (active && current===generation) {loading.value = false;cancelReady=undefined} }
 }
-// SDK volume API: https://www.xingyun3d.com/developers/52-183
-function applyVolume() {
-  if (props.volume == null) return
-  try { avatar?.setVolume(Math.max(0, Math.min(1, props.volume))) } catch { /* SDK may still be initializing */ }
-}
-watch(() => [props.volume, ready.value], applyVolume)
 function stop() {
   try { if (ready.value) avatar?.interactiveidle() } catch { release(); message.value = '数字人连接异常，请重新连接' }
   emit('playing', false)
@@ -169,7 +162,6 @@ function speak(text?: string): boolean {
   if (!ready.value || !avatar || !text?.trim()) return false
   try {
     avatar.interactiveidle()
-    applyVolume()
     avatar.speak(text, true, true)
     return true
   } catch { release(); message.value = '数字人播报失败，本轮使用原导览语音'; return false }
@@ -199,8 +191,6 @@ defineExpose({ speak, stop, isReady: () => ready.value })
 .xingyun-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center;font-size:18px;line-height:1.6;color:var(--text-secondary)}
 .xingyun-guide.station-mode:not(.half) .xingyun-frame{padding:12px 6px 8px}
 .xingyun-guide.station-mode:not(.half) .xingyun-canvas{inset:12px 6px 8px!important;width:calc(100% - 12px)!important;height:calc(100% - 20px)!important}
-/* Enlarge only the station's live figure, preserving headroom and the full feet. */
-.xingyun-guide.station-mode:not(.half) .xingyun-canvas :deep(canvas){transform:scale(1.12)!important;transform-origin:50% 90%!important}
 .station-mode .xingyun-controls:empty{display:none}
 .xingyun-guide{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;justify-content:center;flex:1}.xingyun-guide.activated{flex:1;min-height:180px}.xingyun-frame{flex:1;min-height:120px;width:100%;position:relative;overflow:hidden}.xingyun-canvas{position:absolute;inset:0;width:100%;height:100%}.half .xingyun-canvas{transform:scale(1.75);transform-origin:50% 0}.xingyun-controls{flex-shrink:0;text-align:center;padding:8px;font-size:12px;color: var(--text-secondary)}.xingyun-controls button{padding:8px 14px;border: 1px solid var(--glass-line);border-radius:8px;color: var(--champagne-text);background: var(--glass);cursor:pointer}.xingyun-controls p{margin:6px 0}
 </style>
