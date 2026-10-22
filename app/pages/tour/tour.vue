@@ -47,9 +47,8 @@
       <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
       <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text v-if="guideProvider!=='xingyun'" class="avatar-notice">{{ t('形象未配置') }}</text></view>
       </template>
-      <view v-if="avatarConnecting || speaking || xingyunFailed" class="stage-status" :class="{on:speaking}">
-        <view v-if="avatarConnecting" class="avatar-loading" role="status" :aria-label="t('连接中…')"><view v-for="dot in 3" :key="dot" class="avatar-loading-dot"></view></view>
-        <text v-else>{{ t(xingyunFailed ? '连接失败' : '讲解中') }}</text>
+      <view v-if="avatarConnecting" class="stage-status" :class="{on:speaking}">
+        <view class="avatar-loading" role="status" :aria-label="t('连接中…')"><view v-for="dot in 3" :key="dot" class="avatar-loading-dot"></view></view>
       </view>
     </view>
 
