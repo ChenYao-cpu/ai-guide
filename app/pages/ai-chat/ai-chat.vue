@@ -23,7 +23,6 @@
       <button v-if="chatMode==='guide'" class="qh-spot" :disabled="loading||recognizing" @tap="pickSpot" :aria-label="$t('选择问答景点')">
         <view class="context-pin"><text class="iconfont icon-zuobiao"></text></view>
         <text class="context-name">{{ guideSpotName ? $t(guideSpotName) : $t('选择景点') }}</text>
-        <text class="context-arrow">⌄</text>
       </button>
       <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
         <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
@@ -951,7 +950,7 @@ export default {
 .hist-clock{width:33rpx;height:33rpx;border-color:#38276c}.hc-hour,.hc-minute{background:#38276c}
 .nav .qh-spot{display:flex;align-items:center;gap:12rpx;width:auto;flex:0 1 auto;max-width:450rpx;min-width:0;margin:0;padding:12rpx 18rpx 12rpx 10rpx;min-height:72rpx;line-height:1.4;border:1rpx solid rgba(255,255,255,.76);border-radius:40rpx;background:rgba(255,255,255,.64);box-shadow:0 6rpx 24rpx rgba(115,91,185,.07);text-align:left;box-sizing:border-box}
 .qh-spot::after{border:0}.context-pin{display:flex;align-items:center;justify-content:center;width:46rpx;height:46rpx;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.94)}.context-pin .iconfont{font-size:31rpx;color:#9a81ee}
-.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-arrow{font-size:28rpx;color:#39266e}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
+.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
 .conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
 .welcome-active :deep(.uni-scroll-view-content){display:flex;flex-direction:column;min-height:100%}
 .guide-welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 12rpx 210rpx;box-sizing:border-box}
