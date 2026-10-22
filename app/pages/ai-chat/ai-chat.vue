@@ -23,7 +23,6 @@
       <button v-if="chatMode==='guide'" class="qh-spot" :disabled="loading||recognizing" @tap="pickSpot" :aria-label="$t('选择问答景点')">
         <view class="context-pin"><text class="iconfont icon-zuobiao"></text></view>
         <text class="context-name">{{ guideSpotName ? $t(guideSpotName) : $t('选择景点') }}</text>
-        <text class="context-arrow">⌄</text>
       </button>
       <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
         <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
@@ -125,11 +124,10 @@
 
     <view v-if="voiceError && !transcribing" class="voice-status">{{ $t(voiceError) }}</view>
     <!-- 语音录音提示 -->
-    <view class="recording-hint" v-if="recording">
+    <view class="recording-hint" v-if="recording" aria-hidden="true">
       <view class="rh-wave">
         <view v-for="i in 5" :key="i" class="rh-bar" :style="{animationDelay:(i*0.12)+'s'}"></view>
       </view>
-      <text class="rh-text">{{ $t(recordingText) }}</text>
     </view>
 
     <view v-if="showPhotoChoices" class="photo-popover-mask" :class="{closing:photoClosing}" @tap="closePhotoChoices"></view>
@@ -827,9 +825,9 @@ export default {
 .nav-back text{transform:translateY(-3rpx)}
 .nav-clear{position:static;font-size:24rpx;color:var(--ng-secondary);padding:6rpx 14rpx;border-radius:8rpx;background:rgba(99,102,241,0.06)}
 .nav-history{position:relative;flex-shrink:0;width:68rpx;height:68rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.82);border:1rpx solid var(--ng-border);box-shadow:0 4rpx 14rpx rgba(99,102,241,0.14)}
-.hist-clock{position:relative;width:34rpx;height:34rpx;border:3rpx solid var(--ng-secondary);border-radius:50%;box-sizing:border-box}
-.hc-hour{position:absolute;left:50%;top:50%;width:2.5rpx;height:9rpx;background:var(--ng-secondary);border-radius:2rpx;transform:translate(-50%,-100%)}
-.hc-minute{position:absolute;left:50%;top:50%;width:9rpx;height:2.5rpx;background:var(--ng-secondary);border-radius:2rpx;transform-origin:0 50%;transform:translateY(-50%) rotate(32deg)}
+.hist-clock{position:relative;width:34rpx;height:34rpx;border:3rpx solid #9a81ee;border-radius:50%;box-sizing:border-box}
+.hc-hour{position:absolute;left:50%;top:50%;width:2.5rpx;height:9rpx;background:#9a81ee;border-radius:2rpx;transform:translate(-50%,-100%)}
+.hc-minute{position:absolute;left:50%;top:50%;width:9rpx;height:2.5rpx;background:#9a81ee;border-radius:2rpx;transform-origin:0 50%;transform:translateY(-50%) rotate(32deg)}
 .history-mask{position:fixed!important;inset:0!important;z-index:9500!important;background:rgba(24,20,40,0.38);display:flex;align-items:center;justify-content:center;padding:0 24rpx}
 .history-panel{width:86vw;max-width:660rpx;max-height:74vh;background:var(--ng-surface);border-radius:34rpx;box-shadow:0 30rpx 80rpx rgba(40,30,70,0.28);display:block;overflow:hidden;transform-origin:top right;animation:historyPop .42s cubic-bezier(.18,1.3,.3,1)}
 @keyframes historyPop{0%{transform:translate(40rpx,-60rpx) scale(0.18);opacity:0}55%{transform:translate(0,0) scale(1.04);opacity:1}100%{transform:translate(0,0) scale(1)}}
@@ -889,11 +887,10 @@ export default {
 .result-bar { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:14rpx 20rpx; margin:0 20rpx 8rpx; background:rgba(99,102,241,0.15); border:1rpx solid rgba(99,102,241,0.25); border-radius:14rpx; font-size:24rpx; color:var(--ng-text); font-weight:600; }
 .rb-btn { padding:8rpx 20rpx; border-radius:20rpx; background:linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.18)); color:var(--ng-text); font-size:22rpx; font-weight:700; }
 
-.recording-hint { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; padding:16rpx 0 8rpx; gap:10rpx; }
+.recording-hint { position:absolute; left:0; right:0; bottom:calc(118rpx + env(safe-area-inset-bottom,0px)); z-index:996; display:flex; align-items:flex-end; justify-content:center; padding:0; background:transparent; pointer-events:none; }
 .rh-wave { display:flex; gap:5rpx; align-items:flex-end; height:50rpx; }
-.rh-bar { width:5rpx; min-height:10rpx; border-radius:3rpx; background:rgba(99,102,241,0.18); animation:waveAnim 0.6s ease-in-out infinite; }
+.rh-bar { width:5rpx; min-height:10rpx; border-radius:3rpx; background:rgba(99,102,241,0.55); box-shadow:0 0 6rpx rgba(255,255,255,0.9); animation:waveAnim 0.6s ease-in-out infinite; }
 @keyframes waveAnim { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(3); } }
-.rh-text { font-size:26rpx; color:var(--ng-secondary); font-weight:700; }
 
 .bottom-fixed{position:relative;flex-shrink:0;z-index:998;display:flex;flex-direction:column;background:var(--ng-surface);backdrop-filter: none}
 .bottom-fixed.photo-open{z-index:1300}.input-bar{display:flex;gap:12rpx;align-items:center;padding:16rpx 18rpx 18rpx;background:var(--ng-surface);border-top:1rpx solid var(--ng-border);margin:0}
@@ -953,7 +950,7 @@ export default {
 .hist-clock{width:33rpx;height:33rpx;border-color:#38276c}.hc-hour,.hc-minute{background:#38276c}
 .nav .qh-spot{display:flex;align-items:center;gap:12rpx;width:auto;flex:0 1 auto;max-width:450rpx;min-width:0;margin:0;padding:12rpx 18rpx 12rpx 10rpx;min-height:72rpx;line-height:1.4;border:1rpx solid rgba(255,255,255,.76);border-radius:40rpx;background:rgba(255,255,255,.64);box-shadow:0 6rpx 24rpx rgba(115,91,185,.07);text-align:left;box-sizing:border-box}
 .qh-spot::after{border:0}.context-pin{display:flex;align-items:center;justify-content:center;width:46rpx;height:46rpx;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.94)}.context-pin .iconfont{font-size:31rpx;color:#9a81ee}
-.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-arrow{font-size:28rpx;color:#39266e}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
+.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
 .conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
 .welcome-active :deep(.uni-scroll-view-content){display:flex;flex-direction:column;min-height:100%}
 .guide-welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 12rpx 210rpx;box-sizing:border-box}

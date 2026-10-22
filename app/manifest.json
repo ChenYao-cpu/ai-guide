@@ -69,5 +69,14 @@
     "__usePrivacyCheck__": true,
     "lazyCodeLoading": "requiredComponents"
   },
+  "h5": {
+    "title": "智游知境",
+    "router": {
+      "mode": "hash"
+    },
+    "devServer": {
+      "port": 8080
+    }
+  },
   "vueVersion": "3"
 }
