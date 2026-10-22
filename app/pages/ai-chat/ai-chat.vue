@@ -1,12 +1,12 @@
 <template>
-  <view class="page aurora-page no-tabbar" :class="{'app-english':tourLanguage==='en'}">
+  <view class="page aurora-page no-tabbar chat-ref-page" :class="{'app-english':tourLanguage==='en','chat-keyboard':keyboardVisible}">
     <!-- #ifdef APP-PLUS -->
     <view class="app-status-bar-shield" aria-hidden="true"></view>
     <!-- #endif -->
     <!-- #ifdef APP-PLUS || H5 -->
     <chat-voice :payload="voicePayload" @state="onDigitalVoiceState" style="position:fixed;left:-2000px;top:0;width:240px;height:320px;pointer-events:none" aria-hidden="true" />
     <!-- #endif -->
-    <view class="aurora-background" aria-hidden="true"><view class="aurora-wave aurora-wave-one"></view><view class="aurora-wave aurora-wave-two"></view><view class="aurora-shine"></view></view>
+    <view class="aurora-background chat-scenery" aria-hidden="true"><view class="chat-wave chat-wave-blue"></view><view class="chat-wave chat-wave-lilac"></view></view>
 
     <!-- 水墨背景 -->
     <view class="ink-bg">
@@ -18,7 +18,13 @@
     <!-- 标题 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <view class="nav-back" @tap="goBack" :aria-label="$t('返回')"><text>‹</text></view>
+      <view class="nav-spacer"></view>
       <text class="nav-clear" v-if="msgs.length" @tap="clearHistory">{{ $t("清空") }}</text>
+      <button v-if="chatMode==='guide'" class="qh-spot" :disabled="loading||recognizing" @tap="pickSpot" :aria-label="$t('选择问答景点')">
+        <view class="context-pin"><text class="iconfont icon-zuobiao"></text></view>
+        <text class="context-name">{{ guideSpotName ? $t(guideSpotName) : $t('选择景点') }}</text>
+        <text class="context-arrow">⌄</text>
+      </button>
       <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
         <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
       </view>
@@ -31,22 +37,31 @@
       <view class="qh-chip" @tap="quickSend('帮我规划一个适合拍照的一日游路线')">{{ $t("拍照打卡一日游") }}</view>
       <view class="qh-chip" @tap="quickSend('周末带朋友玩半天，喜欢美食和拍照')">{{ $t("周末美食拍照") }}</view>
     </view>
-    <view class="quick-hints" v-if="msgs.length===0 && chatMode==='guide'">
-      <view class="qh-spot" @tap="pickSpot">
-        <text class="qh-spot-label">{{ $t('选择景点') }}：{{ guideSpotName ? $t(guideSpotName) : $t('未选择') }}</text>
-        <text class="qh-spot-action">›</text>
-      </view>
-      <view class="qh-chip" @tap="askGuide('intro')">{{ guideSpotName ? $t('介绍「{spot}」',{spot:$t(guideSpotName)}) : $t('介绍这个景点') }}</view>
-      <view class="qh-chip" @tap="askGuide('story')">{{ guideSpotName ? $t('「{spot}」有什么历史故事？',{spot:$t(guideSpotName)}) : $t('这里有什么历史故事？') }}</view>
-      <view class="qh-chip" @tap="askGuide('photo')">{{ guideSpotName ? $t('「{spot}」有什么拍照建议？',{spot:$t(guideSpotName)}) : $t('这里有什么拍照建议？') }}</view>
-    </view>
 
     <!-- 对话区 -->
-    <scroll-view scroll-y class="chat-area" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim" @scroll="onChatScroll">
-      <view v-if="msgs.length === 0 && !loading" class="chat-empty">
-
-        <text class="ce-title">{{ $t(chatMode==='guide'?'想了解哪个景点？':'想去哪里？') }}</text>
-
+    <view class="conversation-stage">
+    <scroll-view scroll-y class="chat-area" :class="{'welcome-active':msgs.length===0&&!loading&&chatMode==='guide'}" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim" @scroll="onChatScroll">
+      <view v-if="msgs.length===0&&!loading&&chatMode==='guide'" class="guide-welcome">
+        <view v-if="qaCatalogLoading" class="welcome-loading" aria-live="polite">{{ $t('正在加载景点…') }}</view>
+        <view v-else-if="catalogError" class="welcome-unavailable">
+          <text>{{ $t(catalogError) }}</text>
+          <button @tap="loadWelcomeCatalog">{{ $t('重试') }}</button>
+        </view>
+        <view class="welcome-art" aria-hidden="true">
+          <view class="welcome-art-shadow"></view>
+          <view class="welcome-balloon"><view class="welcome-dots"><view></view><view></view><view></view></view></view>
+          <text class="welcome-sparkle welcome-sparkle-large">✦</text><text class="welcome-sparkle welcome-sparkle-small">✦</text>
+        </view>
+        <text class="welcome-title">{{ $t('想了解哪个景点？') }}</text>
+        <text class="welcome-description">{{ $t('可以选择下方的快捷提问，或直接向我提问~') }}</text>
+        <view class="welcome-topics">
+          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('intro')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-daolan"></text></view><text class="topic-title">{{ $t('介绍这个景点') }}</text></button>
+          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('story')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-lishiwenhua"></text></view><text class="topic-title">{{ $t('这里有什么历史故事？') }}</text></button>
+          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button>
+        </view>
+      </view>
+      <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
+        <text class="ce-title">{{ $t('想去哪里？') }}</text>
       </view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
@@ -70,6 +85,7 @@
       </view>
       <view id="bottom"></view>
     </scroll-view>
+    </view>
 
     <!-- 路线预览时间轴 -->
     <view class="route-preview" v-if="chatMode==='route' && lastSpotIds.length > 0 && !loading">
@@ -208,7 +224,7 @@ export default {
   components:{ChatVoice,NocturneSelect},
   data: function () {
     return {
-      chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
+      chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,catalogError:'',showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,photoClosing:false,scrollAnim:false,
       showHistory:false, historyTranslating:false, historyTranslationFailed:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
@@ -216,6 +232,7 @@ export default {
     }
   },
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
+  onReady:function(){this._welcomeReady=true;if(this.chatMode==='guide')this.loadWelcomeCatalog()},
   watch:{
     pendingPhoto:function(){this.scrollChat()},
     recognitionError:function(){this.scrollChat()},
@@ -245,7 +262,7 @@ export default {
       })
       return out.slice().reverse()
     },
-    qaOptions:function(){return this.qaSpots.map(spot=>[this.$t(spot.city),this.$t(spot.spot_name)].filter(Boolean).join(' · '))},
+    qaOptions:function(){return this.qaSpots.map(spot=>this.$t(spot.spot_name))},
     guideSpotName:function(){const spot=this.qaSpots.find(item=>item.spot_id===this.qaSpotId);return spot?spot.spot_name:''},
     totalDuration: function () {
       if(!this.recommendedPlan)return null
@@ -254,6 +271,11 @@ export default {
     },
   },
   methods: {
+    loadWelcomeCatalog:async function(){
+      const epoch=this.requestEpoch,owner=this.storageOwner();this.catalogError=''
+      try{await this.loadQACatalog()}catch(_){if(this.isCurrentRequest(epoch,owner))this.catalogError='景点加载失败，请检查网络后重试'}
+    },
+
     goBack:function(){
       const stack=(typeof getCurrentPages==='function')?getCurrentPages():[]
       if(stack&&stack.length>1){uni.navigateBack({delta:1});return}
@@ -402,14 +424,15 @@ export default {
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
     loadQACatalog:async function(){
       if(this.qaSpots.length&&this.qaGuides.length)return
-      this.qaCatalogLoading=true
       const epoch=this.requestEpoch,owner=this.storageOwner()
-      try{
-        const [spots,guides]=await Promise.all([request({url:'/tour-session/spots'}),request({url:'/tour-session/guides'})])
+      if(this._catalogRequest&&this._catalogEpoch===epoch&&this._catalogOwner===owner)return this._catalogRequest
+      this.qaCatalogLoading=true;this._catalogEpoch=epoch;this._catalogOwner=owner
+      const pending=Promise.all([request({url:'/tour-session/spots'}),request({url:'/tour-session/guides'})]).then(([spots,guides])=>{
         if(!this.isCurrentRequest(epoch,owner))return
         this.qaSpots=spots.data?.data?.spot_list||[]
         this.qaGuides=guides.data?.data?.guide_list||[]
-      }finally{if(this.isCurrentRequest(epoch,owner))this.qaCatalogLoading=false}
+      }).finally(()=>{if(this.isCurrentRequest(epoch,owner))this.qaCatalogLoading=false;if(this._catalogRequest===pending)this._catalogRequest=null})
+      this._catalogRequest=pending;return pending
     },
     selectQuestionSpot:function(event){
       this.qaSpotId=this.qaSpots[Number(event.detail.value)]?.spot_id||null
@@ -423,7 +446,7 @@ export default {
       }
     },
     pickSpot:function(){
-      this.loadQACatalog()
+      this.loadWelcomeCatalog()
       const self=this
       const open=function(){self.showQASpots=true}
       try{
@@ -574,7 +597,7 @@ export default {
     scrollChat:function(){
       const self=this
       self.scrollAnim=false
-      self.$nextTick(()=>{self.chatScrollTop+=100000})
+      self.$nextTick(()=>{self.chatScrollTop=self.msgs.length||self.loading?self.chatScrollTop+100000:0})
       clearTimeout(self._scrollAnimTimer)
       self._scrollAnimTimer=setTimeout(()=>{self.scrollAnim=true},260)
     },
@@ -595,6 +618,7 @@ export default {
     clearHistory:function(){
       this.requestEpoch++;this.stopTTS();this.cancelRecord();this.loading=false;this.recognizing=false;this.transcribing=false;this.qaCatalogLoading=false
       this.msgs=[];this.historyMsgs=[];this.qaSession=null;this.text='';this.voiceError='';this.showPhotoChoices=false;this.showQASpots=false;this.pendingPhoto='';this.recognitionError='';this.applyingRoute=false;this.clearRoutePreview();this.saveHistory()
+      this.chatScrollTop=0;this.followBottom=true
       uni.removeStorageSync('ai_chat_msgs');uiToast({title:'已清除',icon:'none'})
     },
     fixImg: function (u) { if (!u) return ''; return assetUrl(u) },
@@ -753,7 +777,7 @@ export default {
   },
   onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
   onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
-  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadQACatalog();this.scrollChat()},
+  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
 }
 </script>
 
@@ -915,4 +939,43 @@ export default {
 .rp-total { display:flex; align-items:center; justify-content:space-between; margin-top:10rpx; padding-top:14rpx; border-top:1rpx dashed var(--ng-border); }
 .rp-total-label { font-size:24rpx; color:var(--ng-secondary); font-weight:600; }
 .rp-total-value { font-size:30rpx; font-weight:800; color:var(--ng-text); }
+
+/* Reference layout: compact header, central welcome and soft landscape waves. */
+.chat-ref-page{--app-font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-family:var(--app-font-family);color:#211653}
+.chat-ref-page .chat-scenery{background:linear-gradient(145deg,#efedfc 0%,#f8f7ff 55%,#f2fbff 100%)!important}
+.chat-scenery .chat-wave{position:absolute;opacity:1!important;pointer-events:none;animation:none!important}
+.chat-wave-blue{left:-18%;bottom:140rpx;width:150%;height:560rpx;border-radius:65% 48% 0 0;transform:rotate(-15deg);background:linear-gradient(160deg,rgba(208,232,254,.1),rgba(207,235,254,.55))}
+.chat-wave-lilac{left:-30%;bottom:-130rpx;width:170%;height:460rpx;border-radius:54% 60% 0 0;transform:rotate(13deg);background:linear-gradient(155deg,rgba(221,211,250,.58),rgba(223,236,255,.2))}
+.chat-ref-page .nav{gap:14rpx;padding-left:26rpx;padding-right:26rpx;padding-bottom:20rpx;border-bottom:0!important}
+.nav-back{width:64rpx;height:72rpx;margin:0;flex-shrink:0;font-size:64rpx;color:#302563}.nav-spacer{flex:1;min-width:0}
+.nav-history{width:72rpx;min-width:72rpx;height:72rpx;border-radius:50%;border:1rpx solid rgba(255,255,255,.85);box-shadow:0 6rpx 24rpx rgba(106,82,180,.07);background:rgba(255,255,255,.9)}
+.hist-clock{width:33rpx;height:33rpx;border-color:#38276c}.hc-hour,.hc-minute{background:#38276c}
+.nav .qh-spot{display:flex;align-items:center;gap:12rpx;width:auto;flex:0 1 auto;max-width:450rpx;min-width:0;margin:0;padding:12rpx 18rpx 12rpx 10rpx;min-height:72rpx;line-height:1.4;border:1rpx solid rgba(255,255,255,.76);border-radius:40rpx;background:rgba(255,255,255,.64);box-shadow:0 6rpx 24rpx rgba(115,91,185,.07);text-align:left;box-sizing:border-box}
+.qh-spot::after{border:0}.context-pin{display:flex;align-items:center;justify-content:center;width:46rpx;height:46rpx;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.94)}.context-pin .iconfont{font-size:31rpx;color:#9a81ee}
+.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-arrow{font-size:28rpx;color:#39266e}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
+.conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
+.welcome-active :deep(.uni-scroll-view-content){display:flex;flex-direction:column;min-height:100%}
+.guide-welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 12rpx 210rpx;box-sizing:border-box}
+.welcome-art{position:relative;width:240rpx;height:172rpx;flex-shrink:0;margin:0 0 34rpx;pointer-events:none}
+.welcome-art-shadow{position:absolute;left:16rpx;right:8rpx;bottom:4rpx;height:28rpx;border-radius:50%;background:radial-gradient(ellipse,rgba(171,147,232,.12),rgba(194,176,245,0) 72%)}
+.welcome-balloon{position:absolute;left:42rpx;top:24rpx;width:146rpx;height:96rpx;border-radius:36rpx;background:linear-gradient(135deg,#e1d8ff,#ac91ed);box-shadow:inset 4rpx 6rpx 16rpx rgba(255,255,255,.38),0 10rpx 28rpx rgba(162,130,225,.12);animation:welcomeFloat 4s ease-in-out infinite}
+.welcome-balloon::after{content:'';position:absolute;left:22rpx;bottom:-20rpx;width:38rpx;height:32rpx;background:#c7b5f6;clip-path:polygon(0 0,100% 0,0 100%)}
+.welcome-dots{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:13rpx}.welcome-dots>view{width:14rpx;height:14rpx;border-radius:50%;background:rgba(255,255,255,.94)}
+.welcome-sparkle{position:absolute;line-height:1;color:#d3b2ed;animation:welcomeTwinkle 4s ease-in-out infinite}.welcome-sparkle-large{right:12rpx;top:0;font-size:54rpx}.welcome-sparkle-small{right:0;top:40rpx;font-size:29rpx;animation-delay:1s}
+.welcome-title{display:block;text-align:center;font-size:43rpx;line-height:1.45;font-weight:700;letter-spacing:1rpx;color:#241552}
+.welcome-description{display:block;max-width:100%;margin-top:14rpx;text-align:center;font-size:25rpx;line-height:1.7;color:#9a98ae}
+.welcome-topics{display:flex;flex-wrap:wrap;align-items:stretch;gap:18rpx;width:100%;margin-top:48rpx}
+.welcome-topic{position:relative;max-width:100%;min-width:0;min-height:88rpx;margin:0;padding:16rpx 22rpx;border:1rpx solid rgba(255,255,255,.95);border-radius:32rpx;background:rgba(255,255,255,.85);box-shadow:0 6rpx 20rpx rgba(116,85,196,.06),inset 0 2rpx 6rpx rgba(255,255,255,.85);display:flex;align-items:center;gap:14rpx;text-align:left;line-height:1.45;box-sizing:border-box}
+.welcome-topic::after{border:0}.welcome-topic[disabled]{opacity:.55}.topic-icon-wrap{width:48rpx;height:48rpx;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1edff}.topic-icon{font-size:31rpx;color:#9b82ee}.topic-title{min-width:0;font-size:26rpx;font-weight:500;color:#291b58;white-space:normal}
+.welcome-loading,.welcome-unavailable{width:100%;margin-bottom:20rpx;padding:14rpx 20rpx;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:16rpx;border-radius:20rpx;background:rgba(255,255,255,.6);color:#8b829d;font-size:23rpx;line-height:1.5;white-space:normal;text-align:center}
+.welcome-unavailable button{flex-shrink:0;margin:0;padding:6rpx 18rpx;font-size:23rpx;line-height:1.7;border-radius:14rpx;color:#7961bc;background:#fff}
+.chat-ref-page .bottom-fixed{border-radius:32rpx 32rpx 0 0;background:#fff;box-shadow:0 -6rpx 24rpx rgba(166,154,211,.04);padding-bottom:env(safe-area-inset-bottom,0px)}
+.chat-ref-page .input-bar{gap:12rpx;padding:16rpx 18rpx 20rpx;border-top:0;border-radius:32rpx 32rpx 0 0;background:#fff}.photo-add,.voice-btn{width:82rpx;height:82rpx;flex-shrink:0;background:#f2edfd;color:#402176}.photo-add{font-size:47rpx}.voice-btn .iconfont{color:#402176}
+.input-bar .msg-input{height:82rpx;padding:0 20rpx;font-family:inherit;font-size:26rpx;border:0;border-radius:22rpx;background:#f8f8fb}.chat-ref-page .input-bar .send-btn{height:82rpx;line-height:82rpx;padding:0 26rpx;font-size:27rpx;border-radius:24rpx;color:#fff;background:linear-gradient(135deg,#b99bf5,#a781ed);box-shadow:0 5rpx 12rpx rgba(153,118,214,.12)}.send-btn.disabled{opacity:.7}.input-bar .voice-hold-btn{height:82rpx;border-radius:22rpx}
+.app-english .welcome-title{font-size:40rpx;letter-spacing:0}.app-english .topic-title{font-size:24rpx}
+.chat-keyboard .guide-welcome{justify-content:flex-start;padding:20rpx 8rpx}.chat-keyboard .welcome-art,.chat-keyboard .welcome-description{display:none}.chat-keyboard .welcome-title{font-size:32rpx}.chat-keyboard .welcome-topics{margin-top:24rpx}
+@keyframes welcomeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7rpx)}}
+@keyframes welcomeTwinkle{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){.welcome-balloon,.welcome-sparkle{animation:none}}
+@media (max-width:360px){.chat-ref-page .nav{gap:10rpx;padding-left:18rpx;padding-right:18rpx}.nav .qh-spot{max-width:370rpx;padding-right:14rpx;gap:8rpx}.context-name{font-size:24rpx}.welcome-title{font-size:40rpx}.guide-welcome{padding-left:4rpx;padding-right:4rpx;padding-bottom:80rpx}.welcome-topic{padding:14rpx 16rpx;gap:10rpx}.topic-title{font-size:25rpx}.chat-ref-page .input-bar{gap:8rpx;padding-left:14rpx;padding-right:14rpx}.photo-add,.voice-btn{width:76rpx;height:76rpx}.input-bar .msg-input,.input-bar .voice-hold-btn,.send-btn{height:76rpx;line-height:76rpx}.send-btn{padding:0 20rpx}}
 </style>
