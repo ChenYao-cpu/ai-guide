@@ -53,10 +53,10 @@ test('switching accounts during a question ignores its reply and does not overwr
 test('a photo picker returning after clear cannot restore the discarded draft',()=>{
  const h=harness(),s=h.s;let picker;h.uni.chooseImage=options=>{picker=options};s.pickScenicImage('album');s.clearHistory();picker.success({tempFilePaths:['/old-photo.jpg']});assert.equal(s.pendingPhoto,'')
 })
-test('opening English history translates stored Chinese questions and answers and caches them',async()=>{
+test('opening English history quotes questions as translation data and caches the original text',async()=>{
  const h=harness(),s=h.s;s.historyMsgs=[{role:'user',content:'介绍这个景点'},{role:'ai',content:'这座桥始建于乾隆十五年。'}];s.saveHistory()
  s.openHistory();assert.equal(s.showHistory,true);assert.equal(s.historyTranslating,true)
- const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call,'translation request');assert.equal(call.data.target,'en');assert.deepEqual(plain(call.data.texts),['介绍这个景点','这座桥始建于乾隆十五年。'])
+ const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call,'translation request');assert.equal(call.data.target,'en');assert.deepEqual(plain(call.data.texts).map(JSON.parse),['介绍这个景点','这座桥始建于乾隆十五年。'])
  call.success({statusCode:200,data:{success:true,data:{translations:['Introduce this attraction.','This bridge was built in the fifteenth year of Qianlong.']}}});await tick();await tick()
  assert.equal(s.historyTranslating,false);assert.equal(s.historyMsgs[0].content,'Introduce this attraction.');assert.equal(s.historyMsgs[1].content,'This bridge was built in the fifteenth year of Qianlong.')
  assert.equal(s.historyMsgs[0].lang,'en');assert.equal(s.historyMsgs[0].translations.zh,'介绍这个景点')
@@ -68,6 +68,14 @@ test('a failed history translation keeps the stored Chinese text for a later ret
  s.openHistory();const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call)
  call.fail({errMsg:'request:fail'});await tick();await tick()
  assert.equal(s.historyTranslating,false);assert.equal(s.historyMsgs[0].content,'介绍这个景点')
+})
+
+test('quoting translation data preserves embedded quotes, newlines and the source history',async()=>{
+ const h=harness(),s=h.s,source='请介绍“长廊”。\n保留数字728和引号"。';s.historyMsgs=[{role:'user',content:source}]
+ const run=s.localizeHistory(),call=h.calls.find(c=>/translate-texts$/.test(c.url))
+ assert.equal(JSON.parse(call.data.texts[0]),source);assert.equal(s.historyMsgs[0].content,source)
+ h.reply(call,{translations:['Please introduce the Long Corridor.\nKeep the number 728 and the quotation mark ".']});await run
+ assert.equal(s.historyMsgs[0].translations.zh,source);assert.match(s.historyMsgs[0].content,/728/)
 })
 
  test('English history rejects untranslated server fallback and exposes retry',async()=>{

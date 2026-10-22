@@ -34,6 +34,6 @@ export default {
 .scenic-sheet-panel{position:relative;width:100%;height:50vh;max-height:50vh;display:flex;flex-direction:column;box-sizing:border-box;padding:0;border-radius:36rpx 36rpx 0 0;background:#fff;overscroll-behavior:none;overflow:visible;box-shadow:0 -16px 50px rgba(20,15,50,.15);will-change:transform}
 .scenic-sheet-panel.fit{height:auto;max-height:60vh}
 .scenic-sheet-panel::after{content:"";position:absolute;left:0;right:0;top:calc(100% - 1px);height:80px;background:#fff;pointer-events:none}
-.scenic-sheet-drag-zone{position:absolute;top:0;left:0;right:0;z-index:5;height:16vh;min-height:100px;display:flex;align-items:flex-start;justify-content:center;flex-shrink:0;touch-action:none}
+.scenic-sheet-drag-zone{position:absolute;top:0;left:0;right:0;z-index:5;height:24px;display:flex;align-items:flex-start;justify-content:center;flex-shrink:0;touch-action:none}
 .scenic-sheet-grip{margin-top:10px;width:66rpx;height:8rpx;border-radius:8rpx;background:rgba(255,255,255,.8);box-shadow:0 1px 4px rgba(30,25,50,.25);position:relative;z-index:2}
 </style>

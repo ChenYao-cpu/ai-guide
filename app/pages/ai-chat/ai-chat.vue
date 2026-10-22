@@ -23,6 +23,7 @@
       <button v-if="chatMode==='guide'" class="qh-spot" :disabled="loading||recognizing" @tap="pickSpot" :aria-label="$t('选择问答景点')">
         <view class="context-pin"><text class="iconfont icon-zuobiao"></text></view>
         <text class="context-name">{{ guideSpotName ? $t(guideSpotName) : $t('选择景点') }}</text>
+        <text class="context-arrow">⌄</text>
       </button>
       <view class="nav-history" @tap="openHistory" :aria-label="$t('问答历史')">
         <view class="hist-clock"><view class="hc-hour"></view><view class="hc-minute"></view></view>
@@ -56,7 +57,7 @@
         <view class="welcome-topics">
           <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('intro')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-daolan"></text></view><text class="topic-title">{{ $t('介绍这个景点') }}</text></button>
           <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('story')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-lishiwenhua"></text></view><text class="topic-title">{{ $t('这里有什么历史故事？') }}</text></button>
-          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button>
+          <view class="welcome-photo-row"><button class="welcome-topic welcome-topic-photo" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button></view>
         </view>
       </view>
       <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
@@ -400,7 +401,8 @@ export default {
       try{
         for(let offset=0;offset<pending.length;offset+=4){
           const batch=pending.slice(offset,offset+4)
-          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>p.text),target}})
+          // Quote source questions so the model translates them instead of answering them.
+          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>JSON.stringify(p.text)),target}})
           if(this.storageOwner()!==owner||this.historyMsgs!==list)return
           const translations=res.data&&res.data.data&&res.data.data.translations
           if(!Array.isArray(translations))throw new Error('Invalid translation response')
@@ -946,10 +948,10 @@ export default {
 .chat-ref-page .nav{gap:14rpx;padding-left:26rpx;padding-right:26rpx;padding-bottom:20rpx;border-bottom:0!important}
 .nav-back{width:64rpx;height:72rpx;margin:0;flex-shrink:0;font-size:64rpx;color:#302563}.nav-spacer{flex:1;min-width:0}
 .nav-history{width:72rpx;min-width:72rpx;height:72rpx;border-radius:50%;border:1rpx solid rgba(255,255,255,.85);box-shadow:0 6rpx 24rpx rgba(106,82,180,.07);background:rgba(255,255,255,.9)}
-.hist-clock{width:33rpx;height:33rpx;border-color:#9a81ee}.hc-hour,.hc-minute{background:#9a81ee}
+.hist-clock{width:33rpx;height:33rpx;border-color:#38276c}.hc-hour,.hc-minute{background:#38276c}
 .nav .qh-spot{display:flex;align-items:center;gap:12rpx;width:auto;flex:0 1 auto;max-width:450rpx;min-width:0;margin:0;padding:12rpx 18rpx 12rpx 10rpx;min-height:72rpx;line-height:1.4;border:1rpx solid rgba(255,255,255,.76);border-radius:40rpx;background:rgba(255,255,255,.64);box-shadow:0 6rpx 24rpx rgba(115,91,185,.07);text-align:left;box-sizing:border-box}
 .qh-spot::after{border:0}.context-pin{display:flex;align-items:center;justify-content:center;width:46rpx;height:46rpx;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.94)}.context-pin .iconfont{font-size:31rpx;color:#9a81ee}
-.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
+.context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-arrow{font-size:28rpx;color:#39266e}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
 .conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
 .welcome-active :deep(.uni-scroll-view-content){display:flex;flex-direction:column;min-height:100%}
 .guide-welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 12rpx 210rpx;box-sizing:border-box}
@@ -963,12 +965,11 @@ export default {
 .welcome-description{display:block;max-width:100%;margin-top:14rpx;text-align:center;font-size:25rpx;line-height:1.7;color:#9a98ae}
 .welcome-topics{display:flex;flex-wrap:wrap;align-items:stretch;gap:18rpx;width:100%;margin-top:48rpx}
 .welcome-topic{position:relative;max-width:100%;min-width:0;min-height:88rpx;margin:0;padding:16rpx 22rpx;border:1rpx solid rgba(255,255,255,.95);border-radius:32rpx;background:rgba(255,255,255,.85);box-shadow:0 6rpx 20rpx rgba(116,85,196,.06),inset 0 2rpx 6rpx rgba(255,255,255,.85);display:flex;align-items:center;gap:14rpx;text-align:left;line-height:1.45;box-sizing:border-box}
+.welcome-photo-row{width:100%;display:flex;justify-content:center}.welcome-topic-photo{justify-content:center;text-align:center}
 .welcome-topic::after{border:0}.welcome-topic[disabled]{opacity:.55}.topic-icon-wrap{width:48rpx;height:48rpx;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1edff}.topic-icon{font-size:31rpx;color:#9b82ee}.topic-title{min-width:0;font-size:26rpx;font-weight:500;color:#291b58;white-space:normal}
 .welcome-loading,.welcome-unavailable{width:100%;margin-bottom:20rpx;padding:14rpx 20rpx;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:16rpx;border-radius:20rpx;background:rgba(255,255,255,.6);color:#8b829d;font-size:23rpx;line-height:1.5;white-space:normal;text-align:center}
 .welcome-unavailable button{flex-shrink:0;margin:0;padding:6rpx 18rpx;font-size:23rpx;line-height:1.7;border-radius:14rpx;color:#7961bc;background:#fff}
 .chat-ref-page .bottom-fixed{border-radius:32rpx 32rpx 0 0;background:#fff;box-shadow:0 -6rpx 24rpx rgba(166,154,211,.04);padding-bottom:env(safe-area-inset-bottom,0px)}
-.chat-ref-page .bottom-fixed.keyboard-open{padding-bottom:0}
-.chat-ref-page .bottom-fixed.keyboard-open .input-bar{padding-bottom:12rpx}
 .chat-ref-page .input-bar{gap:12rpx;padding:16rpx 18rpx 20rpx;border-top:0;border-radius:32rpx 32rpx 0 0;background:#fff}.photo-add,.voice-btn{width:82rpx;height:82rpx;flex-shrink:0;background:#f2edfd;color:#402176}.photo-add{font-size:47rpx}.voice-btn .iconfont{color:#402176}
 .input-bar .msg-input{height:82rpx;padding:0 20rpx;font-family:inherit;font-size:26rpx;border:0;border-radius:22rpx;background:#f8f8fb}.chat-ref-page .input-bar .send-btn{height:82rpx;line-height:82rpx;padding:0 26rpx;font-size:27rpx;border-radius:24rpx;color:#fff;background:linear-gradient(135deg,#b99bf5,#a781ed);box-shadow:0 5rpx 12rpx rgba(153,118,214,.12)}.send-btn.disabled{opacity:.7}.input-bar .voice-hold-btn{height:82rpx;border-radius:22rpx}
 .app-english .welcome-title{font-size:40rpx;letter-spacing:0}.app-english .topic-title{font-size:24rpx}

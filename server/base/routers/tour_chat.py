@@ -463,7 +463,7 @@ async def get_visitor_routes():
                 "spot_ids": spot_ids,
                 "spot_names": spot_names,
                 "spot_count": len(spot_ids),
-                **route_editorial(r.name, [s.model_dump() for s in route_members], overview, r.cover_image),
+                **route_editorial(r.name, [s.model_dump() for s in route_members], overview),
             })
 
     route_list.sort(key=lambda r: (r['route_id'] not in summer_palace_route_ids, r['route_id']))

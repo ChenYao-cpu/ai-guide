@@ -49,6 +49,47 @@ class StationServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()['token']
 
+    def test_route_chat_edits_saved_plan_and_rejects_foreign_plan(self):
+        plan = self.plans(budget=240, spot_ids=[SPOTS[0]['spot_id'], SPOTS[1]['spot_id']])[0]
+        remove = plan['route']['stops'][0]
+        response = self.client.post(self.prefix+'/chat', json={'question':'去掉'+remove['spot_name'], 'plan_id':plan['plan_id']}, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        updated = response.json()['plans'][0]
+        self.assertEqual(len(updated['route']['stops']), 1)
+        self.assertNotIn(remove['spot_id'], [s['spot_id'] for s in updated['route']['stops']])
+        other = self.client.post('/service-stations/public/test-east/visits',json={}).json()
+        forbidden = self.client.post('/service-stations/visits/'+other['visit_id']+'/chat',json={'question':'时间短一点', 'plan_id':plan['plan_id']},headers={'X-Station-Token':other['access_token']})
+        self.assertEqual(forbidden.status_code,404)
+        last = updated['route']['stops'][0]
+        rejected = self.client.post(self.prefix+'/chat',json={'question':'去掉'+last['spot_name'],'plan_id':updated['plan_id']},headers=self.headers)
+        self.assertEqual(rejected.status_code,422)
+
+    def test_context_parser_preserves_stops_when_changing_exit_and_ignores_questions(self):
+        from server.base.modules.station_service import revise_plan_request
+        plan = self.plans(budget=240)[0]
+        changed = revise_plan_request('最后改为北宫门',plan,SPOTS)
+        self.assertEqual(changed['end_area'],'north')
+        self.assertEqual(changed['spot_ids'],[s['spot_id'] for s in plan['route']['stops']])
+        self.assertIsNone(revise_plan_request('这条路线有哪些景点值得看？',plan,SPOTS))
+        self.assertIsNone(revise_plan_request('北宫门有什么历史？',plan,SPOTS))
+        removed = revise_plan_request('不想去'+plan['route']['stops'][0]['spot_name'],plan,SPOTS)
+        self.assertNotIn(plan['route']['stops'][0]['spot_id'],removed['spot_ids'])
+        shorter = revise_plan_request('这条路线太长了，短一点',plan,SPOTS)
+        self.assertLess(shorter['budget'],plan['route']['total_minutes'])
+
+    def test_pickup_status_is_private_and_confirms_receipt(self):
+        plan = self.plans()[0]; token = self.share(plan)
+        endpoint = self.prefix+'/share-status'
+        self.assertEqual(self.client.post(endpoint,json={'token':token},headers=self.headers).json(),{'status':'waiting'})
+        self.assertEqual(self.client.post(endpoint,json={'token':token}).status_code,403)
+        other = self.client.post('/service-stations/public/test-east/visits',json={}).json()
+        self.assertEqual(self.client.post('/service-stations/visits/'+other['visit_id']+'/share-status',json={'token':token},headers={'X-Station-Token':other['access_token']}).status_code,404)
+        response = self.client.post('/service-stations/claim/receive',json={'token':token,'receipt':'a'*48})
+        self.assertEqual(response.status_code,200,response.text)
+        status = self.client.post(endpoint,json={'token':token},headers=self.headers)
+        self.assertEqual(status.json(),{'status':'received'})
+        self.assertEqual(status.headers['cache-control'],'no-store')
+
     def test_plans_include_station_origin_exit_and_never_exceed_budget(self):
         for pace in ('standard', 'relaxed'):
             plans = self.plans(budget=90, pace=pace, interest='nature', end_area='north')

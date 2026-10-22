@@ -24,6 +24,7 @@ vi.mock('@/api/serviceStation', async (importOriginal) => {
     consultStation: vi.fn(),
     speakAtStation: vi.fn(),
     shareStationPlan: vi.fn(),
+    stationShareStatus: vi.fn(),
     stationDirections: vi.fn()
   }
 })
@@ -141,9 +142,113 @@ afterEach(() => {
   wrapper?.unmount()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('Fixed service station', () => {
+  it('discards a late microphone transcript after ending the visit', async () => {
+    let speech: any
+    vi.stubGlobal(
+      'SpeechRecognition',
+      class {
+        constructor() {
+          speech = this
+        }
+        start() {}
+        abort() {}
+      }
+    )
+    render()
+    await flushPromises()
+    await button('和数字人聊一聊').trigger('click')
+    await flushPromises()
+    await button('说话').trigger('click')
+    await button('结束本次使用').trigger('click')
+    await button('结束并复位').trigger('click')
+    await flushPromises()
+    speech.onresult({ results: [[{ transcript: '上一位游客的问题' }]] })
+    await button('和数字人聊一聊').trigger('click')
+    await flushPromises()
+    expect((wrapper.get('.station-chat-input input').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('updates the current route directly and keeps the new pickup enabled', async () => {
+    vi.mocked(api.consultStation).mockResolvedValue({
+      answer: '已更新路线',
+      actions: ['plan'],
+      source: 'local',
+      preferences: { ...plan.preferences, budget: 60 },
+      plans: [{ ...plan, plan_id: 'p2', preferences: { ...plan.preferences, budget: 60 } }]
+    })
+    render()
+    await flushPromises()
+    await button('帮我规划游览').trigger('click')
+    await flushPromises()
+    await button('生成我的游览方案').trigger('click')
+    await flushPromises()
+    await button('时间再短一点').trigger('click')
+    await flushPromises()
+    expect(api.consultStation).toHaveBeenCalledWith(
+      visit,
+      expect.objectContaining({ plan_id: 'p1' }),
+      expect.any(AbortSignal)
+    )
+    expect(wrapper.find('.station-result').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已更新路线')
+    expect(button('把这条路线带到手机').attributes('disabled')).toBeUndefined()
+  })
+  it('retains the existing route when an edit fails', async () => {
+    vi.mocked(api.consultStation).mockRejectedValue({
+      response: { status: 422, data: { detail: '已选景点超出时间预算' } }
+    })
+    render()
+    await flushPromises()
+    await button('帮我规划游览').trigger('click')
+    await flushPromises()
+    await button('生成我的游览方案').trigger('click')
+    await flushPromises()
+    await button('时间再短一点').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.station-result').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已选景点超出时间预算')
+    expect(button('把这条路线带到手机').attributes('disabled')).toBeUndefined()
+  })
+  it('confirms phone pickup and hides the used QR code', async () => {
+    vi.mocked(api.shareStationPlan).mockResolvedValue({
+      token: 'claim-token',
+      expires_at: new Date(Date.now() + 900000).toISOString()
+    })
+    vi.mocked(api.stationShareStatus).mockResolvedValue({ status: 'received' })
+    render()
+    await flushPromises()
+    await button('帮我规划游览').trigger('click')
+    await flushPromises()
+    await button('生成我的游览方案').trigger('click')
+    await flushPromises()
+    await button('把这条路线带到手机').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('路线已成功带到手机')
+    expect(wrapper.find('.station-share-dialog img').exists()).toBe(false)
+    await button('完成，结束本次使用').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.station-share-dialog').exists()).toBe(false)
+    expect(wrapper.find('.station-home-content').exists()).toBe(true)
+  })
+  it('does not label an expired consultation as a network outage', async () => {
+    vi.mocked(api.getStation).mockResolvedValue({
+      ...structuredClone(catalog),
+      guide: { guide_id: 1, name: '接待员', render_mode: 'xingyun', poster_image: '' }
+    })
+    render()
+    await flushPromises()
+    vi.mocked(api.extendStationVisit).mockRejectedValue({ response: { status: 410 } })
+    await vi.advanceTimersByTimeAsync(90000)
+    await flushPromises()
+    expect(wrapper.find('.station-network').exists()).toBe(false)
+  })
+
   it('uses only concrete route details after a reply containing legacy preferences', async () => {
     vi.mocked(api.consultStation).mockResolvedValue({
       answer: '请确认时间和终点',
@@ -451,7 +556,7 @@ describe('Fixed service station', () => {
     vi.mocked(api.heartbeatStation).mockRejectedValue(new Error())
     render()
     await flushPromises()
-    expect(wrapper.text()).toContain('网络暂不可用')
+    expect(wrapper.text()).toContain('服务站连接暂不可用')
     await button('帮我规划游览').trigger('click')
     await flushPromises()
     expect(button('生成我的游览方案').attributes('disabled')).toBeDefined()

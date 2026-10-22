@@ -85,6 +85,7 @@ export interface StationPlan {
   version: number
 }
 export interface StationReply {
+  plans?: StationPlan[]
   answer: string
   actions: string[]
   visuals?: VisualContext | null
@@ -167,7 +168,13 @@ export function planAtStation(
 }
 export function consultStation(
   visit: StationVisit,
-  data: { question: string; language: string; preferences: StationPlanningInput; spot_id?: number },
+  data: {
+    question: string
+    language: string
+    preferences: StationPlanningInput
+    spot_id?: number
+    plan_id?: string
+  },
   signal?: AbortSignal
 ) {
   return request_handler
@@ -265,5 +272,13 @@ export async function saveStationAdmin(
       headers: { Authorization: header_authorization.value },
       timeout: 10000
     })
+    .then((r) => r.data)
+}
+
+export function stationShareStatus(visit: StationVisit, token: string) {
+  return request_handler
+    .post<{
+      status: 'waiting' | 'received' | 'expired'
+    }>('/service-stations/visits/' + visit.visit_id + '/share-status', { token }, { headers: headers(visit), timeout: 8000 })
     .then((r) => r.data)
 }

@@ -7,12 +7,12 @@ export function loadScenicMap(): Promise<any> {
     if (!document.querySelector('link[data-scenic-leaflet]')) {
       const css = document.createElement('link')
       css.rel = 'stylesheet'
-      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      css.href = '/vendor/leaflet/leaflet.css'
       css.dataset.scenicLeaflet = 'true'
       document.head.appendChild(css)
     }
     const script = document.createElement('script')
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.src = '/vendor/leaflet/leaflet.js'
     const timer = setTimeout(() => {
       script.remove()
       pending = undefined
