@@ -99,6 +99,31 @@ test('clearing history from its panel preserves an in-flight reply and current q
 test('clearing archived history preserves visible conversation and its session',()=>{
  const h=harness(),s=h.s;s.msgs=[{role:'user',content:'Visible question'},{role:'ai',content:'Visible answer'}];s.historyMsgs=s.msgs.slice();s.qaSession={session_id:70};s.clearHistoryFromPanel();assert.equal(s.msgs.length,2);assert.equal(s.qaSession.session_id,70);assert.equal(s.historyMsgs.length,0);assert.equal(JSON.parse(h.storage.get(s.historyKey())).messages.length,0)
 })
+// 数字人语音：中文和英文分别连接对应星云应用（language 参数由后端选凭据）；
+// 星云语音临时失败时只用本地语音60秒，之后重新尝试数字人，避免一次网络抖动整段会话降级。
+test('replies use the language-matched digital human voice and retry after a temporary fallback',async()=>{
+ const h=harness(),s=h.s,edge=[]
+ const voiceCalls=()=>h.calls.filter(c=>/\/xingyun\/chat-voice$/.test(c.url))
+ s.playEdgeTTS=(text,index)=>{edge.push([text,index])}
+ s.playTTS=h.o.methods.playTTS.bind(s) // 测试默认把播报替换成空函数，这里换回真实实现
+ s.tourLanguage='zh';s.playTTS('中文答案',0)
+ assert.equal(voiceCalls().length,1,'zh asks the backend for the default digital human')
+ voiceCalls().at(-1).success({statusCode:200,data:{guide_id:53}});await tick();await tick()
+ assert.equal(s.voicePayload.command,'connect')
+ assert.match(s.voicePayload.gateway,/chat_speech=true/)
+ assert.match(s.voicePayload.gateway,/language=zh/)
+ s.tourLanguage='en';h.o.watch.tourLanguage.call(s)
+ s.playTTS('English answer',0)
+ assert.equal(voiceCalls().length,2,'switching language opens a new voice session')
+ voiceCalls().at(-1).success({statusCode:200,data:{guide_id:53}});await tick();await tick()
+ assert.match(s.voicePayload.gateway,/language=en/)
+ s.onDigitalVoiceState({state:'error'});await tick()
+ assert.equal(edge.length,1,'pending reply falls back to the local voice')
+ assert.ok(s._voiceRetryAt>Date.now(),'fallback is limited to one minute')
+ s._voiceRetryAt=Date.now()-1;s.playTTS('重试答案',0)
+ assert.equal(voiceCalls().length,3,'after the cooldown the digital human is tried again')
+ assert.equal(s.voiceFailed,false)
+})
 // 回归：App.vue 给 .aurora-page 的直接子 view 统一加 position:relative，
 // 屏幕外的语音容器必须继续 fixed，否则会进入文档流、把对话区挤成 0 高（输入框跑到屏幕中间、下方大片空白）。
 test('the off-screen voice container stays fixed so the chat area keeps its height',()=>{

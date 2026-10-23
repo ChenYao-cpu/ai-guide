@@ -792,6 +792,7 @@
   "数字人连接已关闭，可重新连接": "Guide connection closed. You can reconnect.",
   "数字人连接异常，请重新连接": "Digital human connection error; please reconnect",
   "数字人配置查询失败，请检查后端服务": "Unable to load guide configuration. Check the backend service.",
+  "数字人需要 HTTPS 或 localhost 才能连接": "The digital human requires HTTPS or localhost to connect",
   "数字人驱动": "Digital human driver",
   "数字导游": "Digital guides",
   "数字导游不存在或无权管理": "Digital guide does not exist or you lack management permission",

@@ -15,6 +15,8 @@ const appEnglish = {
   "密码至少 8 位，UTF-8 编码不超过 72 字节": "Use at least 8 characters and no more than 72 UTF-8 bytes.",
   "登录服务未配置 JWT 密钥": "The sign-in service is not configured.",
   "验证码发送失败，请稍后重试或联系管理员": "Could not send the code. Try again later or contact support.",
+  "数字人语音暂不可用，先用本地语音": "The digital human voice is unavailable. Using the local voice for now.",
+  "星云语音不可用，已切换本地语音": "Xingyun voice is unavailable. Switched to the local voice.",
 
   "AI 数字人景区导览": "AI Digital Tour Guide",
   "山水之间 · 智游相伴": "Explore nature · Travel with AI",
