@@ -99,3 +99,23 @@ test('clearing history from its panel preserves an in-flight reply and current q
 test('clearing archived history preserves visible conversation and its session',()=>{
  const h=harness(),s=h.s;s.msgs=[{role:'user',content:'Visible question'},{role:'ai',content:'Visible answer'}];s.historyMsgs=s.msgs.slice();s.qaSession={session_id:70};s.clearHistoryFromPanel();assert.equal(s.msgs.length,2);assert.equal(s.qaSession.session_id,70);assert.equal(s.historyMsgs.length,0);assert.equal(JSON.parse(h.storage.get(s.historyKey())).messages.length,0)
 })
+// 回归：App.vue 给 .aurora-page 的直接子 view 统一加 position:relative，
+// 屏幕外的语音容器必须继续 fixed，否则会进入文档流、把对话区挤成 0 高（输入框跑到屏幕中间、下方大片空白）。
+test('the off-screen voice container stays fixed so the chat area keeps its height',()=>{
+ const appStyle=fs.readFileSync(path.join(root,'App.vue'),'utf8'),voiceStyle=fs.readFileSync(path.join(root,'components/chat-voice.vue'),'utf8')
+ const rule=appStyle.match(/\.aurora-page>view:not\([^)]*\)[^{]*\{[^}]*position:relative[^}]*\}/)
+ assert.ok(rule,'global direct-child positioning rule should exist')
+ assert.ok(rule[0].includes(':not(.voice-render)'),'voice-render must be excluded from the global direct-child rule')
+ assert.match(voiceStyle,/\.voice-render\{[^}]*position:fixed!important/, 'voice-render must keep fixed positioning')
+})
+// 回归：键盘弹起时欢迎区整块保持原位，不允许再重排（贴顶、隐藏气球/说明、缩小标题、改快捷提问间距）。
+test('the welcome block keeps its layout when the keyboard opens',()=>{
+ const pageStyle=fs.readFileSync(path.join(root,'pages/ai-chat/ai-chat.vue'),'utf8')
+ const rules=[...pageStyle.matchAll(/\.chat-keyboard[^{]*\{([^}]*)\}/g)].map(m=>m[1])
+ for(const body of rules){
+  assert.doesNotMatch(body,/justify-content:flex-start/,'keyboard state must not top-align the welcome block')
+  assert.doesNotMatch(body,/display:none/,'keyboard state must not hide the welcome art or description')
+ }
+ assert.doesNotMatch(pageStyle,/\.chat-keyboard \.welcome-title\s*\{[^}]*font-size/,'keyboard state must not resize the welcome title')
+ assert.doesNotMatch(pageStyle,/\.chat-keyboard \.welcome-topics\s*\{[^}]*margin-top/,'keyboard state must not move the welcome topics')
+})

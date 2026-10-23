@@ -100,12 +100,12 @@
     </scroll-view>
 
     <!-- 底部输入区 -->
-    <view class="bottom-bar" :class="{'keyboard-open':keyboardHeight>0}" :style="keyboardHeight>0?{bottom:keyboardHeight+'px'}:{}">
+    <view class="bottom-bar" :class="{'keyboard-open':keyboardHeight>0}" :style="keyboardHeight>0?{transform:'translateY(-'+keyboardHeight+'px)'}:{}">
       <view class="input-row">
         <view class="voice-btn" :class="{rec:voiceMode}" @tap="toggleVoiceMode">
           <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
         </view>
-        <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @keyboardheightchange="onKeyboardHeight" @blur="keyboardHeight=0" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
+        <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @keyboardheightchange="onKeyboardHeight" @blur="onInputBlur" :cursor-spacing="0" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
         <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
           <text>{{ t(transcribing ? '正在识别…' : loading ? '正在回答…' : voicePressing ? '松开发送' : '按住说话') }}</text>
         </view>
@@ -270,7 +270,12 @@ export default {
       catch(_){if(current())this.chatTranslationFailed=true}
       finally{if(this._translationVersion===version)this.chatTranslating=false}
     },
-    onKeyboardHeight(e){this.keyboardHeight=Math.max(0,Number(e.detail?.height)||0)},
+    onKeyboardHeight(e){
+      this.keyboardHeight=Math.max(0,Number(e.detail?.height)||0)
+      // 只抬输入栏；不重排页面，数字人舞台、景点卡等保持原位
+      if(this.keyboardHeight>0&&uni.pageScrollTo)try{uni.pageScrollTo({scrollTop:0,duration:0})}catch(_){}
+    },
+    onInputBlur:function(){var self=this;setTimeout(function(){self.keyboardHeight=0},150)},
     connectXingyun:async function(){
       if(this._xingyunClosePromise)await this._xingyunClosePromise
       if(!this.tourVisible||this.leavingTour||this.endingTour)return
@@ -639,7 +644,7 @@ export default {
     cancelRecord: function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&this._recordStartedAt)this._voiceManager.stop()},
   },
   onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
-  onUnload:function(){this._translationVersion=(this._translationVersion||0)+1;this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps()},
+  onUnload:function(){this._translationVersion=(this._translationVersion||0)+1;this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps();if(uni.offKeyboardHeightChange&&this._kbListener)uni.offKeyboardHeightChange(this._kbListener)},
   onHide:function(){this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
     // #ifdef MP-WEIXIN
     if(this.$refs.xfyun)this.$refs.xfyun.close()
@@ -656,6 +661,8 @@ export default {
     this.statusH = (s.statusBarHeight || 20) + 6
     this.refresh()
     var self=this
+    // 兜底监听键盘高度：部分机型输入框不派发 keyboardheightchange
+    if(uni.onKeyboardHeightChange){this._kbListener=function(res){self.onKeyboardHeight({detail:{height:res.height}})};uni.onKeyboardHeightChange(this._kbListener)}
     setTimeout(function(){self.measureProgress()},700)
     setTimeout(function(){self.measureProgress()},2200)
   },
@@ -843,5 +850,5 @@ export default {
 .tp-track.fade-left:not(.fade-right){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 44rpx,#000 100%)}
 .tp-track.fade-right:not(.fade-left){-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 44rpx),transparent 100%)}
 .tp-dot{transition:background .3s ease,border-color .3s ease,box-shadow .3s ease}
-.bottom-bar.keyboard-open{position:fixed!important;left:0;right:0;z-index:10001;padding-bottom:12rpx!important}
+.bottom-bar.keyboard-open{z-index:10001;box-shadow:0 -8rpx 24rpx rgba(15,23,42,.08)}
 </style>
