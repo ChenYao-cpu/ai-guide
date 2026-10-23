@@ -33,14 +33,15 @@ test('language settings ignore old account responses and never overwrite a newer
  }
 })
 
-test('language settings quote history as translation data and preserve the source for switching back',()=>{
+test('language settings quote history as translation data and preserve the source for switching back',async()=>{
  for(const [target,source,translated] of [['en','请介绍颐和园的历史。','Please introduce the history of the Summer Palace.'],['zh','Please tell me about the history of the Summer Palace.','请告诉我颐和园的历史。']]){
   const {s,storage,calls}=component('pages/mine/mine.vue'),key='ai_chat_state:'+encodeURIComponent('id:17')
   s.tourLanguage=target
   storage[key]=JSON.stringify({messages:[{role:'user',content:source}]})
-  s.translateAiChatHistory(target);const call=calls.find(c=>/translate-texts$/.test(c.url))
+  const pending=s.translateAiChatHistory(target);const call=calls.find(c=>/translate-texts$/.test(c.url))
   assert.equal(call.data.target,target);assert.equal(JSON.parse(call.data.texts[0]),source)
   call.success({statusCode:200,data:{success:true,data:{translations:[translated]}}})
+  await pending
   const message=JSON.parse(storage[key]).messages[0]
   assert.equal(message.content,translated);assert.equal(message.lang,target);assert.equal(message.translations[target==='en'?'zh':'en'],source)
  }

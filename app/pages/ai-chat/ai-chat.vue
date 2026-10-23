@@ -59,7 +59,7 @@
       <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
         <text class="ce-title">{{ $t('想去哪里？') }}</text>
       </view>
-      <view v-if="historyTranslating||historyTranslationFailed" class="chat-translation" role="status" @tap="!historyTranslating&&localizeHistory()">{{ historyTranslating ? (tourLanguage==='en'?'Translating…':'正在翻译…') : (tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试') }}</view>
+      <view v-if="historyTranslationFailed" class="chat-translation" @tap="localizeHistory">{{ tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试' }}</view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
@@ -170,7 +170,6 @@
             <view class="hp-close" @tap="closeHistory" :aria-label="$t('关闭')"><text>×</text></view>
           </view>
         </view>
-        <view v-if="historyTranslating" class="hp-translating">{{ $t('正在翻译…') }}</view>
         <view v-if="historyTranslationFailed && !historyTranslating" class="hp-translating" @tap="localizeHistory">{{ tourLanguage==='en' ? 'Translation unavailable. Tap to retry.' : '翻译失败，点击重试' }}</view>
         <view class="hp-body">
           <view v-if="!historyPairs.length" class="hp-empty">{{ $t('还没有问答记录') }}</view>
@@ -185,7 +184,7 @@
 </template>
 
 <script>
-import { localizeChatMessages } from '../../common/chat-language.js'
+import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import NocturneSelect from '../../components/NocturneSelect.vue'
 import { planningMessage, recommendationText, questionLanguage, findQuestionSpot, photoIdentificationText } from '../../common/planning-language.js'
@@ -228,20 +227,20 @@ export default {
     }
   },
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
-  onReady:function(){this._welcomeReady=true;if(this.chatMode==='guide')this.loadWelcomeCatalog()},
+  onReady:function(){this._welcomeReady=true;if(this.historyOwner!==this.storageOwner())this.loadHistory();this.warmHistory();if(this.chatMode==='guide')this.loadWelcomeCatalog()},
   watch:{
     tourLanguage:function(){this.stopTTS();this.stopReveal();this.msgs.forEach(m=>{if(m.segments){m.segments=undefined;m.cursor=false}});this.localizeHistory()},
-    'msgs.length':function(){this.localizeHistory()},
+    'msgs.length':function(){this.localizeHistory();this.warmHistory()},
     pendingPhoto:function(){this.scrollChat()},
     recognitionError:function(){this.scrollChat()},
-    loading:function(){this.scrollChat()},
+    loading:function(){this.scrollChat();this.warmHistory()},
   },
   onLoad:function(){
     this._keyboardListener=event=>this.updateKeyboardHeight(event.height)
     if(uni.onKeyboardHeightChange)uni.onKeyboardHeightChange(this._keyboardListener)
   },
   onUnload:function(){
-    this.requestEpoch++;this._translationVersion=(this._translationVersion||0)+1
+    this._translationDisposed=true;this.requestEpoch++;this._translationVersion=(this._translationVersion||0)+1
     if(uni.offKeyboardHeightChange&&this._keyboardListener)uni.offKeyboardHeightChange(this._keyboardListener)
     this.cancelRecord()
     this.stopTTS()
@@ -252,7 +251,7 @@ export default {
       var self=this,out=[],cur=null
       this.historyMsgs.forEach(function(m){
         var text=m.content||''
-        if(self.tourLanguage==='en'&&/[\u3400-\u9fff]/.test(text))text=self.historyTranslating?'Translating…':'Translation unavailable. Tap to retry.'
+        if(self.tourLanguage==='en'&&self.historyTranslationFailed&&/[\u3400-\u9fff]/.test(text))text='Translation unavailable. Tap to retry.'
         if(m.image&&!text)text=self.$t('照片')
         if(!text)return
         if(m.role==='user'){cur={q:text,a:''};out.push(cur)}
@@ -380,13 +379,21 @@ export default {
       const active=this.msgs,history=this.historyMsgs
       const current=()=>this._translationVersion===version&&this.storageOwner()===owner&&this.tourLanguage===target&&this.msgs===active&&this.historyMsgs===history
       this.historyTranslating=true;this.historyTranslationFailed=false
-      if(!this._messageTranslations||this._translationOwner!==owner){this._messageTranslations=new Map();this._translationOwner=owner}
+      this._messageTranslations=getChatTranslationCache(owner)
       try{
         await localizeChatMessages({lists:[active,history],field:'content',target,cache:this._messageTranslations,isCurrent:current,
           translate:async texts=>{const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts,target}});return res.data?.data?.translations}})
         if(current())this.saveHistory()
       }catch(_){if(current())this.historyTranslationFailed=true}
       finally{if(this._translationVersion===version)this.historyTranslating=false}
+    },
+    warmHistory:function(){
+      const owner=this.storageOwner(),cache=getChatTranslationCache(owner)
+      if(!this.msgs.length&&!this.historyMsgs.length)return Promise.resolve()
+      return warmChatTranslations({lists:[this.msgs,this.historyMsgs],field:'content',cache,
+        isCurrent:()=>this.storageOwner()===owner&&!this._translationDisposed,
+        translate:async(texts,target)=>{const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts,target}});return res.data?.data?.translations}
+      }).then(()=>{if(this.storageOwner()===owner&&!this._translationDisposed)this.saveHistory()}).catch(()=>{})
     },
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
     loadQACatalog:async function(){
@@ -737,7 +744,7 @@ export default {
   },
   onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
   onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
-  onShow:function(){if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
+  onShow:function(){this._translationDisposed=false;if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
 }
 </script>
 

@@ -82,7 +82,7 @@
     <!-- 对话区 -->
     <scroll-view scroll-y class="chat-area" :scroll-into-view="lastMsgId">
       <view v-if="!msgs.length && !loading" class="chat-empty"></view>
-      <view v-if="chatTranslating||chatTranslationFailed" class="chat-translation" role="status" @tap="!chatTranslating&&localizeChat()">{{ chatTranslating ? (tourLanguage==='en'?'Translating…':'正在翻译…') : (tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试') }}</view>
+      <view v-if="chatTranslationFailed" class="chat-translation" @tap="localizeChat()">{{ tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试' }}</view>
       <view v-for="(m,i) in msgs" :key="i" :id="'msg-'+i" class="msg-row" :class="m.role==='guide'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <text class="msg-text">{{ m.message }}</text>
@@ -124,7 +124,7 @@ import TourXfyun from '../../components/tour-xfyun.vue'
 // #endif
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { appendTourChatMessage } from '../../common/tour-chat-log.js'
-import { localizeChatMessages } from '../../common/chat-language.js'
+import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
 
@@ -250,12 +250,19 @@ export default {
     },
   },
   methods: {
+    chatTranslationOwner:function(){const id=uni.getStorageSync('user_id'),name=uni.getStorageSync('username');return id?'id:'+id:name?'name:'+name:'guest'},
+    warmChat:function(){
+      const owner=this.chatTranslationOwner(),cache=getChatTranslationCache(owner)
+      if(!this.msgs.length)return Promise.resolve()
+      return warmChatTranslations({lists:[this.msgs],field:'message',cache,isCurrent:()=>this.chatTranslationOwner()===owner&&!this.leavingTour,
+        translate:async(texts,target)=>{const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts,target}});return res.data?.data?.translations}}).catch(()=>{})
+    },
     localizeChat:async function(){
       const version=this._translationVersion=(this._translationVersion||0)+1
       const target=this.tourLanguage==='en'?'en':'zh',list=this.msgs,owner=uni.getStorageSync('token')
       const current=()=>this._translationVersion===version&&this.tourLanguage===target&&this.msgs===list&&uni.getStorageSync('token')===owner&&!this.leavingTour
       this.chatTranslating=true;this.chatTranslationFailed=false
-      if(!this._messageTranslations)this._messageTranslations=new Map()
+      this._messageTranslations=getChatTranslationCache(this.chatTranslationOwner())
       try{await localizeChatMessages({lists:[list],field:'message',target,cache:this._messageTranslations,isCurrent:current,
         translate:async texts=>{const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts,target}});return res.data?.data?.translations}})}
       catch(_){if(current())this.chatTranslationFailed=true}
@@ -441,7 +448,7 @@ export default {
           if(data.live_status===2){self.repairOpen=false;self.routeOverview=null;return false}
           self.routeOverview=data.remaining_route_overview||data.route_overview||null;self.repairInitial=repairDefaults(data);self.liveCurrentId=data.current_spot_info?.spot_id||0
           self.msgs = data.conversation || []
-          self.localizeChat()
+          self.localizeChat();self.warmChat()
           if (data.guide_info) {
             self.guideProvider = data.guide_info.render_mode || ''
             self.guideName = data.guide_info.name || ''
