@@ -100,12 +100,12 @@
     </scroll-view>
 
     <!-- 底部输入区 -->
-    <view class="bottom-bar" :class="{'keyboard-open':keyboardHeight>0}" :style="keyboardHeight>0?{transform:'translateY(-'+keyboardHeight+'px)'}:{}">
+    <view class="bottom-bar" :class="{'keyboard-open':keyboardHeight>0}" :style="keyboardHeight>0?{paddingBottom:keyboardHeight+'px'}:{}">
       <view class="input-row">
         <view class="voice-btn" :class="{rec:voiceMode}" @tap="toggleVoiceMode">
           <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
         </view>
-        <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @keyboardheightchange="onKeyboardHeight" @blur="onInputBlur" :cursor-spacing="0" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
+        <textarea v-if="!voiceMode" v-model="text" class="msg-input" :focus="textareaFocus" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @touchstart.prevent="onInputTouchStart" @input="onInputValue" @focus="onInputFocus" @keyboardheightchange="onKeyboardHeight" @linechange="onInputLineChange" @blur="onInputBlur" :cursor-spacing="0" confirm-type="send" @confirm="onConfirm" :show-confirm-bar="false" :style="inputHeight?{height:inputHeight+'px'}:{}" :maxlength="2000" :disabled="loading||transcribing"></textarea>
         <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
           <text>{{ t(transcribing ? '正在识别…' : loading ? '正在回答…' : voicePressing ? '松开发送' : '按住说话') }}</text>
         </view>
@@ -167,7 +167,7 @@ export default {
   data: function() {
     return {
 
-      keyboardHeight:0,showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
+      keyboardHeight:0,inputHeight:0,textareaFocus:false,showEndConfirm: false,tourVisible:true,leavingTour:false,endingTour:false,appXingyun:false,xingyunPayload:{},xingyunConnected:false,xingyunFailed:false,xingyunActive:false,
       chatTranslating:false,chatTranslationFailed:false,
       sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressActive: -1, progressScrollLeft: 0, fadeLeft: false, fadeRight: false, progressTrackW: 0, progressContentW: 0, progressNodeW: 100,
       guideName: '', guideNameEn: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
@@ -270,12 +270,55 @@ export default {
       catch(_){if(current())this.chatTranslationFailed=true}
       finally{if(this._translationVersion===version)this.chatTranslating=false}
     },
-    onKeyboardHeight(e){
-      this.keyboardHeight=Math.max(0,Number(e.detail?.height)||0)
-      // 只抬输入栏；不重排页面，数字人舞台、景点卡等保持原位
-      if(this.keyboardHeight>0&&uni.pageScrollTo)try{uni.pageScrollTo({scrollTop:0,duration:0})}catch(_){}
+    // 键盘高度只改底部间距（margin），不做 transform / pageScrollTo：
+    // 输入框在布局上位于键盘上方，顶部标题和整页不会被系统往上推；
+    // 中间消息区 flex:1 + 自身滚动，页面整体保持 100vh 不滚动。
+    // 系统可能在 keyboardheightchange 之前就决定上移页面，所以聚焦时先按上次键盘高度
+    // （首次按屏高估算）预留空间，拿到真实高度后再校正。
+    kbEstimate:function(){
+      var h=0
+      try{h=Number(uni.getStorageSync('app-keyboard-height'))||0}catch(e){h=0}
+      if(!h){var s=uni.getSystemInfoSync();h=Math.round((s.windowHeight||s.screenHeight||700)*0.42)}
+      return h
     },
-    onInputBlur:function(){var self=this;setTimeout(function(){self.keyboardHeight=0},150)},
+    onInputTouchStart:function(){
+      // 显式置焦点保证一次点击就弹键盘；内边距把输入行抬到预估键盘高度（防整页平移），
+      // 输入栏背景填满下方区域，键盘升起时盖住它，不会露出页面底部。
+      // 键盘被系统关掉后 focus 可能仍为 true，要先复位再置位才能再次弹出。
+      if(this.textareaFocus){var self=this;this.textareaFocus=false;this.$nextTick(function(){self.textareaFocus=true})}
+      else this.textareaFocus=true
+      if(this.keyboardHeight>0)return
+      this._kbSeen=false
+      this.keyboardHeight=this.kbEstimate()
+      var self=this;clearTimeout(this._kbFocusTimer)
+      this._kbFocusTimer=setTimeout(function(){if(!self._kbSeen)self.keyboardHeight=0},1600)
+    },
+    onInputFocus:function(){
+      if(this.keyboardHeight>0)return
+      this.keyboardHeight=this.kbEstimate()
+    },
+    onKeyboardHeight(e){
+      var h=Math.max(0,Number(e.detail?.height)||0)
+      if(h>0){this._kbSeen=true;clearTimeout(this._kbFocusTimer);try{uni.setStorageSync('app-keyboard-height',h)}catch(_){}}
+      else this.textareaFocus=false
+      this.keyboardHeight=h
+    },
+    onInputBlur:function(){
+      var self=this;this.textareaFocus=false
+      clearTimeout(this._kbFocusTimer)
+      setTimeout(function(){self.keyboardHeight=0},150)
+    },
+    // 清空内容时立即还原单行高度，避免输入框一直停在多行高度。
+    onInputValue:function(event){
+      var value=event&&event.detail&&event.detail.value
+      if((value===undefined||value===null||String(value).length===0)&&this.inputHeight)this.inputHeight=0
+    },
+    // textarea 自动增高：1 行为基础高度，超过 4 行后固定 4 行高并在框内滚动。
+    onInputLineChange:function(event){
+      var lines=Math.max(1,Math.min(4,Number(event&&event.detail&&event.detail.lineCount)||1))
+      var rpx=lines>1?(lines*39+40):0
+      this.inputHeight=rpx?(uni.upx2px?uni.upx2px(rpx):Math.round(rpx/2)):0
+    },
     connectXingyun:async function(){
       if(this._xingyunClosePromise)await this._xingyunClosePromise
       if(!this.tourVisible||this.leavingTour||this.endingTour)return
@@ -408,7 +451,7 @@ export default {
       if (!t || self.loading||self.repairOpen||self.repairOpening) return
       if(isRouteChange(t)){self.text='';self.openRepair(t);return}
       if(!self.guideId){uni.showToast({title:'导游信息加载中，请稍后再试',icon:'none'});return}
-      self.stopPlayback();self.text = ''; self.loading = true
+      self.stopPlayback();self.text = ''; self.inputHeight = 0; self.loading = true
       self._answerPending=false;if(self._revealTimer){clearTimeout(self._revealTimer);self._revealTimer=null}
       var playbackVersion=self._playbackVersion,turn=self._turnVersion=(self._turnVersion||0)+1
       var currentSpot = self.spotCards[self.spotIdx]
@@ -608,7 +651,7 @@ export default {
       this.knowCard.visible = false
       if (this._knowTimer) { clearTimeout(this._knowTimer); this._knowTimer = null }
     },
-    toggleVoiceMode:function(){if(this.recording||this.transcribing)return;this.voiceMode=!this.voiceMode;if(this.voiceMode)uni.hideKeyboard()},
+    toggleVoiceMode:function(){if(this.recording||this.transcribing)return;this.voiceMode=!this.voiceMode;this.textareaFocus=false;if(this.voiceMode)uni.hideKeyboard()},
     initRecorder: function() {
       if(this._voiceManager)return this._voiceManager
       var self=this,rm=uni.getRecorderManager();self._voiceManager=rm
@@ -693,7 +736,7 @@ export default {
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 
 /* 导航 */
-.nav{position:relative;z-index:1;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx;align-items:flex-start}
+.nav{position:relative;z-index:3;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx;align-items:flex-start;flex-shrink:0}
 .nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-title{flex:1;font-size:36rpx;font-weight:600;color:var(--ng-text);letter-spacing:4rpx;font-family:var(--app-font-family);text-align:center}
 .nav-end{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:30rpx;color:var(--ng-secondary);flex-shrink:0}
@@ -719,7 +762,7 @@ export default {
 .kc-img{width:100%;height:120rpx;border-radius:8rpx;margin-top:4rpx}
 
 /* 数字导游区域 — 大半屏 */
-.page .guide-stage{position:relative;z-index:2;height:auto;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;margin:0 8rpx;border-radius:24rpx;overflow:hidden;background:linear-gradient(180deg,var(--ng-surface) 0%,var(--ng-surface) 50%,var(--ng-surface) 100%);box-shadow:0 18rpx 44rpx -20rpx rgba(30,41,59,.24),0 4rpx 16rpx rgba(30,41,59,.06)}
+.page .guide-stage{position:relative;z-index:2;height:34vh;display:flex;align-items:center;justify-content:center;margin:0 8rpx;border-radius:24rpx;overflow:hidden;background:linear-gradient(180deg,var(--ng-surface) 0%,var(--ng-surface) 50%,var(--ng-surface) 100%);box-shadow:0 18rpx 44rpx -20rpx rgba(30,41,59,.24),0 4rpx 16rpx rgba(30,41,59,.06)}
 .spot-nav-bar{position:absolute;top:16rpx;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:12rpx;padding:0 20rpx}
 .spot-arrow{width:52rpx;height:52rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter: none;font-size:36rpx;color:var(--ng-text);flex-shrink:0}
 .spot-label-text{padding:8rpx 16rpx;border-radius:10rpx;background:rgba(0,0,0,.45);backdrop-filter: none;color:var(--ng-text);font-size:22rpx;font-weight:700;white-space:nowrap}
@@ -752,7 +795,7 @@ export default {
 .ss-desc{font-size:20rpx;color:var(--ng-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 
 /* 对话区 */
-.chat-area{position:relative;z-index:1;flex:1;min-height:0;padding:12rpx 20rpx}
+.chat-area{position:relative;z-index:1;flex:1;min-height:0;padding:12rpx 20rpx 140rpx}
 .chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%}
 .ce-icon{font-size:64rpx;margin-bottom:12rpx}
 .ce-title{font-size:28rpx;font-weight:600;color:var(--ng-text);margin-bottom:8rpx}
@@ -773,9 +816,9 @@ export default {
 .loading-tip .avatar-loading-dot{width:12rpx;height:12rpx;background:var(--ng-secondary)}
 
 /* 底部输入 */
-.bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottom-bar{position:absolute;left:0;right:0;bottom:0;z-index:2;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* 输入区尺寸与 AI 小导游页保持一致（84/88rpx、胶囊圆角） */
-.input-row{display:flex;align-items:center;gap:12rpx;padding:16rpx 18rpx 18rpx}
+.input-row{display:flex;align-items:flex-end;gap:12rpx;padding:16rpx 18rpx 18rpx}
 .voice-btn{width:84rpx;height:84rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
 .voice-btn .iconfont{font-size:32rpx;color:var(--ng-secondary)}
 .voice-btn.rec{background:rgba(99,102,241,0.18)}
@@ -783,7 +826,7 @@ export default {
 .voice-hold-btn{flex:1;height:88rpx;display:flex;align-items:center;justify-content:center;border:1rpx dashed rgba(99,102,241,0.25);border-radius:44rpx;background:rgba(99,102,241,0.08);font-size:28rpx;color:var(--ng-secondary);font-weight:600;user-select:none}
 .voice-hold-btn.pressing{background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);border-style:solid}
 @keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0.15)}50%{box-shadow:0 0 0 12rpx rgba(99,102,241,0.15)}}
-.msg-input{flex:1;height:88rpx;padding:0 24rpx;border:1rpx solid var(--ng-border);border-radius:44rpx;background:var(--ng-surface);font-size:28rpx;color:var(--ng-text)}
+.msg-input{flex:1;height:88rpx;min-height:88rpx;padding:20rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:28rpx;background:var(--ng-surface);font-size:28rpx;line-height:1.5;color:var(--ng-text);box-sizing:border-box;overflow-y:auto;max-height:360rpx}
 .send-btn{height:88rpx;padding:0 32rpx;line-height:88rpx;border-radius:44rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:28rpx;font-weight:700;flex-shrink:0}
 .send-btn.disabled{opacity:.35}
 .spot-switch{flex-shrink:0}.ss-desc{line-height:1.4}.ss-card{align-items:center}.ss-img{height:80rpx;width:80rpx}

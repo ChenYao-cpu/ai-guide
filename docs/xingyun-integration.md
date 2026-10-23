@@ -38,6 +38,15 @@
 
 后端启动时自动建表和迁移现有表。真实 PostgreSQL 必须已启动。没有自己的有效星云应用凭据和可用域名时，不能验证实际形象、口型、云端播报和 App 真机。
 
+## 网页访问要求（安全上下文）
+
+星云 litesdk 在初始化前会做能力检查，`secureContext`（`window.isSecureContext`）是 **fatal** 项，不满足时 SDK 直接拒绝连接。因此游客网页必须通过 **HTTPS 或 localhost** 打开：
+
+- 手机用局域网地址 `http://10.x.x.x:5173` 打开时不是安全上下文，数字人会连不上（旧版提示为"暂时无法连接，请重试"）。现已在页面中直接说明原因并隐藏无意义的"连接数字人"按钮。
+- USB 调试时可用 `adb reverse tcp:5173 tcp:5173`，手机打开 `http://localhost:5173/m/home`。
+- 无线演示或二维码入口必须使用 HTTPS 地址（反向代理/证书，或 `npm run dev:public` 的 localtunnel 地址在浏览器里接受一次隧道提示页）。
+- 管理端生成的游客入口若仍是 `http://<局域网IP>`，数字人同样连不上；二维码/外链要改成 HTTPS。
+
 ## 官方参考
 
 - GitHub：https://github.com/publicize0828/XmovLiteAvatarJSDemo

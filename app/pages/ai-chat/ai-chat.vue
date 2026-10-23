@@ -51,15 +51,15 @@
         <text class="welcome-title">{{ $t('想了解哪个景点？') }}</text>
         <text class="welcome-description">{{ $t('可以选择下方的快捷提问，或直接向我提问~') }}</text>
         <view class="welcome-topics">
-          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('intro')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-daolan"></text></view><text class="topic-title">{{ $t('介绍这个景点') }}</text></button>
-          <button class="welcome-topic" :disabled="qaCatalogLoading" @tap="askGuide('story')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-lishiwenhua"></text></view><text class="topic-title">{{ $t('这里有什么历史故事？') }}</text></button>
+          <button class="welcome-topic welcome-topic-intro" :disabled="qaCatalogLoading" @tap="askGuide('intro')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-daolan"></text></view><text class="topic-title">{{ $t('介绍这个景点') }}</text></button>
+          <button class="welcome-topic welcome-topic-story" :disabled="qaCatalogLoading" @tap="askGuide('story')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-lishiwenhua"></text></view><text class="topic-title">{{ $t('这里有什么历史故事？') }}</text></button>
           <view class="welcome-photo-row"><button class="welcome-topic welcome-topic-photo" :disabled="qaCatalogLoading" @tap="askGuide('photo')"><view class="topic-icon-wrap"><text class="topic-icon iconfont icon-cam-3"></text></view><text class="topic-title">{{ $t('这里有什么拍照建议？') }}</text></button></view>
         </view>
       </view>
       <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
         <text class="ce-title">{{ $t('想去哪里？') }}</text>
       </view>
-      <view v-if="historyTranslationFailed" class="chat-translation" @tap="localizeHistory">{{ tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试' }}</view>
+      <view v-if="historyTranslationFailed" class="chat-translation" @tap="localizeHistory">{{ tourLanguage==='en'?'Translation unavailable — showing the original text. Tap to retry.':'翻译暂不可用，已显示原文。点击重试' }}</view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
@@ -124,7 +124,7 @@
     <view v-if="voiceError && !transcribing" class="voice-status">{{ $t(voiceError) }}</view>
     <view v-if="showPhotoChoices" class="photo-popover-mask" :class="{closing:photoClosing}" @tap="closePhotoChoices"></view>
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
-    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}" :style="keyboardHeight>0?{transform:'translateY(-'+keyboardHeight+'px)'}:{}">
+    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}" :style="keyboardHeight>0?{paddingBottom:keyboardHeight+'px'}:{}">
       <!-- 录音波形以输入栏为定位基准，显示在输入栏上方的空白处。 -->
       <view class="recording-hint" v-if="recording" aria-hidden="true">
         <view class="rh-wave">
@@ -148,7 +148,7 @@
       <view class="voice-btn" :class="{ active: voiceMode }" @tap="toggleVoiceMode">
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
-      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :adjust-position="false" :cursor-spacing="0" :disabled="loading"/>
+      <textarea v-if="!voiceMode" v-model="text" class="msg-input" :focus="textareaFocus" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" :style="inputHeight?{height:inputHeight+'px'}:{}" @touchstart.prevent="onInputTouchStart" @input="onInputValue" @focus="onInputFocus" @blur="onInputBlur" @linechange="onInputLineChange" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :adjust-position="false" :cursor-spacing="0" :show-confirm-bar="false" :disabled="loading"></textarea>
       <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
         <text>{{ $t(transcribing ? $t("正在识别…") : voicePressing ? $t("正在录音，松开发送") : $t("按住说话")) }}</text>
       </view>
@@ -173,7 +173,7 @@
             <view class="hp-close" @tap="closeHistory" :aria-label="$t('关闭')"><text>×</text></view>
           </view>
         </view>
-        <view v-if="historyTranslationFailed && !historyTranslating" class="hp-translating" @tap="localizeHistory">{{ tourLanguage==='en' ? 'Translation unavailable. Tap to retry.' : '翻译失败，点击重试' }}</view>
+        <view v-if="historyTranslationFailed && !historyTranslating" class="hp-translating" @tap="localizeHistory">{{ tourLanguage==='en' ? 'Translation unavailable — showing the original text. Tap to retry.' : '翻译暂不可用，已显示原文。点击重试' }}</view>
         <view class="hp-body">
           <view v-if="!historyPairs.length" class="hp-empty">{{ $t('还没有问答记录') }}</view>
           <view v-for="(pair, i) in historyPairs" :key="i" class="hp-item">
@@ -228,7 +228,7 @@ export default {
       showHistory:false, historyTranslating:false, historyTranslationFailed:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,ttsPaused:false,
       voiceConnected:false,voiceConnecting:false,voiceFailed:false,_voiceGateway:'',_voiceLang:'',_voiceGuideId:0,_voicePendingText:'',_voicePendingIndex:-1,
-      recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
+      recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20, inputHeight:0, textareaFocus:false,
     }
   },
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
@@ -482,13 +482,56 @@ export default {
       if(!result.data?.success||!result.data?.data?.message)throw new Error(result.data?.message||'问答服务暂不可用，请稍后重试')
       return result.data.data.message
     },
-    updateKeyboardHeight:function(height){
-      this.keyboardHeight=Math.max(0,Number(height)||0);this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()
-      // 只抬输入栏，页面内容保持原位
-      if(this.keyboardHeight>0&&uni.pageScrollTo)try{uni.pageScrollTo({scrollTop:0,duration:0})}catch(_){}
+    // 键盘高度只改布局底部间距（margin），不做 transform / pageScrollTo：
+    // 这样输入框在布局上就位于键盘上方，系统不会再为了露出焦点把整页往上推。
+    // 系统可能在 keyboardheightchange 之前就决定上移页面，所以聚焦时先按上次的键盘高度
+    // （首次使用按屏高估算）预留空间，再用真实高度校正。
+    kbEstimate:function(){
+      var h=0
+      try{h=Number(uni.getStorageSync('app-keyboard-height'))||0}catch(e){h=0}
+      if(!h){var s=uni.getSystemInfoSync();h=Math.round((s.windowHeight||s.screenHeight||700)*0.42)}
+      return h
     },
-    onInputFocus:function(){this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()},
-    onInputBlur:function(){if(!this.keyboardHeight)this.keyboardVisible=false},
+    updateKeyboardHeight:function(height){
+      var h=Math.max(0,Number(height)||0)
+      if(h>0){this._kbSeen=true;clearTimeout(this._kbFocusTimer);try{uni.setStorageSync('app-keyboard-height',h)}catch(e){}}
+      else this.textareaFocus=false
+      this.keyboardHeight=h;this.keyboardVisible=h>0;this.scrollChat()
+    },
+    // 触摸按下就先预留键盘空间（早于 focus 和键盘弹出），避免系统抢先把页面往上推。
+    onInputTouchStart:function(){
+      // 置焦点保证一次点击就弹键盘；同时用内边距把输入行抬到预估键盘高度（防系统平移整页）。
+      // 输入栏背景会填满下方区域，键盘升起时把它盖住，不会露出页面底部。
+      // 键盘被系统关掉时 focus 可能仍为 true，需要先复位再置位，否则 focus 值没变化、键盘不会弹出。
+      if(this.textareaFocus){var self=this;this.textareaFocus=false;this.$nextTick(function(){self.textareaFocus=true})}
+      else this.textareaFocus=true
+      if(this.keyboardHeight>0)return
+      this._kbSeen=false
+      this.keyboardHeight=this.kbEstimate()
+      var self=this;clearTimeout(this._kbFocusTimer)
+      this._kbFocusTimer=setTimeout(function(){if(!self._kbSeen)self.keyboardHeight=0},1600)
+    },
+    onInputFocus:function(){
+      this.scrollChat();this.keyboardVisible=true
+      if(this.keyboardHeight>0)return
+      this.keyboardHeight=this.kbEstimate()
+    },
+    onInputBlur:function(){
+      var self=this;this.textareaFocus=false
+      clearTimeout(this._kbFocusTimer)
+      setTimeout(function(){self.keyboardHeight=0;self.keyboardVisible=false;self.scrollChat()},150)
+    },
+    // 清空内容时立即还原单行高度，避免输入框一直停在多行高度。
+    onInputValue:function(event){
+      var value=event&&event.detail&&event.detail.value
+      if((value===undefined||value===null||String(value).length===0)&&this.inputHeight)this.inputHeight=0
+    },
+    // textarea 自动增高：1 行基础高度，超过 4 行后固定为 4 行高度并在框内滚动。
+    onInputLineChange:function(event){
+      var lines=Math.max(1,Math.min(4,Number(event&&event.detail&&event.detail.lineCount)||1))
+      var rpx=lines>1?(lines*39+40):0
+      this.inputHeight=rpx?(uni.upx2px?uni.upx2px(rpx):Math.round(rpx/2)):0
+    },
     onInputKeyboardHeight:function(event){this.updateKeyboardHeight(event.detail.height)},
     chooseScenicPhoto:function(){
       if(this.recognizing)return
@@ -641,7 +684,7 @@ export default {
       if(Array.from(msg).length>2000){uiToast({title:'请输入2000字以内的问题',icon:'none'});return}
       const epoch=++this.requestEpoch,owner=this.storageOwner()
       self.pushMsg({ role: 'user', content: msg })
-      self.text = ''; self.loading = true; self.scrollChat()
+      self.text = ''; self.inputHeight = 0; self.loading = true; self.scrollChat()
       self.saveHistory()
       var requestLanguage = questionLanguage(msg,self.tourLanguage)
       try{
@@ -683,7 +726,7 @@ export default {
       setTimeout(function () { if(self.isCurrentRequest(epoch,owner))uni.$emit('tabs:select','tour') }, 500)
     },
     blockTouch:function(){},
-    toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;if(this.voiceMode)uni.hideKeyboard() },
+    toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;this.textareaFocus=false;if(this.voiceMode)uni.hideKeyboard() },
     // 星云数字人语音：不显示人物，只用应用音色；英文/中文各用对应星云应用。
     ensureVoiceSession:function(){
       var self=this,lang=this.tourLanguage==='en'?'en':'zh'
@@ -698,10 +741,10 @@ export default {
         self._voiceGateway=BASE_URL+'/xingyun/session/'+data.guide_id+'?chat_speech=true&language='+lang
         self.voicePayload={id:Date.now(),command:'connect',text:'',gateway:self._voiceGateway,token:uni.getStorageSync('token')}
       }).catch(function(){
-        self.voiceConnecting=false;self.voiceConnected=false;self.voiceFailed=true
+        self.voiceConnecting=false;self.voiceConnected=false;self.voiceFailed=true;self._voiceRetryAt=Date.now()+60000
         var text=self._voicePendingText,index=self._voicePendingIndex
         self._voicePendingText='';self._voicePendingIndex=-1
-        if(text)self.playEdgeTTS(text,index)
+        if(text){self.playEdgeTTS(text,index);uiToast({title:'数字人语音暂不可用，先用本地语音',icon:'none'})}
       })
     },
     closeVoice:function(){
@@ -729,8 +772,8 @@ export default {
       if(event.state==='error'||event.state==='closed'){
         var pending=this._voicePendingText,pendingIndex=this._voicePendingIndex
         this._voicePendingText='';this._voicePendingIndex=-1
-        this.voiceConnected=false;this.voiceConnecting=false;this.voiceFailed=true;this._voiceGateway=''
-        if(pending)this.playEdgeTTS(pending,pendingIndex)
+        this.voiceConnected=false;this.voiceConnecting=false;this.voiceFailed=true;this._voiceGateway='';this._voiceRetryAt=Date.now()+60000
+        if(pending){this.playEdgeTTS(pending,pendingIndex);uiToast({title:'数字人语音暂不可用，先用本地语音',icon:'none'})}
         else if(this.ttsLoading){this.ttsLoading=false;this.speaking=false;uiToast({title:'星云语音不可用，已切换本地语音',icon:'none'})}
       }
     },
@@ -758,6 +801,8 @@ export default {
       if (!text) return
       this.stopTTS()
       var clean=this.cleanTTS(text)
+      // 星云语音曾失败时只降级一分钟：超时后重新尝试数字人音色，避免一次网络抖动就整段会话都用本地语音。
+      if(this.voiceFailed&&Date.now()>=(this._voiceRetryAt||0)){this.voiceFailed=false;this._voiceRetryAt=0}
       if(!this.voiceFailed){
         if(this.voiceConnected){this.sendVoiceSpeak(clean,index);return}
         this.speakingIndex=index;this.ttsLoading=true
@@ -833,7 +878,7 @@ export default {
   },
   onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
   onHide:function(){this.cancelRecord();this.stopTTS();this.closeVoice();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
-  onShow:function(){this._translationDisposed=false;if(this.voiceFailed){this.voiceFailed=false;this.voiceConnected=false}if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
+  onShow:function(){this._translationDisposed=false;if(this.voiceFailed){this.voiceFailed=false;this._voiceRetryAt=0;this.voiceConnected=false}if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
 }
 </script>
 
@@ -874,7 +919,7 @@ export default {
 .ink-mt-2 { bottom:35%; height:130rpx; opacity:0.02; transform:scaleX(1.5) translateX(-10%); }
 .ink-circle { position:absolute; top:20%; right:-100rpx; width:360rpx; height:360rpx; border-radius:50%; border:1rpx solid rgba(99,102,241,0.25); }
 
-.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;padding:12rpx 24rpx;min-height:88rpx;box-sizing:border-box}
+.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;padding:12rpx 24rpx;min-height:88rpx;box-sizing:border-box;flex-shrink:0}
 .nav-actions{display:flex;align-items:center;gap:16rpx;margin-left:auto}
 .nav-title { font-size:44rpx; font-weight:900; color:var(--ng-text); letter-spacing:8rpx; font-family:var(--app-font-family); }
 .nav-back{display:flex;align-items:center;justify-content:center;width:108rpx;height:108rpx;margin:-22rpx 10rpx -22rpx -8rpx;border-radius:24rpx;background:transparent;border:0;box-shadow:none;color:var(--ng-text);font-size:60rpx;line-height:1;margin-right:auto}
@@ -953,8 +998,8 @@ export default {
 .rh-bar { width:5rpx; min-height:10rpx; border-radius:3rpx; background:rgba(99,102,241,0.55); box-shadow:0 0 6rpx rgba(255,255,255,0.9); animation:waveAnim 0.6s ease-in-out infinite; }
 @keyframes waveAnim { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(3); } }
 
-.bottom-fixed{position:relative;flex-shrink:0;z-index:998;display:flex;flex-direction:column;background:var(--ng-surface);backdrop-filter: none}
-.bottom-fixed.photo-open{z-index:1300}.input-bar{display:flex;gap:12rpx;align-items:center;padding:16rpx 18rpx 18rpx;background:var(--ng-surface);border-top:1rpx solid var(--ng-border);margin:0}
+.bottom-fixed{position:absolute;left:0;right:0;bottom:0;flex-shrink:0;z-index:998;display:flex;flex-direction:column;background:var(--ng-surface);backdrop-filter: none}
+.bottom-fixed.photo-open{z-index:1300}.input-bar{display:flex;gap:12rpx;align-items:flex-end;padding:16rpx 18rpx 18rpx;background:var(--ng-surface);border-top:1rpx solid var(--ng-border);margin:0}
 .voice-btn { width:84rpx; height:84rpx; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(99,102,241,0.15); font-size:32rpx; }
 .voice-btn.active { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .msg-input { flex:1; height:88rpx; padding:0 24rpx; border:1rpx solid var(--ng-border); border-radius:44rpx; background:var(--ng-surface); font-size:28rpx; color:var(--ng-text); }
@@ -1012,7 +1057,7 @@ export default {
 .nav .qh-spot{display:flex;align-items:center;gap:12rpx;width:auto;flex:0 1 auto;max-width:450rpx;min-width:0;margin:0;padding:12rpx 18rpx 12rpx 10rpx;min-height:72rpx;line-height:1.4;border:1rpx solid rgba(255,255,255,.76);border-radius:40rpx;background:rgba(255,255,255,.64);box-shadow:0 6rpx 24rpx rgba(115,91,185,.07);text-align:left;box-sizing:border-box}
 .qh-spot::after{border:0}.context-pin{display:flex;align-items:center;justify-content:center;width:46rpx;height:46rpx;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.94)}.context-pin .iconfont{font-size:31rpx;color:#9a81ee}
 .context-name{flex:1;min-width:0;font-size:25rpx;font-weight:500;color:#261956;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-clear{flex-shrink:0;margin:0;padding:8rpx;font-size:23rpx;background:transparent}
-.conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
+.conversation-stage{position:relative;flex:1;min-height:0;overflow:hidden;padding-bottom:128rpx}.conversation-stage .chat-area{height:100%;padding:0 28rpx 24rpx}
 .welcome-active :deep(.uni-scroll-view-content){display:flex;flex-direction:column;min-height:100%}
 .guide-welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24rpx 12rpx 210rpx;box-sizing:border-box}
 .welcome-art{position:relative;width:240rpx;height:172rpx;flex-shrink:0;margin:0 0 34rpx;pointer-events:none}
@@ -1031,8 +1076,14 @@ export default {
 .welcome-unavailable button{flex-shrink:0;margin:0;padding:6rpx 18rpx;font-size:23rpx;line-height:1.7;border-radius:14rpx;color:#7961bc;background:#fff}
 .chat-ref-page .bottom-fixed{border-radius:32rpx 32rpx 0 0;background:#fff;box-shadow:0 -6rpx 24rpx rgba(166,154,211,.04);padding-bottom:env(safe-area-inset-bottom,0px)}
 .chat-ref-page .input-bar{gap:12rpx;padding:16rpx 18rpx 20rpx;border-top:0;border-radius:32rpx 32rpx 0 0;background:#fff}.photo-add,.voice-btn{width:82rpx;height:82rpx;flex-shrink:0;background:#f2edfd;color:#402176}.photo-add{font-size:47rpx}.voice-btn .iconfont{color:#402176}
-.input-bar .msg-input{height:82rpx;padding:0 20rpx;font-family:inherit;font-size:26rpx;border:0;border-radius:22rpx;background:#f8f8fb}.chat-ref-page .input-bar .send-btn{height:82rpx;line-height:82rpx;padding:0 26rpx;font-size:27rpx;border-radius:24rpx;color:#fff;background:linear-gradient(135deg,#b99bf5,#a781ed);box-shadow:0 5rpx 12rpx rgba(153,118,214,.12)}.send-btn.disabled{opacity:.7}.input-bar .voice-hold-btn{height:82rpx;border-radius:22rpx}
+.input-bar .msg-input{height:82rpx;min-height:82rpx;padding:20rpx;line-height:1.5;font-family:inherit;font-size:26rpx;border:0;border-radius:22rpx;background:#f8f8fb;box-sizing:border-box;overflow-y:auto;max-height:360rpx}.chat-ref-page .input-bar .send-btn{height:82rpx;line-height:82rpx;padding:0 26rpx;font-size:27rpx;border-radius:24rpx;color:#fff;background:linear-gradient(135deg,#b99bf5,#a781ed);box-shadow:0 5rpx 12rpx rgba(153,118,214,.12)}.send-btn.disabled{opacity:.7}.input-bar .voice-hold-btn{height:82rpx;border-radius:22rpx}
 .app-english .welcome-title{font-size:40rpx;letter-spacing:0}.app-english .topic-title{font-size:24rpx}
+/* 英文文案更长，三个快捷提问会各自换行；英文状态下整行居中，中文布局保持不变。 */
+.app-english .welcome-topics{justify-content:center}
+/* 英文里最短的是 "Introduce this place"，放到另外两个下面（只是排在其他两个之后，不贴页面底部）。 */
+.app-english .welcome-topic-intro{order:3}
+.app-english .welcome-topic-story{order:1}
+.app-english .welcome-photo-row{order:2}
 /* 键盘弹起时欢迎区完全保持原位：不贴顶、不隐藏气球和说明、不缩放标题、不改快捷提问间距，避免整块跳动或被导航裁切。 */
 @keyframes welcomeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7rpx)}}
 @keyframes welcomeTwinkle{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.06)}}

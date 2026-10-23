@@ -25,6 +25,10 @@ let retryTimer:ReturnType<typeof setTimeout>|undefined
 let cancelReady:(()=>void)|undefined
 let wanted=true
 const statusText = computed(() => message.value.startsWith('数字人服务异常') ? t("暂时无法连接，请重试") : message.value.replace(/SDK/g, '数字人资源').replace(/^Error:\s*/, ''))
+// 星云 litesdk 初始化前会做能力检查，安全上下文（isSecureContext）是 fatal 项：
+// 用局域网 http://IP 打开时 SDK 会直接拒绝，只提示“暂时无法连接”会让游客误判为网络故障。
+const insecureContext = typeof window !== 'undefined' && window.isSecureContext === false
+const insecureMessage = () => t('数字人需要 HTTPS 或 localhost 才能连接') + (typeof location !== 'undefined' ? '（' + location.origin + '）' : '')
 let avatar: Avatar | undefined
 let active = true
 let generation = 0
@@ -44,7 +48,8 @@ watch(() => [props.guideId, props.tourId, props.stationVisit?.visit_id,configRev
       provider.value = data.provider
       message.value = data.configured ? t("尚未连接实时数字人，请点击连接") : t("该数字人未上架或未完成应用绑定")
       if (configured.value && (props.tourId || props.stationVisit)) {
-        void nextTick().then(() => {
+        if (insecureContext) message.value = insecureMessage()
+        else void nextTick().then(() => {
           if (active && current === generation) void connect()
         })
       }
@@ -90,6 +95,7 @@ window.addEventListener('online',online)
 async function connect() {
   await configPromise
   if (!active || !wanted || !configured.value || loading.value) return
+  if (insecureContext) { message.value = insecureMessage(); return }
   release()
   const current = generation
   loading.value = true
@@ -188,7 +194,7 @@ defineExpose({ speak, stop, isReady: () => ready.value })
     </div>
     <div v-if="!stationMode || !ready" class="xingyun-controls">
       <span v-if="retryPending" role="status">{{ $t('正在准备自动重连') }} {{ retryCount }} / 2 · </span>
-      <button v-if="!ready && !loading && !querying && provider==='xingyun'" @click="retry">{{ $t("连接数字人") }}</button>
+      <button v-if="!ready && !loading && !querying && provider==='xingyun' && !insecureContext" @click="retry">{{ $t("连接数字人") }}</button>
       <button v-if="ready" @click="wanted=false; release(); message='数字人连接已关闭'">{{ $t("断开连接") }}</button>
     </div>
   </section>

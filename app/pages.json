@@ -52,9 +52,9 @@
     {
       "path": "pages/ai-chat/ai-chat",
       "style": {
-        "app-plus": {"softinputMode": "adjustResize"},
+        "app-plus": {"softinputMode": "adjustNothing"},
         "navigationStyle": "custom",
-        "disableScroll": false,
+        "disableScroll": true,
         "navigationBarBackgroundColor": "#f8fafc",
         "navigationBarTextStyle": "black",
         "backgroundColor": "#f8fafc",
