@@ -69,9 +69,9 @@ for(const [file,moduleName] of [['tour-xingyun.vue','runtime'],['chat-voice.vue'
  assert.ok(!/transform:\s*none!important/.test(source));
  });
 
-test('tour restores old project framing without per-frame logging',()=>{
+test('tour centers its compatible avatar without per-frame logging',()=>{
 const source=fs.readFileSync(path.join(root,'components/tour-xingyun.vue'),'utf8');
-assert.ok(!source.includes('onRenderChange:'));assert.ok(source.includes('transform:translateX(-10%)'));
+assert.ok(!source.includes('onRenderChange:'));assert.ok(source.includes('transform:translateX(0)'));
 assert.ok(source.includes('await loadXingyunSdk()'));
 assert.ok(!source.includes('script.src=value.sdkUrl'));
 });

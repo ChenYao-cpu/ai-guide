@@ -358,7 +358,7 @@ export default {
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
         if(rr&&rr.data){var rd=rr.data;s.routes=(rd.data&&rd.data.route_list)?rd.data.route_list:(rd.route_list||[])}
         s.spots=s.spots.filter(function(x){return isBeijingCity(x.city)})
-        s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)}).slice(0,3)
+        s.routes=s.routes.filter(function(x){return isBeijingCity(x.city)}).slice(0,3).map(r=>({...r,cover_image:({"皇家园林经典文化线": "/static/route-covers/royal-garden-culture.jpg", "昆明湖摄影漫游线": "/static/route-covers/kunming-lake-photography.jpg", "亲子湖山体验线": "/static/route-covers/family-lakeside.jpg"})[r.name]||r.cover_image}))
         s.routeIndex=Math.min(s.routeIndex,Math.max(0,s.routes.length-1))
         var ordered=prioritizeSummerPalace(s.spots,s.routes);s.spots=ordered.spots;s.routes=ordered.routes
         var located=s.spots.find(function(x){return x.latitude&&x.longitude});if(located){var point=wgs84ToGcj02(Number(located.latitude),Number(located.longitude));s.mapCenter={latitude:point[0],longitude:point[1]}}

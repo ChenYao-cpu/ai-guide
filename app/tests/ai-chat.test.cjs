@@ -5,7 +5,7 @@ function harness(){
  const uni={getStorageSync:k=>storage.get(k),setStorageSync:(k,v)=>storage.set(k,v),removeStorageSync:k=>storage.delete(k),request:o=>{calls.push(o);return{abort(){}}},uploadFile:o=>{uploads.push(o);return{abort(){}}},showToast:o=>feedback.push(o),reLaunch:o=>navigations.push(o),getRecorderManager:()=>({onStart:fn=>handlers.start=fn,onStop:fn=>handlers.stop=fn,onError:fn=>handlers.error=fn,stop(){},start(){}})}
  const translateTour=(s,language,params={})=>String(s??'').replace(/\{(\w+)\}/g,(m,k)=>params[k]??m)
  const c={uni,console,Promise,Date,Set,Number,Math,JSON,Array,Object,String,setTimeout,clearTimeout,BASE_URL:'http://local/api/v1',ChatVoice:{},NocturneSelect:{},TabBarNav:{},translateTour,LANGUAGE_STORAGE_KEY:'zhiyou.app-language',assetUrl:x=>x,uiToast:o=>feedback.push(o)}
- vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(root,'common/planning-language.js'),'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),c)
+ vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(root,'common/chat-language.js'),'utf8').replace(/export /g,''),c);vm.runInContext(fs.readFileSync(path.join(root,'common/planning-language.js'),'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),c)
  const source=fs.readFileSync(path.join(root,'pages/ai-chat/ai-chat.vue'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
  vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.component='),c)
  const o=c.component,s={tourLanguage:'en',$t:(value,params)=>translateTour(value,'en',params),t:(value,params)=>translateTour(value,'en',params),$nextTick:fn=>fn()};Object.assign(s,o.data.call(s));for(const [k,f] of Object.entries(o.methods))s[k]=f.bind(s)
@@ -14,6 +14,12 @@ function harness(){
  return{s,o,uni,calls,uploads,feedback,navigations,storage,handlers,reply(call,data){call.success({statusCode:200,data:{success:true,data}})}}
 }
 const spots=[{spot_id:7,spot_name:'万寿山',city:'北京'},{spot_id:8,spot_name:'昆明湖',city:'北京'}],guide={guide_id:2,is_enabled:true}
+test('language watcher translates the visible streamed chat and restores Chinese without a new request',async()=>{
+ const h=harness(),s=h.s;s.msgs=[{role:'user',content:'介绍仁寿殿'},{role:'ai',content:'仁寿殿是理政中心。',segments:[{t:'旧文本'}],cursor:true}];s.historyMsgs=s.msgs.map(m=>({...m}));s.tourLanguage='en'
+ h.o.watch.tourLanguage.call(s);const call=h.calls.find(c=>/translate-texts$/.test(c.url));assert.ok(call);h.reply(call,{translations:['Introduce the hall.','The hall was a center of government.']});await tick();await tick()
+ assert.equal(s.msgs[1].content,'The hall was a center of government.');assert.equal(s.msgs[1].segments,undefined);assert.equal(s.msgs[1].cursor,false)
+ const count=h.calls.length;s.tourLanguage='zh';h.o.watch.tourLanguage.call(s);await tick();assert.equal(s.msgs[1].content,'仁寿殿是理政中心。');assert.equal(h.calls.length,count)
+})
 test('ordinary scenic questions use chat with language and retain the same conversation',async()=>{
  const h=harness(),s=h.s;assert.equal(s.chatMode,'guide');s.qaSpots=spots;s.qaGuides=[guide];s.qaSpotId=7;s.text='What is its history?'
  const run=s.sendText();await tick();assert.match(h.calls[0].url,/visitor-create/);h.reply(h.calls.shift(),{session_id:70});await tick()

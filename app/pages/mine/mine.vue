@@ -82,6 +82,7 @@
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
 import AuthPage from '../auth/auth.vue'
 import { BASE_URL, assetUrl } from '../../common/config.js'
+import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 export default {
   components:{NocturneConfirm,AuthPage},
@@ -107,80 +108,22 @@ export default {
       if (previous !== next) this.translateAiChatHistory(next)
     },
     // 切换语言时，把本地保存的 AI 小导游问答一起转换成新语言。
-    translateAiChatHistory: function (target) {
-      var ownerId = uni.getStorageSync('user_id')
-      var ownerName = uni.getStorageSync('username')
-      var owner = ownerId ? 'id:' + ownerId : ownerName ? 'name:' + ownerName : 'guest'
-      var storageKey = 'ai_chat_state:' + encodeURIComponent(owner)
-      var raw = ''
-      try { raw = uni.getStorageSync(storageKey) || uni.getStorageSync('ai_chat_msgs') || '' } catch (e) { raw = '' }
-      if (!raw) return
-      var state
-      try { state = JSON.parse(raw) } catch (e) { return }
-      var legacyList = Array.isArray(state)
-      var list = legacyList ? state : (state && Array.isArray(state.messages) ? state.messages : null)
-      if (!list || !list.length) return
-      var saveHistory = function () {
-        try {
-          if (legacyList) uni.setStorageSync('ai_chat_msgs', JSON.stringify(list))
-          else { state.messages = list; uni.setStorageSync(storageKey, JSON.stringify(state)) }
-        } catch (e) {}
-      }
-      var guess = function (text) {
-        var value = String(text || '')
-        var cjk = (value.match(/[\u4e00-\u9fff]/g) || []).length
-        var latin = (value.match(/[A-Za-z]/g) || []).length
-        if (latin >= 5 && latin >= cjk * 2) return 'en'
-        if (cjk > 0) return 'zh'
-        if (latin > 0) return 'en'
-        return target
-      }
-      var pending = []
-      list.forEach(function (m, index) {
-        if (!m || typeof m.content !== 'string' || !m.content.trim()) return
-        m.lang = guess(m.content)
-        var body = String(m.content || '')
-        var mixedForEnglish = target === 'en' && /[\u4e00-\u9fff]/.test(body)
-        var englishForChinese = target === 'zh' && !/[\u4e00-\u9fff]/.test(body) && /[A-Za-z]/.test(body)
-        if (m.lang === target && !mixedForEnglish && !englishForChinese) return
-        if (m.translations && typeof m.translations[target] === 'string' && m.translations[target].trim()) {
-          m.content = m.translations[target]
-          m.lang = target
-          return
-        }
-        pending.push({ index: index, text: body, from: m.lang })
-      })
-      if (!pending.length) { saveHistory(); return }
-      uni.request({
-        url: BASE_URL + '/tour-session/translate-texts', method: 'POST',
-        header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (uni.getStorageSync('token') || '') },
-        timeout: 90000,
-        // Quote source questions so switching language translates rather than answers them.
-        data: { texts: pending.map(function (x) { return JSON.stringify(x.text) }), target: target },
-        success: function (res) {
-          try {
-            var translations = res.data && res.data.data && res.data.data.translations
-            if (!Array.isArray(translations)) return
-            pending.forEach(function (p, k) {
-              var m = list[p.index]
-              if (!m) return
-              var translated = translations[k]
-              if (typeof translated !== 'string' || !translated.trim()) return
-              var nextText = translated.trim()
-              var hasCJK = /[\u4e00-\u9fff]/.test(nextText)
-              if (nextText !== String(m.content || '').trim()) {
-                if (!m.translations) m.translations = {}
-                m.translations[m.lang || p.from] = m.content
-                m.content = nextText
-                m.lang = target
-              } else if ((target === 'zh' && hasCJK) || (target === 'en' && !hasCJK)) {
-                m.lang = target
-              }
-            })
-            saveHistory()
-          } catch (e) {}
-        }
-      })
+    translateAiChatHistory:async function(target,background=false){
+      const version=this._historyTranslationVersion=(this._historyTranslationVersion||0)+1
+      const ownerId=uni.getStorageSync('user_id'),ownerName=uni.getStorageSync('username')
+      const owner=ownerId?'id:'+ownerId:ownerName?'name:'+ownerName:'guest'
+      const key='ai_chat_state:'+encodeURIComponent(owner),raw=uni.getStorageSync(key)
+      if(!raw)return
+      let state;try{state=typeof raw==='string'?JSON.parse(raw):raw}catch(_){return}
+      if(!Array.isArray(state.messages))return
+      const current=()=>{const id=uni.getStorageSync('user_id'),name=uni.getStorageSync('username');return (background||version===this._historyTranslationVersion)&&(id?'id:'+id:name?'name:'+name:'guest')===owner&&(background||this.tourLanguage===target)}
+      const options={lists:[state.messages],field:'content',target,cache:getChatTranslationCache(owner),isCurrent:current,
+        translate:(texts,language=target)=>new Promise((resolve,reject)=>uni.request({url:BASE_URL+'/tour-session/translate-texts',method:'POST',timeout:45000,
+          header:{'Content-Type':'application/json',Authorization:'Bearer '+(uni.getStorageSync('token')||'')},data:{texts,target:language},
+          success:res=>res.statusCode===200?resolve(res.data?.data?.translations):reject(new Error('Translation failed')),fail:reject}))}
+      try{if(background)await warmChatTranslations(options);else await localizeChatMessages(options)
+        if(current()&&uni.getStorageSync(key)===raw)uni.setStorageSync(key,JSON.stringify(state))
+      }catch(_){}
     },
     // 只翻译界面文案；用户昵称等用户自填内容保持原样。
     t: function (value, params) {
@@ -227,7 +170,7 @@ export default {
   onHide:function(){this.showAbout=false;this.showLogout=false},
   onUnload:function(){clearTimeout(this._revealTimer);clearTimeout(this._revealFallback)},
   onShow: function () {
-    this.showAbout=false
+    this.showAbout=false;this.translateAiChatHistory(this.tourLanguage,true)
     var token = uni.getStorageSync('token')
     if (!token) { uni.reLaunch({ url: '/pages/auth/auth' }); return }
     uni.request({url:BASE_URL+'/user/me',header:{Authorization:'Bearer '+token},
