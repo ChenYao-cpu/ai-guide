@@ -183,11 +183,13 @@ const handleDelete = async (id: number, spotName: string) => {
           <template #default="scope">
             <div style="display: flex; align-items: center; justify-content: center">
               <el-image
+                v-if="scope.row.image_path"
                 :src="scope.row.image_path"
                 :preview-src-list="[scope.row.image_path]"
                 style="width: 60px; height: 60px"
                 fit="cover"
               />
+              <span v-else class="spot-no-image">{{ $t("暂无图片") }}</span>
             </div>
           </template>
         </el-table-column>
@@ -280,6 +282,17 @@ const handleDelete = async (id: number, spotName: string) => {
 </template>
 
 <style lang="scss" scoped>
+.spot-no-image {
+  display: inline-block;
+  width: 60px;
+  height: 60px;
+  line-height: 60px;
+  font-size: 12px;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border-radius: 6px;
+}
+
 .el-card {
   border-radius: 12px;
 }

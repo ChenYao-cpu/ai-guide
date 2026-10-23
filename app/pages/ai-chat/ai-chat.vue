@@ -36,7 +36,7 @@
 
     <!-- 对话区 -->
     <view class="conversation-stage">
-    <scroll-view scroll-y class="chat-area" :class="{'welcome-active':msgs.length===0&&!loading&&chatMode==='guide'}" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim" @scroll="onChatScroll">
+    <scroll-view :scroll-y="!voicePressing" class="chat-area" :class="{'welcome-active':msgs.length===0&&!loading&&chatMode==='guide'}" :scroll-top="chatScrollTop" :scroll-with-animation="scrollAnim" @scroll="onChatScroll">
       <view v-if="msgs.length===0&&!loading&&chatMode==='guide'" class="guide-welcome">
         <view v-if="qaCatalogLoading" class="welcome-loading" aria-live="polite">{{ $t('正在加载景点…') }}</view>
         <view v-else-if="catalogError" class="welcome-unavailable">
@@ -70,8 +70,9 @@
           <text v-else-if="m.content" class="msg-text">{{ m.content }}</text>
           <button v-if="m.recognitionEvidence" class="photo-evidence-toggle" @tap="toggleEvidence(m)">{{ $t(m.showEvidence?'收起识别依据':'查看识别依据（原文）') }}</button>
           <text v-if="m.showEvidence&&m.recognitionEvidence" class="photo-evidence">{{ m.recognitionEvidence }}</text>
-          <view v-if="m.role==='ai' && m.content && !m.cursor" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" @tap="replayTTS(m.content,i)">
-            <text>{{ $t(speakingIndex===i ? (ttsLoading ? $t("正在生成语音…") : $t("停止播报")) : $t("语音播报")) }}</text>
+          <view v-if="m.role==='ai' && m.content && !m.cursor" class="msg-speaker" :class="{on:speaking && speakingIndex===i}" :aria-label="$t(speakingIndex===i && !ttsPaused ? '暂停语音播报' : '继续播放')" @tap="replayTTS(m.content,i)">
+            <view v-if="speakingIndex===i && ttsPaused" class="vm-play"></view>
+            <view v-else class="vm-pause"><text class="vm-bar"></text><text class="vm-bar"></text></view>
           </view>
         </view>
       </view>
@@ -121,16 +122,15 @@
     </view>
 
     <view v-if="voiceError && !transcribing" class="voice-status">{{ $t(voiceError) }}</view>
-    <!-- 语音录音提示 -->
-    <view class="recording-hint" v-if="recording" aria-hidden="true">
-      <view class="rh-wave">
-        <view v-for="i in 5" :key="i" class="rh-bar" :style="{animationDelay:(i*0.12)+'s'}"></view>
-      </view>
-    </view>
-
     <view v-if="showPhotoChoices" class="photo-popover-mask" :class="{closing:photoClosing}" @tap="closePhotoChoices"></view>
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
     <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}">
+      <!-- 录音波形以输入栏为定位基准，显示在输入栏上方的空白处。 -->
+      <view class="recording-hint" v-if="recording" aria-hidden="true">
+        <view class="rh-wave">
+          <view v-for="i in 5" :key="i" class="rh-bar" :style="{animationDelay:(i*0.12)+'s'}"></view>
+        </view>
+      </view>
       <view v-if="pendingPhoto || recognitionError" class="photo-draft">
         <view v-if="pendingPhoto" class="draft-thumbnail"><image :src="pendingPhoto" mode="aspectFill" @tap="previewChatPhoto(pendingPhoto)" /><button class="draft-remove" @tap="pendingPhoto=''">×</button></view>
         <text v-if="pendingPhoto" class="draft-note">{{ $t("已选择图片，点击发送后识别") }}</text>
@@ -149,7 +149,7 @@
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
       <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
-      <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
+      <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
         <text>{{ $t(transcribing ? $t("正在识别…") : voicePressing ? $t("正在录音，松开发送") : $t("按住说话")) }}</text>
       </view>
       <view v-if="!voiceMode" class="send-btn" :class="{ disabled: (!text.trim() && !pendingPhoto) || loading || recognizing }" @tap="sendText">
@@ -222,7 +222,7 @@ export default {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,catalogError:'',showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,photoClosing:false,scrollAnim:false,
       showHistory:false, historyTranslating:false, historyTranslationFailed:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
-      voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,
+      voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,ttsPaused:false,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
   },
@@ -321,6 +321,7 @@ export default {
     },
     startReveal:function(msg,index,speak){
       this.stopReveal()
+      if(speak&&msg.content)this.prefetchTTS(msg.content,index)
       const chunks=this.splitReveal(msg.content)
       const epoch=this._revealEpoch
       let i=0
@@ -671,30 +672,55 @@ export default {
       uiToast({ title: '已选中' + this.lastSpotIds.length + '个景点', icon: 'success' })
       setTimeout(function () { if(self.isCurrentRequest(epoch,owner))uni.$emit('tabs:select','tour') }, 500)
     },
+    blockTouch:function(){},
     toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;if(this.voiceMode)uni.hideKeyboard() },
-    stopTTS:function(){this._ttsRequestId=(this._ttsRequestId||0)+1;this.voicePayload={id:this._ttsRequestId};if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}this.speaking=false;this.ttsLoading=false;this.speakingIndex=-1},
+    stopTTS:function(){this._ttsRequestId=(this._ttsRequestId||0)+1;this.voicePayload={id:this._ttsRequestId};if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}this.speaking=false;this.ttsLoading=false;this.ttsPaused=false;this.speakingIndex=-1},
     onDigitalVoiceState:function(event){if(event.id!==this._ttsRequestId)return;if(event.state==='playing'){this.speaking=true;this.ttsLoading=false}else{this.stopTTS();if(event.state==='error')uiToast({title:event.message||'数字人语音连接失败',icon:'none'})}},
-    replayTTS: function (text,index) { if(this.speakingIndex===index){this.stopTTS();return}this.playTTS(text,index) },
+    replayTTS: function (text,index) {
+      if(this.speakingIndex===index){
+        if(this.ttsLoading){this.stopTTS();return}
+        if(this.ttsPaused){this.ttsPaused=false;try{this._ttsAudio&&this._ttsAudio.play();this.speaking=true}catch(e){};return}
+        this.ttsPaused=true;this.speaking=false;try{this._ttsAudio&&this._ttsAudio.pause()}catch(e){};return
+      }
+      this.playTTS(text,index)
+    },
+    prefetchTTS:function(text,index){
+      var self=this
+      var clean=this.cleanTTS(text)
+      var promise=new Promise(function(resolve,reject){
+        request({url:'/tts/edge?text='+encodeURIComponent(clean)}).then(function(res){
+          if(res.data&&res.data.success&&res.data.data)resolve(res.data.data);else reject(new Error('语音服务未返回音频'))
+        }).catch(reject)
+      })
+      this._ttsPrefetch={text:text,index:index,promise:promise}
+      promise.catch(function(){})
+      return promise
+    },
+    cleanTTS:function(text){return (text||'').replace(/\*\*/g,'').replace(/[\[\]]/g,'').replace(/[（）\(\)]/g,'，').replace(/\n+/g,'，').substring(0,2000)},
     playTTS: function (text,index) {
       if (!text) return
+      var self=this
+      var prefetched=this._ttsPrefetch&&this._ttsPrefetch.index===index&&this._ttsPrefetch.text===text?this._ttsPrefetch.promise:null
       this.stopTTS()
-      var self = this
       var requestId=this._ttsRequestId
       this.speakingIndex=index;this.ttsLoading=true
-      var clean = text.replace(/\*\*/g,'').replace(/[\[\]]/g,'').replace(/[（）\(\)]/g,'，').replace(/\n+/g,'，').substring(0,2000)
-      request({ url: '/tts/edge?text=' + encodeURIComponent(clean) }).then(function (res) {
+      var load=prefetched||new Promise(function(resolve,reject){
+        request({url:'/tts/edge?text='+encodeURIComponent(self.cleanTTS(text))}).then(function(res){
+          if(res.data&&res.data.success&&res.data.data)resolve(res.data.data);else reject(new Error('语音服务未返回音频'))
+        }).catch(reject)
+      })
+      load.then(function (raw) {
         if(requestId!==self._ttsRequestId)return
-        if (res.data && res.data.success && res.data.data) {
-          var url = res.data.data
-          if (url.indexOf('http') !== 0) url = BASE_URL + url
-          else url = assetUrl(url)
-          var audio = uni.createInnerAudioContext()
-          self._ttsAudio=audio
-          audio.onPlay(function(){if(requestId!==self._ttsRequestId)return;self.ttsLoading=false;self.speaking=true})
-          audio.onEnded(function(){if(requestId===self._ttsRequestId)self.stopTTS()})
-          audio.onError(function(){if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:'语音播放失败，请检查网络后重试',icon:'none'})})
-          audio.src = url; audio.play()
-        }else throw new Error('语音服务未返回音频')
+        self._ttsPrefetch=null
+        var url = raw
+        if (url.indexOf('http') !== 0) url = BASE_URL + url
+        else url = assetUrl(url)
+        var audio = uni.createInnerAudioContext()
+        self._ttsAudio=audio
+        audio.onPlay(function(){if(requestId!==self._ttsRequestId)return;self.ttsLoading=false;self.ttsPaused=false;self.speaking=true})
+        audio.onEnded(function(){if(requestId===self._ttsRequestId)self.stopTTS()})
+        audio.onError(function(){if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:'语音播放失败，请检查网络后重试',icon:'none'})})
+        audio.src = url; audio.play()
       }).catch(function (error) {if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:error.message||'语音播报失败，请稍后重试',icon:'none'})})
     },
 
@@ -849,14 +875,17 @@ export default {
 @keyframes segIn{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur(0)}}
 .msg-caret{display:inline-block;width:3rpx;height:26rpx;margin-left:6rpx;border-radius:2rpx;background:var(--ng-accent-text,#6840c2);vertical-align:-4rpx;animation:caretBlink .92s steps(1,end) infinite}
 @keyframes caretBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
-.msg-speaker{margin-top:16rpx;padding:10rpx 16rpx;text-align:right;font-size:24rpx;color:var(--ng-accent-text,#6840c2);border-top:1rpx solid var(--ng-border)}
+.msg-speaker{margin-top:16rpx;padding:6rpx 28rpx 6rpx 16rpx;display:flex;justify-content:flex-end;border-top:1rpx solid var(--ng-border)}
+.msg-speaker .vm-pause{display:flex;align-items:center;gap:6rpx;padding:8rpx 10rpx;border-radius:20rpx;background:rgba(99,102,241,.12)}
+.msg-speaker .vm-bar{width:7rpx;height:22rpx;border-radius:4rpx;background:#4f46e5;display:block}
+.msg-speaker .vm-play{width:0;height:0;border-left:18rpx solid #4f46e5;border-top:11rpx solid transparent;border-bottom:11rpx solid transparent;margin-left:4rpx}
 .msg-speaker.on{animation:spkPulse .6s ease-in-out infinite}
 @keyframes spkPulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 .result-bar { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:14rpx 20rpx; margin:0 20rpx 8rpx; background:rgba(99,102,241,0.15); border:1rpx solid rgba(99,102,241,0.25); border-radius:14rpx; font-size:24rpx; color:var(--ng-text); font-weight:600; }
 .rb-btn { padding:8rpx 20rpx; border-radius:20rpx; background:linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.18)); color:var(--ng-text); font-size:22rpx; font-weight:700; }
 
-.recording-hint { position:absolute; left:0; right:0; bottom:calc(118rpx + env(safe-area-inset-bottom,0px)); z-index:996; display:flex; align-items:flex-end; justify-content:center; padding:0; background:transparent; pointer-events:none; }
+.recording-hint { position:absolute; left:0; right:0; bottom:100%; z-index:996; display:flex; align-items:flex-end; justify-content:center; padding:0 0 18rpx; background:transparent; pointer-events:none; }
 .rh-wave { display:flex; gap:5rpx; align-items:flex-end; height:50rpx; }
 .rh-bar { width:5rpx; min-height:10rpx; border-radius:3rpx; background:rgba(99,102,241,0.55); box-shadow:0 0 6rpx rgba(255,255,255,0.9); animation:waveAnim 0.6s ease-in-out infinite; }
 @keyframes waveAnim { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(3); } }

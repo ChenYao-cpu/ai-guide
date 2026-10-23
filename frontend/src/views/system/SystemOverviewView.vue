@@ -8,7 +8,7 @@ interface SystemStatus {
   database: { status: string; error?: string }
   llm: { status: string; api_base: string; model: string; key_configured: boolean }
   tts: { status: string }
-  asr: { status: string }
+  asr: { status: string; engine?: string; key_configured?: boolean }
   rag: { status: string }
   digital_human: { status: string }
   python_version: string
@@ -42,9 +42,10 @@ const loadStatus = async () => {
   }
 }
 
-const statusTag = (s: string) => s === 'connected' || s === 'available' ? 'success' : 'danger'
+const statusTag = (s: string) => (s === 'connected' || s === 'available') ? 'success' : s === 'configured' ? 'warning' : 'danger'
 const statusLabel = (s: string) => {
   if (s === 'connected' || s === 'available') return t("正常")
+  if (s === 'configured') return t("已配置")
   if (s === 'unavailable') return t("未启用")
   return t("异常")
 }
@@ -52,12 +53,12 @@ const statusLabel = (s: string) => {
 const services = computed(() => {
   if (!status.value) return []
   return [
-    { name: t("数据库 PostgreSQL"), status: status.value.database.status, detail: status.value.database.error ? t("异常: {p0}", {p0: status.value.database.error}) : t("连接正常"), statusKey: 'connected' },
+    { name: t("数据库 PostgreSQL"), status: status.value.database.status, detail: status.value.database.error ? t("异常: {p0}", {p0: status.value.database.error}) : t("连接正常") },
     { name: t("LLM 大模型"), status: status.value.llm.status, detail: `${status.value.llm.model} @ ${status.value.llm.api_base}`, extra: status.value.llm.key_configured ? t(" Key已配置") : t(" Key未配置") },
-    { name: t("TTS 语音合成"), status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS', statusKey: 'available' },
-    { name: t("ASR 语音识别"), status: status.value.asr.status, detail: 'FunASR Paraformer', statusKey: 'available' },
-    { name: t("RAG 知识检索"), status: status.value.rag.status, detail: t("向量数据库 + 景区知识库"), statusKey: 'available' },
-    { name: t("数字人驱动"), status: status.value.digital_human.status, detail: t("MuseTalk 口型同步"), statusKey: 'available' },
+    { name: t("TTS 语音合成"), status: status.value.tts.status, detail: 'Edge-TTS / GPT-SoVITS' },
+    { name: t("ASR 语音识别"), status: status.value.asr.status, detail: status.value.asr.engine || 'FunASR Paraformer' },
+    { name: t("RAG 知识检索"), status: status.value.rag.status, detail: t("向量数据库 + 景区知识库") },
+    { name: t("数字人驱动"), status: status.value.digital_human.status, detail: t("MuseTalk 口型同步") },
   ]
 })
 
@@ -82,8 +83,8 @@ onMounted(() => { loadStatus() })
           <div class="svc-header">
 
             <span class="svc-name">{{ $t(svc.name) }}</span>
-            <el-tag :type="svc.status === (svc.statusKey || 'connected') ? 'success' : 'danger'" size="small" effect="dark">
-              {{ $t(svc.status === (svc.statusKey || 'connected') ? '● 正常' : '✕ 异常') }}
+            <el-tag :type="statusTag(svc.status)" size="small" effect="dark">
+              {{ statusLabel(svc.status) }}
             </el-tag>
           </div>
           <div class="svc-detail">{{ $t(svc.detail) }}</div>

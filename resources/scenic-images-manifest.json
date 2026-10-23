@@ -1,0 +1,129 @@
+{
+  "images": 19,
+  "records": [
+    {
+      "kind": "spot",
+      "name": "仁寿殿",
+      "path": "static/tour_files/spot_images/enhanced/renshou-hall.jpg",
+      "sha256": "4747b0689fb0c66e92080d172e9817d2b95b5e40d4ddb437db72f2b122a29161"
+    },
+    {
+      "kind": "spot",
+      "name": "长廊",
+      "path": "static/tour_files/spot_images/enhanced/long-corridor.jpg",
+      "sha256": "22bb655f65d647a1f306b8e42246a8008a4de85b4fbd9de059bc6a414faa0479"
+    },
+    {
+      "kind": "spot",
+      "name": "佛香阁",
+      "path": "static/tour_files/spot_images/enhanced/buddhist-incense-tower.jpg",
+      "sha256": "0417c9a0b998a0f058a3e2a4ab0176cf3b078f733bcdbcf09979795798731f3f"
+    },
+    {
+      "kind": "spot",
+      "name": "昆明湖",
+      "path": "static/tour_files/spot_images/enhanced/kunming-lake.jpg",
+      "sha256": "56e6b019e3a9d68dcf51fdb9ca746e926e79dccb0afa58633534d7f336181ed6"
+    },
+    {
+      "kind": "spot",
+      "name": "十七孔桥",
+      "path": "static/tour_files/spot_images/enhanced/seventeen-arch-bridge.jpg",
+      "sha256": "04ca56c3cb357780ee4e14e5c27a100f0efbec4e0f5e64840342adc7e91db8e8"
+    },
+    {
+      "kind": "spot",
+      "name": "苏州街",
+      "path": "static/tour_files/spot_images/enhanced/suzhou-street.jpg",
+      "sha256": "54fedfbec52cbc9d4855e04e2098eea445c9a92fe7c7fd9409a145a6aa73fc54"
+    },
+    {
+      "kind": "spot",
+      "name": "乐寿堂",
+      "path": "static/tour_files/spot_images/enhanced/leshou-hall.jpg",
+      "sha256": "d589d973926ce6abfd4301abf178f390cbeadac8b5bc64a907fe814839f06b39"
+    },
+    {
+      "kind": "spot",
+      "name": "玉澜堂",
+      "path": "static/tour_files/spot_images/enhanced/yulan-hall.jpg",
+      "sha256": "74874516363a37f019c034a9df70e17f981331706031fa77b459438c093a5265"
+    },
+    {
+      "kind": "spot",
+      "name": "排云殿",
+      "path": "static/tour_files/spot_images/enhanced/paiyun-hall.jpg",
+      "sha256": "dd513ce9efff8532e76cb6f2023ecbd9d66e5bb7aa54f2cb68afd0f149caa83b"
+    },
+    {
+      "kind": "spot",
+      "name": "谐趣园",
+      "path": "static/tour_files/spot_images/enhanced/harmonious-interests-garden.jpg",
+      "sha256": "e9f217d2b268167596763b5f36e39b50530e74c89f2b9f9bda35d85e257c9871"
+    },
+    {
+      "kind": "spot",
+      "name": "石舫",
+      "path": "static/tour_files/spot_images/enhanced/marble-boat.jpg",
+      "sha256": "a54bcd2fddbd63874839c9768dc708b7e5ae9a390b8490322f40df55b68f771c"
+    },
+    {
+      "kind": "spot",
+      "name": "玉带桥",
+      "path": "static/tour_files/spot_images/enhanced/jade-belt-bridge.jpg",
+      "sha256": "0e6147fe9f55f7f16e2359d7df951b47627d8235d67c4010175de469ea7a7af0"
+    },
+    {
+      "kind": "spot",
+      "name": "南湖岛",
+      "path": "static/tour_files/spot_images/enhanced/south-lake-island.jpg",
+      "sha256": "0de9b3b68f91519d49c941504cba03decd3fccfedbdf0ebe42194113e445afc3"
+    },
+    {
+      "kind": "spot",
+      "name": "铜牛",
+      "path": "static/tour_files/spot_images/enhanced/bronze-ox.jpg",
+      "sha256": "57c3bfc3970a54a9bab4414dd9e1bd299bf1775036ca918e5e1f6ed3ffd7b9f5"
+    },
+    {
+      "kind": "spot",
+      "name": "德和园",
+      "path": "static/tour_files/spot_images/enhanced/dehe-garden.jpg",
+      "sha256": "aa917b53d83ae60beb146024ff5500824b33b790fc9bf37cca54486883b4dbb1"
+    },
+    {
+      "kind": "spot",
+      "name": "文昌阁",
+      "path": "static/tour_files/spot_images/enhanced/wenchang-pavilion.jpg",
+      "sha256": "1693afc9703269a4837cb4f2ac8eb49984336c3d07bb6e62f6d59b082d9aa4fb"
+    },
+    {
+      "kind": "spot",
+      "name": "故宫博物院",
+      "path": null
+    },
+    {
+      "kind": "spot",
+      "name": "长城(八达岭)",
+      "path": null
+    },
+    {
+      "kind": "route",
+      "name": "皇家园林经典文化线",
+      "path": "static/tour_files/route_covers/royal-garden-culture.jpg",
+      "sha256": "5e0bdf464be375f9d0f04534057fad87341d1a3e2be94585d60919a47212f4b0"
+    },
+    {
+      "kind": "route",
+      "name": "昆明湖摄影漫游线",
+      "path": "static/tour_files/route_covers/kunming-lake-photography.jpg",
+      "sha256": "918442c815a9af3f99568c696110f6188b662ecd131f8c76254913bc361a815f"
+    },
+    {
+      "kind": "route",
+      "name": "亲子湖山体验线",
+      "path": "static/tour_files/route_covers/family-lakeside.jpg",
+      "sha256": "1961578d74c523140247b601a5488350c8c6365792e53756cb918c320b4895e8"
+    }
+  ]
+}
