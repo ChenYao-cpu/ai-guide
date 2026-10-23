@@ -5,17 +5,13 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/station/summer-palace-east' },
     { path: '/station', redirect: '/station/summer-palace-east' },
-    { path:'/station-preview/:stationId',name:'StationPreview',component:()=>import('@/views/station/StationPreviewView.vue'),meta:{title:'服务站屏幕预览',requiresAuth:false} },
     {
       path: '/station/:stationId', name: 'ServiceStation',
       component: () => import('@/views/station/StationServiceView.vue'),
       meta: {title:'景区数字人服务站',requiresAuth:false},
     },
-    {
-      path: '/m/receive', name: 'StationReceive',
-      component: () => import('@/views/station/StationReceiveView.vue'),
-      meta: {title:'领取游览方案',requiresAuth:false},
-    },
+    { path: '/m/receive', name: 'StationReceive', component: () => import('@/views/station/StationReceiveView.vue'), meta: {title: '领取游览方案', requiresAuth: false} },
+    { path: '/m/tour/:sessionId', name: 'MobileTour', component: () => import('@/views/visitor/TourInteractionView.vue'), props: true, meta: {title: '智能导览', requiresAuth: false} },
     {
       path: '/login',
       name: 'Login',
@@ -23,46 +19,6 @@ const router = createRouter({
       meta: {
         title: '登录页' // 面包屑显示标题
       }
-    },
-    // ==========================================
-    //   游客交互端（免登录）
-    // ==========================================
-    {
-      path: '/visitor/home',
-      name: 'VisitorHome',
-      redirect: '/station/summer-palace-east',
-      meta: {
-        title: '选择导游',
-        requiresAuth: false,
-      },
-    },
-    {
-      path: '/visitor/:sessionId',
-      name: 'VisitorTour',
-      component: () => import('@/views/visitor/TourInteractionView.vue'),
-      props: true,
-      meta: {
-        title: '景区导览',
-        requiresAuth: false
-      }
-    },
-    // ==========================================
-    //   游客交互端 - 手机版（免登录）
-    // ==========================================
-    {
-      path: '/m/home',
-      name: 'MobileHome',
-      component: () => import('@/views/visitor/MobileHomeView.vue'),
-      meta: { title: '景区导览', requiresAuth: false },
-    },
-    {
-      path: '/m/tour/:sessionId',
-      name: 'MobileTour',
-      // Both browser entry points share dialogue state and capabilities.
-      // Native mini-program pages remain a separate application.
-      component: () => import('@/views/visitor/TourInteractionView.vue'),
-      props: true,
-      meta: { title: '智能导览', requiresAuth: false },
     },
     // ==========================================
     //   管理后台（需要登录）
@@ -85,108 +41,6 @@ const router = createRouter({
           name: 'Home',
           component: () => import('@/views/home/HomeView.vue'),
           meta: { title: '主页' }
-        },
-        // ---------------------
-        //       商品
-        // ---------------------
-        {
-          path: '/product',
-          name: 'Product',
-          redirect: { name: 'ProductList' },
-          meta: { title: '商品管理' },
-          children: [
-            {
-              path: '/product/list',
-              name: 'ProductList',
-              component: () => import('@/views/product/ProductListView.vue'),
-              meta: { title: '商品列表' }
-            },
-            {
-              path: '/product/create',
-              name: 'ProductCreate',
-              component: () => import('@/views/product/ProductEditView.vue'),
-              meta: { title: '新增商品' }
-            },
-            {
-              path: '/product/:productId/edit',
-              name: 'ProductEdit',
-              component: () => import('@/views/product/ProductEditView.vue'),
-              meta: { title: '商品修改' },
-              props: true
-            }
-          ]
-        },
-        // ---------------------
-        //       数字人管理
-        // ---------------------
-        {
-          path: '/digital_human',
-          name: 'DigitalHuman',
-          redirect: { name: 'DigitalHumanList' },
-          meta: { title: '数字人管理' },
-          children: [
-            {
-              path: '/digital_human/list',
-              name: 'DigitalHumanList',
-              component: () => import('@/views/digital-human/DigitalHumanView.vue'),
-              meta: { title: '角色管理' }
-            }
-          ]
-        },
-        // ---------------------
-        //       直播管理
-        // ---------------------
-
-        {
-          path: '/streaming',
-          name: 'Streaming',
-          redirect: { name: 'StreamingOverview' },
-          meta: { title: '直播管理' },
-          children: [
-            {
-              path: '/streaming/overview',
-              name: 'StreamingOverview',
-              component: () => import('@/views/streaming/StreamingRoomListView.vue'),
-              meta: { title: '直播间管理' }
-            },
-            {
-              path: '/streaming/create',
-              name: 'StreamingCreate',
-              component: () => import('@/views/streaming/StreamingRoomeEditView.vue'),
-              meta: { title: '新建直播间' }
-            },
-            {
-              path: '/streaming/:roomId/edit',
-              name: 'StreamingEdit',
-              component: () => import('@/views/streaming/StreamingRoomeEditView.vue'),
-              meta: { title: '编辑直播间' },
-              props: true
-            },
-            {
-              path: '/streaming/:roomId/on-air',
-              name: 'StreamingOnAir',
-              component: () => import('@/views/streaming/StreamingOnAirView.vue'),
-              meta: { title: '直播间' },
-              props: true
-            }
-          ]
-        },
-        // ---------------------
-        //       订单管理
-        // ---------------------
-        {
-          path: '/order',
-          name: 'Order',
-          redirect: { name: 'OrderOverview' },
-          meta: { title: '订单管理' },
-          children: [
-            {
-              path: '/order/overview',
-              name: 'OrderOverview',
-              component: () => import('@/views/order/OrderView.vue'),
-              meta: { title: '订单管理' }
-            }
-          ]
         },
         // ==========================================
         //   景区导览管理（新增）
@@ -304,23 +158,7 @@ const router = createRouter({
 
 import { useTokenStore } from '@/stores/userToken'
 
-// 检测是否为手机设备
-function isMobileDevice(): boolean {
-  const ua = navigator.userAgent
-  return /Android|iPhone|iPad|iPod|webOS/i.test(ua) || window.innerWidth < 768
-}
-
 router.beforeEach((to, from, next) => {
-  // 手机设备访问桌面游客端 → 自动跳转手机版
-  if (isMobileDevice() && to.name === 'VisitorHome' && to.query['desktop'] !== '1') {
-    next({ name: 'MobileHome' })
-    return
-  }
-  if (isMobileDevice() && to.name === 'VisitorTour' && to.query['desktop'] !== '1') {
-    next({ name: 'MobileTour', params: to.params })
-    return
-  }
-
   if (to.matched.some((r) => r.meta?.requiresAuth)) {
     // 登录状态缓存
     const tokenStore = useTokenStore()

@@ -33,20 +33,20 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from ..web_configs import API_CONFIG, WEB_CONFIGS
 from .database.init_db import create_db_and_tables
 from .routers import (
-    digital_human, llm, products, streamer_info, streaming_room, users,
+    llm, users,
     scenic_spots, knowledge_base, tour_routes, tour_chat, feedback_analytics,
-    digital_guide, avatar, spot_favorites, xingyun, tts, xfyun,
+    digital_guide, avatar, xingyun,
 )
 from .server_info import SERVER_PLUGINS_INFO
 from .models import station_models
-from .utils import ChatItem, ResultCode, gen_default_data, make_return_data, streamer_sales_process
+from .utils import ResultCode, gen_default_data, make_return_data
 
 swagger_description = """
 
@@ -55,7 +55,7 @@ swagger_description = """
 智游知境 · AI 智能导览平台
 
 基于开源多模态大模型的智能景区导览系统，支持语音/文本交互、数字人口型同步、
-个性化路线推荐和游客反馈分析。
+固定服务站路线规划和管理员数据分析。
 
 ## 功能点
 
@@ -66,7 +66,7 @@ swagger_description = """
 5. 🦸 **数字人驱动** — MuseTalk 口型同步 + 表情生成
 6. 🗺️ **个性化路线推荐** — 基于游客偏好匹配最佳游览路线
 7. 📊 **游客反馈分析** — 情感分析 + 热点话题 + 满意度趋势
-8. 🍍 **Vue3 + Element Plus** 管理后台 + 游客交互端，双端架构
+8. 🍍 **Vue3 + Element Plus** 管理后台 + 固定服务站，双端架构
 9. 🗝️ FastAPI + PostgreSQL + JWT 身份验证，高性能生产可用
 10. 🐋 Docker-compose 一键分布式部署
 
@@ -125,27 +125,20 @@ app = FastAPI(
 
 # 注册路由（原有路由 + 新增景区导览路由）
 app.include_router(users.router)
-app.include_router(products.router)
 app.include_router(llm.router)
-app.include_router(streamer_info.router)
-app.include_router(streaming_room.router)
-app.include_router(digital_human.router)
 # 景区导览新增路由
 app.include_router(scenic_spots.router)
 app.include_router(knowledge_base.router)
 app.include_router(tour_routes.router)
 app.include_router(tour_chat.router)
-from .routers import tour_adaptive, tour_experience, service_stations
-app.include_router(tour_adaptive.router)
-app.include_router(tour_experience.router)
+from .routers import service_stations, admin_preview, tour_adaptive
 app.include_router(service_stations.router)
-app.include_router(tts.router)
+app.include_router(admin_preview.router)
+app.include_router(tour_adaptive.router)
 app.include_router(feedback_analytics.router)
 app.include_router(digital_guide.router)
 app.include_router(avatar.router)
-app.include_router(spot_favorites.router)
 app.include_router(xingyun.router)
-app.include_router(xfyun.router)
 
 
 # 挂载静态文件目录，以便访问上传的文件
@@ -229,6 +222,12 @@ async def validation_exception_handler(request, exc):
     # Validation input and headers may contain application secrets or bearer tokens.
     errors = [{"loc": item["loc"], "msg": item["msg"], "type": item["type"]} for item in exc.errors()]
     logger.info("Request validation failed: {} {}", request.url.path, errors)
+    if request.url.path.startswith('/service-stations/'):
+        budget_error = any(e['loc'][-1] == 'budget' for e in errors)
+        question_error = any(e['loc'][-1] == 'question' for e in errors)
+        detail = ('请输入20—480之间的整数分钟' if budget_error else
+                  '请输入1—1000字的问题' if question_error else '输入格式不正确，请检查后重试')
+        return JSONResponse({'detail': detail, 'errors': errors}, status_code=422)
     return PlainTextResponse(str(errors), status_code=400)
 
 
@@ -421,13 +420,3 @@ async def upload_product_api(file: UploadFile = File(...), user_id: int = Depend
     file_url = f"{API_CONFIG.REQUEST_FILES_URL}{str(save_path).split(split_dir_name)[-1]}"
 
     return make_return_data(True, ResultCode.SUCCESS, "成功", file_url)
-
-
-@app.post("/streamer-sales/chat", tags=["base"], summary="对话接口", deprecated=True)
-async def streamer_sales_chat(chat_item: ChatItem, response: Response):
-    from sse_starlette import EventSourceResponse
-
-    # 对话总接口
-    response.headers["Content-Type"] = "text/event-stream"
-    response.headers["Cache-Control"] = "no-cache"
-    return EventSourceResponse(streamer_sales_process(chat_item))

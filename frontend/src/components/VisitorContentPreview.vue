@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { t, locale } from '@/i18n'
 import { getContentPreview } from '@/api/tourExperience'
-import { getVisitorSpotList } from '@/api/visitor'
+import { getSpotList } from '@/api/scenicSpot'
 import TourVisualContext from './TourVisualContext.vue'
 import RouteOverview from './RouteOverview.vue'
 import { formatTourMessage, isKnowledgeSourceUrl } from '@/utils/tourPresentation'
@@ -57,7 +57,7 @@ async function refresh() {
 watch([selectedSpot, selectedGuide], refresh)
 onMounted(async () => {
   try {
-    const response = await getVisitorSpotList()
+    const response = await getSpotList(1, 200)
     if (disposed) return
     spots.value = response.data.data.spot_list || []
     if (!selectedSpot.value && !props.draft?.spot_name)

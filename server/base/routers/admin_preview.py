@@ -14,7 +14,7 @@ from ..modules.rag import rag_worker
 from ..utils import make_return_data, ResultCode
 from .users import get_current_user_info
 
-router = APIRouter(prefix='/tour-experience', tags=['tour-experience'])
+router = APIRouter(prefix='/admin-preview', tags=['admin-preview'])
 
 
 class RoutePreviewRequest(BaseModel):
@@ -39,31 +39,12 @@ def load_spots(db, ids):
     return [s.model_dump() for s in spots]
 
 
-@router.post('/route-preview')
-def preview_route(body: RoutePreviewRequest):
+
+
+@router.post('/route')
+def preview_route(body: RoutePreviewRequest, user_id: int = Depends(get_current_user_info)):
     with Session(DB_ENGINE) as db:
-        result = route_overview(load_spots(db, body.spot_ids), body.pace, end_area=body.end_area,
-            start_area=body.start_area, avoid_steps=body.avoid_steps, reserve=body.reserve)
-    return make_return_data(True, ResultCode.SUCCESS, '成功', result)
-
-
-class RouteOrderRequest(RoutePreviewRequest):
-    spot_ids: list[int] = Field(min_length=2, max_length=20)
-    fixed_start: bool = True
-    fixed_end: bool = False
-
-
-@router.post('/optimize-order', summary='只调整景点顺序，保留全部已选景点')
-def preview_order_optimization(body: RouteOrderRequest):
-    from ..modules.route_order import optimize_order
-    with Session(DB_ENGINE) as db:
-        spots = load_spots(db, body.spot_ids)
-    try:
-        result = optimize_order(spots, fixed_start=body.fixed_start, fixed_end=body.fixed_end,
-            pace=body.pace, start_area=body.start_area, end_area=body.end_area,
-            avoid_steps=body.avoid_steps, reserve=body.reserve)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        result = route_overview(load_spots(db, body.spot_ids), body.pace, end_area=body.end_area, start_area=body.start_area, avoid_steps=body.avoid_steps, reserve=body.reserve)
     return make_return_data(True, ResultCode.SUCCESS, '成功', result)
 
 
@@ -77,7 +58,7 @@ class ContentPreviewRequest(RoutePreviewRequest):
     explanation_mode: Literal['standard', 'deep', 'child'] = 'standard'
 
 
-@router.post('/content-preview')
+@router.post('/content')
 async def preview_content(body: ContentPreviewRequest, user_id: int = Depends(get_current_user_info)):
     from ..modules.tour_support import child_fallback
     with Session(DB_ENGINE) as db:

@@ -109,7 +109,13 @@ export const defaultStationPreferences = (): StationPreferences => ({
 
 export function stationError(error: unknown): string {
   const detail = (error as any)?.response?.data?.detail
-  return typeof detail === 'string' ? detail : '服务暂不可用，请重试'
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    if (detail.some((e) => e.loc?.at(-1) === 'budget')) return '请输入20—480之间的整数分钟'
+    if (detail.some((e) => e.loc?.at(-1) === 'question')) return '请输入1—1000字的问题'
+    return '输入格式不正确，请检查后重试'
+  }
+  return '服务暂不可用，请重试'
 }
 export function getStation(id: string, signal?: AbortSignal) {
   return request_handler
@@ -194,14 +200,19 @@ export function speakAtStation(visit: StationVisit, language: string, signal?: A
     )
     .then((r) => r.data)
 }
-export function shareStationPlan(visit: StationVisit, plan_id: string, signal?: AbortSignal) {
+export function shareStationPlan(
+  visit: StationVisit,
+  plan_id: string,
+  signal?: AbortSignal,
+  language?: 'zh' | 'en'
+) {
   return request_handler
     .post<{
       token: string
       expires_at: string
     }>(
       '/service-stations/visits/' + visit.visit_id + '/share',
-      { plan_id },
+      { plan_id, language },
       { headers: headers(visit), signal, timeout: 10000 }
     )
     .then((r) => r.data)
@@ -279,6 +290,10 @@ export function stationShareStatus(visit: StationVisit, token: string) {
   return request_handler
     .post<{
       status: 'waiting' | 'received' | 'expired'
-    }>('/service-stations/visits/' + visit.visit_id + '/share-status', { token }, { headers: headers(visit), timeout: 8000 })
+    }>(
+      '/service-stations/visits/' + visit.visit_id + '/share-status',
+      { token },
+      { headers: headers(visit), timeout: 8000 }
+    )
     .then((r) => r.data)
 }

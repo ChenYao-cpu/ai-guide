@@ -34,12 +34,18 @@ export function useStationIdle(options: {
   onMounted(() => {
     window.addEventListener('pointerdown', touch, { passive: true })
     window.addEventListener('keydown', touch)
+    window.addEventListener('wheel', touch, { passive: true })
+    window.addEventListener('touchmove', touch, { passive: true })
+    window.addEventListener('scroll', touch, { passive: true, capture: true })
     timer = setInterval(tick, 1000)
   })
   onBeforeUnmount(() => {
     if (timer) clearInterval(timer)
     window.removeEventListener('pointerdown', touch)
     window.removeEventListener('keydown', touch)
+    window.removeEventListener('wheel', touch)
+    window.removeEventListener('touchmove', touch)
+    window.removeEventListener('scroll', touch, true)
   })
   return { remaining, touch, tick }
 }

@@ -1,6 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
-import os from 'node:os'
 
+import os from 'node:os'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -76,27 +76,23 @@ export default defineConfig(({ mode }) => {
     allowedHosts: true,
     proxy: {
       '/user': { target: backendUrl, bypass: spaNavigationBypass },
-      '/products': { target: backendUrl, bypass: spaNavigationBypass },
       '/upload': { target: backendUrl, bypass: spaNavigationBypass },
-      '/streamer': { target: backendUrl, bypass: spaNavigationBypass },
       '/llm': { target: backendUrl, bypass: spaNavigationBypass },
       '/dashboard': { target: backendUrl, bypass: spaNavigationBypass },
-      '/streaming-room': { target: backendUrl, bypass: spaNavigationBypass },
       '/plugins_info': { target: backendUrl, bypass: spaNavigationBypass },
-      '/digital-human': { target: backendUrl, bypass: spaNavigationBypass },
       '/digital-guide': { target: backendUrl, bypass: spaNavigationBypass },
       // 景区导览新增路由代理
       '/scenic-spots': { target: backendUrl, bypass: spaNavigationBypass },
       '/knowledge-base': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-routes': { target: backendUrl, bypass: spaNavigationBypass },
       '/tour-session': { target: backendUrl, bypass: spaNavigationBypass },
-      '/tour-experience': { target: backendUrl, bypass: spaNavigationBypass },
       '/service-stations': { target: backendUrl, bypass: spaNavigationBypass },
       '/analytics': { target: backendUrl, bypass: spaNavigationBypass },
       '/system': { target: backendUrl, bypass: spaNavigationBypass },
       '/files': { target: backendUrl, bypass: spaNavigationBypass },
       '/api': { target: backendUrl, bypass: spaNavigationBypass },
       '/xingyun': { target: backendUrl, bypass: spaNavigationBypass },
+      '/admin-preview': { target: backendUrl, bypass: spaNavigationBypass },
       '/avatar': { target: backendUrl, bypass: spaNavigationBypass }
     }
   },

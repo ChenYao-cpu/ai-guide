@@ -72,6 +72,11 @@ const prefs = reactive(defaultStationPlanningInput()),
   plans = ref<StationPlan[]>([]),
   planIndex = ref(0),
   planStale = ref(false)
+const budgetError = computed(() =>
+  Number.isInteger(prefs.budget) && prefs.budget >= 20 && prefs.budget <= 480
+    ? ''
+    : S('请输入20—480之间的整数分钟', 'Enter a whole number of minutes between 20 and 480')
+)
 const plan = computed(() => plans.value[planIndex.value]),
   station = computed(() => catalog.value?.station)
 const question = ref(''),
@@ -119,6 +124,7 @@ let version = 0,
   starting: Promise<StationVisit | null> | null = null,
   blobUrl = '',
   lastExtend = 0
+let pendingQuestion = ''
 let interval: ReturnType<typeof setInterval> | undefined,
   heartbeat: ReturnType<typeof setInterval> | undefined
 let recordingTimer: ReturnType<typeof setTimeout> | undefined,
@@ -162,9 +168,6 @@ const vDialogFocus = {
     focusCleanup.delete(el)
   }
 }
-const sharePreviewUrl = computed(() =>
-  shareUrl.value ? location.origin + '/m/receive' + new URL(shareUrl.value).hash : ''
-)
 const remainingSeconds = computed(() =>
   Math.max(0, Math.ceil((shareExpiry.value - clock.value) / 1000))
 )
@@ -410,6 +413,8 @@ function stopListening() {
   previous?.abort()
 }
 function cancel() {
+  if (pendingQuestion) question.value = pendingQuestion
+  pendingQuestion = ''
   version++
   controller?.abort()
   busy.value = false
@@ -471,6 +476,10 @@ function toggleStop(s: StationSpot) {
 }
 async function calculate() {
   if (busy.value || offline.value) return
+  if (budgetError.value) {
+    error.value = budgetError.value
+    return
+  }
   const own = ++version
   controller?.abort()
   controller = new AbortController()
@@ -519,7 +528,7 @@ async function ask(value = question.value) {
   stopListening()
   const previousTask = task.value
   task.value = 'chat'
-  lastQuestion.value = value
+  pendingQuestion = value
   question.value = ''
   try {
     const v = await ensureVisit()
@@ -537,6 +546,8 @@ async function ask(value = question.value) {
     )
     if (disposed || own !== version) return
     reply.value = data
+    lastQuestion.value = value
+    pendingQuestion = ''
     const { budget, end_area, avoid_steps, spot_ids } = data.preferences
     Object.assign(prefs, {
       budget,
@@ -566,6 +577,7 @@ async function ask(value = question.value) {
   } catch (e: any) {
     if (own === version && e.code !== 'ERR_CANCELED') {
       question.value = value
+      pendingQuestion = ''
       task.value = previousTask
       handleError(e)
     }
@@ -700,7 +712,7 @@ async function share() {
   shareToken.value = ''
   shareReceived.value = false
   try {
-    const data = await shareStationPlan(visit.value, planId)
+    const data = await shareStationPlan(visit.value, planId, undefined, locale.value)
     if (
       disposed ||
       own !== version ||
@@ -783,8 +795,10 @@ function onOffline() {
   stopSpeech()
 }
 watch(locale, () => {
-  stopSpeech()
-  stopListening()
+  cancel()
+  lastQuestion.value = ''
+  routeUpdate.value = ''
+  showShare.value = false
   reply.value = null
   messages.value = []
   question.value = ''
@@ -794,7 +808,7 @@ watch(locale, () => {
   idle.touch()
 })
 watch(
-  () => JSON.stringify(prefs),
+  () => JSON.stringify([prefs.budget, prefs.end_area, prefs.avoid_steps, prefs.spot_ids]),
   () => {
     if (plans.value.length) {
       planStale.value = true
@@ -1108,10 +1122,14 @@ function backToAttractions() {
                         type="number"
                         min="20"
                         max="480"
+                        step="1"
+                        :aria-invalid="!!budgetError"
+                        aria-describedby="station-budget-error"
                         :aria-label="S('自定义分钟数', 'Custom minutes')"
                       />{{ S('分钟', 'min') }}</label
                     >
                   </div>
+                  <p v-if="budgetError" id="station-budget-error" role="alert">{{ budgetError }}</p>
                 </fieldset>
                 <fieldset>
                   <legend>{{ S('最后去哪里？', 'Where will you finish?') }}</legend>
@@ -1196,7 +1214,7 @@ function backToAttractions() {
                   :disabled="
                     busy ||
                     offline ||
-                    !Number.isFinite(prefs.budget) ||
+                    !Number.isInteger(prefs.budget) ||
                     prefs.budget < 20 ||
                     prefs.budget > 480
                   "
@@ -1710,14 +1728,8 @@ function backToAttractions() {
           :disabled="shareBusy"
           @click="share"
         >
-          {{ S('重新生成领取码', 'Generate a new code') }}</button
-        ><a
-          v-if="shareUrl && remainingSeconds > 0"
-          :href="sharePreviewUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ S('在本机预览领取页', 'Preview pickup on this device') }} ↗</a
-        >
+          {{ S('重新生成领取码', 'Generate a new code') }}
+        </button>
         <p class="station-share-note">
           {{
             S(

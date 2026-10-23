@@ -9,6 +9,7 @@ from .route_presentation import route_overview
 from .route_order import optimize_order
 
 ENGLISH = json.loads((Path(__file__).resolve().parents[3]/'data/station_public_english.json').read_text(encoding='utf-8'))
+SPOT_ENGLISH = json.loads((Path(__file__).resolve().parents[3]/'data/station_spot_english.json').read_text(encoding='utf-8'))
 
 
 def english_local_answer(spot, answer):
@@ -16,7 +17,7 @@ def english_local_answer(spot, answer):
     if translated: return translated
     # Prefer a published English description to an invented translation when the
     # provider is unavailable. Specific missing details remain explicitly unknown.
-    description = ENGLISH.get(spot.get('description', ''))
+    description = ENGLISH.get(spot.get('description', '')) or SPOT_ENGLISH.get(spot.get('spot_name', ''), {}).get('description')
     return (description + '\n\nFor further details, try the digital guide again or ask on-site staff.' if description else
             'A verified English explanation for this question is temporarily unavailable. You can browse the attraction information or ask on-site staff.')
 
@@ -57,6 +58,8 @@ def plan_walk(station, spots, preferences):
     distances = [[distance_between(a, b, preferences['avoid_steps']) for b in allowed] for a in allowed]
     entry = [anchor_distance(s, start, preferences['avoid_steps']) for s in allowed]
     exit = [anchor_distance(s, end, preferences['avoid_steps']) for s in allowed]
+    if not any(math.isfinite(a) and math.isfinite(b) for a, b in zip(entry, exit)):
+        raise ValueError('当前路网没有满足条件的完整步行路线，请更换出口、调整台阶限制或咨询工作人员')
     rest_factor = .15 if preferences['pace'] == 'relaxed' else .08
     budget = preferences['budget']
     interest = preferences['interest']
@@ -113,10 +116,22 @@ def plan_walk(station, spots, preferences):
     return output
 
 
+def affirmative_edit_text(question):
+    """Ignore negated changes, but keep explicit exclusions such as 'skip A'."""
+    clauses = re.split(r'[，,。;；]|但是|但|而是|\bbut\b|\band\s+(?=(?:please\s+)?(?:add|remove|include|skip|finish|change)\b)', question.lower())
+    negative = re.compile(
+        r'(?:不要|不用|别|不必|不想|不能|不允许|不需要|不希望).{0,16}(?:改|换|调整|缩短|短一点|少走|加上|加入|增加|移除|去掉|删掉|离园|结束|安排|控制|预算)'
+        r'|不(?:改|换|调整|缩短|加上|加入|增加|移除|去掉|删掉)'
+        r'|(?:不|别)从.{0,12}(?:门|出口)'
+        r"|\b(?:don['’]t|do not|never|no need to|not to)\b.{0,35}\b(?:change|switch|make|set|finish|end|return|remove|drop|skip|add|include|shorten)\b"
+    )
+    return '，'.join(c for c in clauses if not negative.search(c))
+
+
 def extract_request(question, existing=None):
     """Conservative bilingual hints. A visible editable form always confirms them."""
     values = dict(existing or {})
-    q = question.lower()
+    q = affirmative_edit_text(question)
     match = re.search(r'(\d{1,3})\s*(?:分钟|minutes?|mins?)', q)
     hours = re.search(r'(\d+(?:\.\d+)?)\s*(?:个?小时|hours?|hrs?)', q)
     if match: values['budget'] = max(20, min(480, int(match[1])))
@@ -177,7 +192,7 @@ def consultation(question, station, spots, language):
 def revise_plan_request(question, snapshot, spots):
     """Only explicit route edits change the saved route; ordinary questions stay read-only."""
     from .tour_language import query_aliases
-    q = query_aliases(question).lower()
+    q = affirmative_edit_text(query_aliases(question))
     original = snapshot['preferences']
     values = extract_request(q, original)
     if not re.search(r'最后|离园|改为|换.*出口|返回本站|回到这里|finish|end at|return here', q):

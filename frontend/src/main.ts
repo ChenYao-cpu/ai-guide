@@ -29,12 +29,6 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
     navigator.serviceWorker.register('/sw.js').then(
       (registration) => {
         console.log('[PWA] Service Worker registered:', registration.scope)
-        // 请求后台位置同步权限（如果支持）
-        if (location.pathname.startsWith('/m/') && 'periodicSync' in registration) {
-          (registration as any).periodicSync.register('location-update', {
-            minInterval: 5 * 60 * 1000, // 最短5分钟
-          }).catch(() => { /* 浏览器不支持 */ })
-        }
       },
       (err) => console.warn('[PWA] SW registration failed:', err),
     )

@@ -1845,5 +1845,9 @@
   "设施编号不能重复": "Facility IDs must be unique.",
   "公告有效期格式无效": "The notice expiry date is invalid.",
   "服务站编号仅支持小写字母、数字和短横线": "Use lowercase letters, numbers and hyphens for the station ID.",
-  "本站接待配置已变化，请结束本次使用后重新开始": "The receptionist configuration changed. Finish this visit and start again."
+  "本站接待配置已变化，请结束本次使用后重新开始": "The receptionist configuration changed. Finish this visit and start again.",
+  "请输入20—480之间的整数分钟": "Enter a whole number of minutes between 20 and 480",
+  "请输入1—1000字的问题": "Enter a question of 1 to 1000 characters",
+  "输入格式不正确，请检查后重试": "Check the input format and try again",
+  "当前路网没有满足条件的完整步行路线，请更换出口、调整台阶限制或咨询工作人员": "No complete walking route meets these conditions in the current map. Change the exit or step restriction, or ask on-site staff."
 }

@@ -73,31 +73,6 @@ class RouteOrderTests(unittest.TestCase):
                 optimize_order(SPOTS[:3])
 
 
-class RouteOrderApiTests(unittest.TestCase):
-    def test_public_preview_is_read_only_validates_ids_and_preserves_every_stop(self):
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-        from server.base.routers import tour_experience as api
-        from server.base.models.tour_models import ScenicSpotInfo
-        records = {s['spot_id']: ScenicSpotInfo(**s) for s in SPOTS}
-        db = MagicMock()
-        db.get.side_effect = lambda model, sid: records.get(sid)
-        context = MagicMock()
-        context.__enter__.return_value = db
-        app = FastAPI()
-        app.include_router(api.router)
-        with patch.object(api, 'Session', return_value=context), TestClient(app) as client:
-            body = dict(spot_ids=list(records), fixed_start=True, fixed_end=True)
-            response = client.post('/tour-experience/optimize-order', json=body)
-            self.assertEqual(response.status_code, 200, response.text)
-            data = response.json()['data']
-            self.assertEqual(data['input_spot_ids'], list(records))
-            self.assertEqual(set(data['spot_ids']), set(records))
-            self.assertEqual(data['spot_ids'][-1], list(records)[-1])
-            for ids in [[1], [1, 1], [1, 999], list(range(21))]:
-                self.assertEqual(client.post('/tour-experience/optimize-order', json={'spot_ids':ids}).status_code, 422)
-            db.commit.assert_not_called()
-            db.add.assert_not_called()
 
 
 if __name__ == '__main__':

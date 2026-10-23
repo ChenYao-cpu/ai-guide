@@ -175,22 +175,6 @@ def signed_headers(method, body, timestamp=None, app_id=None, app_secret=None):
             "X-TOKEN": hashlib.md5(value.encode()).hexdigest(), "Content-Type": "application/json"}
 
 
-@router.get("/webview/{tour_id}")
-def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
-    from ..models.tour_models import TourSessionInfo
-    with Session(DB_ENGINE) as db:
-        tour = db.get(TourSessionInfo, tour_id)
-        if not tour:
-            raise HTTPException(404, "导览不存在")
-        authorize_tour(db, tour_id, tour.guide_id, x_tour_access, "")
-        guide = db.get(DigitalGuideInfo, tour.guide_id)
-        if not selectable(db, guide) or guide.render_mode != "xingyun":
-            raise HTTPException(409, "所选导游未启用星云")
-    origin = os.getenv("XINGYUN_WEB_ORIGIN", "").strip().rstrip("/")
-    parsed = urlsplit(origin)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
-        raise HTTPException(503, "待配置：管理员需设置星云网页 HTTPS 地址及微信业务域名")
-    return {"url": f"{origin}/m/tour/{tour_id}?framing=half#avatarToken={quote(x_tour_access, safe='')}"}
 
 
 @router.api_route("/session/{guide_id}", methods=["POST", "DELETE"])

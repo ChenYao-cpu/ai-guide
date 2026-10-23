@@ -185,7 +185,7 @@ onMounted(() => {
     /* Optional account recall. */
   }
   request_handler
-    .get('/tour-session/guides', { timeout: 5000 })
+    .get('/service-stations/public/summer-palace-east', { timeout: 5000 })
     .then(() => {
       serviceState.value = 'ready'
     })
@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
           >
             <div class="entry-heading">
               <h1>{{ $t('景区数字人服务站') }}</h1>
-              <p>{{ $t('在本站咨询规划，扫码带走游览方案。') }}</p>
+              <p>{{ $t('在本站咨询景点、查看地图和规划游览。') }}</p>
             </div>
             <div class="visitor-scene" aria-hidden="true">
               <svg viewBox="0 0 400 170" fill="none">

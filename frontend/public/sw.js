@@ -1,5 +1,5 @@
 // 景区导览 PWA Service Worker
-// 提供离线缓存和后台位置追踪能力
+// 提供离线缓存
 
 const CACHE_NAME = 'tour-guide-station-v3'
 const CACHE_URLS = [
@@ -38,7 +38,7 @@ self.addEventListener('fetch', (event) => {
   // responses must never enter a shared-terminal browser cache.
   if (url.origin !== self.location.origin) return
   const allowed = /^\/(assets|images|brand|models|scenic|vendor)\//.test(url.pathname) ||
-    event.request.mode === 'navigate' && /^\/(station(?:\/|$)|m\/(?:home|receive)$)/.test(url.pathname)
+    event.request.mode === 'navigate' && /^\/(station(?:\/|$))/.test(url.pathname)
   if (!allowed) return
 
   event.respondWith(
@@ -52,19 +52,3 @@ self.addEventListener('fetch', (event) => {
       .catch(async () => (await caches.match(event.request)) || (event.request.mode === 'navigate' ? await caches.match('/offline.html') : Response.error()))
   )
 })
-
-// 后台位置推送（如果支持 Periodic Background Sync）
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'location-update') {
-    event.waitUntil(updateLocationInBackground())
-  }
-})
-
-async function updateLocationInBackground() {
-  // 后台位置更新 — 由主线程触发
-  const clients = await self.clients.matchAll({ type: 'window' })
-  for (const client of clients) {
-    if (!new URL(client.url).pathname.startsWith('/m/')) continue
-    client.postMessage({ type: 'bg-location-request' })
-  }
-}

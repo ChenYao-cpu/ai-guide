@@ -146,6 +146,135 @@ afterEach(() => {
 })
 
 describe('Fixed service station', () => {
+  it('keeps a valid route across language changes and shares the current language', async () => {
+    vi.mocked(api.shareStationPlan).mockResolvedValue({
+      token: 'claim-token',
+      expires_at: new Date(Date.now() + 900000).toISOString()
+    })
+    render()
+    await flushPromises()
+    await button('帮我规划游览').trigger('click')
+    await button('生成我的游览方案').trigger('click')
+    await flushPromises()
+    setLocale('en')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Recalculate before pickup')
+    const pickup = wrapper.findAll('button').find((b) => b.text().includes('phone'))!
+    expect(pickup.attributes('disabled')).toBeUndefined()
+    await pickup.trigger('click')
+    await flushPromises()
+    expect(api.shareStationPlan).toHaveBeenCalledWith(visit, 'p1', undefined, 'en')
+    setLocale('zh')
+    await flushPromises()
+    expect(button('把这条路线带到手机').attributes('disabled')).toBeUndefined()
+    expect(api.planAtStation).toHaveBeenCalledTimes(1)
+    await button('帮我规划游览').trigger('click')
+    await wrapper.get('input[type=number]').setValue(180)
+    expect(wrapper.text()).toContain('生成我的游览方案')
+  })
+  it('restores the canceled question and keeps the previous completed answer paired', async () => {
+    const response = {
+      answer: '上次完整答案',
+      actions: [],
+      source: 'local',
+      preferences: api.defaultStationPreferences()
+    }
+    vi.mocked(api.consultStation).mockResolvedValueOnce(response)
+    render()
+    await flushPromises()
+    await button('和数字人聊一聊').trigger('click')
+    await flushPromises()
+    await wrapper.get('.station-chat-input input').setValue('介绍佛香阁')
+    await wrapper.get('.station-chat-input').trigger('submit')
+    await flushPromises()
+    let resolve!: (data: any) => void
+    vi.mocked(api.consultStation).mockReturnValueOnce(
+      new Promise((r) => {
+        resolve = r
+      })
+    )
+    await wrapper.get('.station-chat-input input').setValue('介绍德和园')
+    await wrapper.get('.station-chat-input').trigger('submit')
+    await flushPromises()
+    await button('取消').trigger('click')
+    expect(wrapper.get('.station-user-question').text()).toBe('介绍佛香阁')
+    expect(wrapper.get('.station-answer').text()).toContain('上次完整答案')
+    expect((wrapper.get('.station-chat-input input').element as HTMLInputElement).value).toBe(
+      '介绍德和园'
+    )
+    resolve({ ...response, answer: '迟到的德和园答案' })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('迟到的德和园答案')
+  })
+  it('ignores a late answer in the old language after switching language', async () => {
+    let resolve!: (data: any) => void
+    vi.mocked(api.consultStation).mockReturnValueOnce(
+      new Promise((r) => {
+        resolve = r
+      })
+    )
+    render()
+    await flushPromises()
+    await button('和数字人聊一聊').trigger('click')
+    await flushPromises()
+    await wrapper.get('.station-chat-input input').setValue('长廊有什么历史故事？')
+    await wrapper.get('.station-chat-input').trigger('submit')
+    await flushPromises()
+    const signal = vi.mocked(api.consultStation).mock.calls[0][2]!
+    setLocale('en')
+    await flushPromises()
+    expect(signal.aborted).toBe(true)
+    resolve({
+      answer: '旧中文答案',
+      actions: [],
+      source: 'local',
+      preferences: api.defaultStationPreferences()
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('旧中文答案')
+    expect(wrapper.find('.station-user-question').exists()).toBe(false)
+    expect(wrapper.get('.station-chat-input input').attributes('disabled')).toBeUndefined()
+  })
+  it('rejects fractional minutes locally with an actionable hint', async () => {
+    render()
+    await flushPromises()
+    await button('帮我规划游览').trigger('click')
+    await wrapper.get('input[type=number]').setValue(60.5)
+    expect(wrapper.get('#station-budget-error').text()).toBe('请输入20—480之间的整数分钟')
+    expect(button('生成我的游览方案').attributes('disabled')).toBeDefined()
+    expect(api.planAtStation).not.toHaveBeenCalled()
+    setLocale('en')
+    await flushPromises()
+    expect(wrapper.get('#station-budget-error').text()).toContain('whole number')
+    await wrapper.get('input[type=number]').setValue(60)
+    expect(wrapper.find('#station-budget-error').exists()).toBe(false)
+  })
+  it.each(['wheel', 'touchmove', 'scroll'])(
+    'counts %s reading activity, then expires when truly idle',
+    async (eventName) => {
+      render()
+      await flushPromises()
+      await button('帮我规划游览').trigger('click')
+      await flushPromises()
+      const scrollTarget = document.createElement('div')
+      document.body.append(scrollTarget)
+      try {
+        for (let i = 0; i < 3; i++) {
+          await vi.advanceTimersByTimeAsync(39000)
+          scrollTarget.dispatchEvent(new Event(eventName, { bubbles: eventName !== 'scroll' }))
+          await flushPromises()
+          expect(wrapper.find('[role=alertdialog]').exists()).toBe(false)
+          expect(api.endStationVisit).not.toHaveBeenCalled()
+        }
+        await vi.advanceTimersByTimeAsync(61000)
+        await flushPromises()
+        expect(api.endStationVisit).toHaveBeenCalledWith(visit)
+        expect(wrapper.find('.station-home-content').exists()).toBe(true)
+      } finally {
+        scrollTarget.remove()
+      }
+    }
+  )
   it('discards a late microphone transcript after ending the visit', async () => {
     let speech: any
     vi.stubGlobal(
@@ -229,6 +358,7 @@ describe('Fixed service station', () => {
     await flushPromises()
     await vi.advanceTimersByTimeAsync(4000)
     await flushPromises()
+    expect(wrapper.text()).not.toContain('在本机预览领取页')
     expect(wrapper.text()).toContain('路线已成功带到手机')
     expect(wrapper.find('.station-share-dialog img').exists()).toBe(false)
     await button('完成，结束本次使用').trigger('click')

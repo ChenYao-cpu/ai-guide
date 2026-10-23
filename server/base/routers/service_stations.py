@@ -253,7 +253,9 @@ async def chat(visit_id: str, body: ChatInput, x_station_token: str = Header(def
                 db.add(visit); db.commit()
                 return dict(answer=answer, actions=['plan'], source='local', preferences=revised, plans=updated)
         context_question = question
-        if body.spot_id:
+        from ..modules.tour_language import query_aliases
+        explicit_spot = any(s['spot_name'] in query_aliases(question) for s in spots)
+        if body.spot_id and not explicit_spot:
             current = next((s for s in spots if s['spot_id'] == body.spot_id), None)
             if current: context_question = current['spot_name'] + ' ' + question
         result = consultation(context_question, station, spots, body.language)
@@ -346,6 +348,7 @@ def math_ceil(value):
 
 class ShareInput(BaseModel):
     plan_id: str = Field(max_length=64)
+    language: Literal['zh', 'en'] | None = None
 
 
 @router.post('/visits/{visit_id}/share')
@@ -357,8 +360,12 @@ def share_plan(visit_id: str, body: ShareInput, x_station_token: str = Header(de
         if plan.snapshot['network_version'] != network_version() or plan.snapshot['station']['revision'] != station.revision or plan.snapshot.get('catalog_version') != catalog_version(db):
             raise HTTPException(409, '路线或服务站配置已更新，请重新规划后领取')
         token = secrets.token_urlsafe(32)
+        import copy
+        snapshot = copy.deepcopy(plan.snapshot)
+        if body.language:
+            snapshot['preferences']['language'] = body.language
         row = StationClaim(claim_hash=digest(token), station_id=station.station_id, plan_id=plan.plan_id,
-            snapshot=plan.snapshot, expires_at=utcnow() + timedelta(minutes=15))
+            snapshot=snapshot, expires_at=utcnow() + timedelta(minutes=15))
         db.add(row); db.commit()
         return dict(token=token, expires_at=row.expires_at.isoformat() + 'Z')
 

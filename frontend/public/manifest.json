@@ -1,12 +1,12 @@
 {
-  "name": "智游知境",
+  "name": "智游知境 · 景区数字人服务站",
   "short_name": "智游知境",
-  "description": "基于AI数字人技术的智能景区导览系统，支持语音问答、GPS位置感知、个性化路线推荐",
-  "start_url": "/visitor/home",
+  "description": "固定景区数字人服务站与管理员平台",
+  "start_url": "/station/summer-palace-east",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#e0f7ff",
-  "theme_color": "#0284c7",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
   "lang": "zh-CN",
   "icons": [
     {
@@ -14,32 +14,6 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
     }
-  ],
-  "categories": ["travel", "navigation", "education"],
-  "screenshots": [
-    {
-      "src": "/screenshots/home.png",
-      "sizes": "390x844",
-      "type": "image/png"
-    }
-  ],
-  "features": [
-    "GPS位置感知自动讲解",
-    "AI数字人语音对话",
-    "个性化路线推荐",
-    "多景区形象适配"
   ]
 }

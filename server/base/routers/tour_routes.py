@@ -123,39 +123,3 @@ async def remove_route(routeId: int, user_id: int = Depends(get_current_user_inf
     if not success:
         return make_return_data(False, ResultCode.FAIL, "删除失败", "")
     return make_return_data(True, ResultCode.SUCCESS, "成功", "")
-
-
-@router.post("/recommend", summary="个性化路线推荐")
-async def get_route_recommendation(
-    request: RouteRecommendRequest,
-):
-    """根据游客偏好推荐游览路线（免登录）"""
-    # 获取所有可用景点
-    spot_list, _ = await get_db_scenic_spot_info(user_id=1)
-
-    if not spot_list:
-        return make_return_data(False, ResultCode.FAIL, "暂无可用景点", "")
-
-    # 调用推荐算法
-    result = await recommend_route(request.preferences, spot_list, request.time_budget_minutes,
-                                   city=request.city, pace=request.pace, start_area=request.start_area,
-                                   end_area=request.end_area, queue_reserve_minutes=request.queue_reserve_minutes,
-                                   excluded_spot_ids=request.excluded_spot_ids)
-    if not result['spot_ids']:
-        return make_return_data(False,ResultCode.FAIL,'当前时间与步行节奏下暂无匹配路线，请增加时长或调整出发区域','')
-
-    return make_return_data(True, ResultCode.SUCCESS, "推荐成功", result)
-
-
-@router.post("/parse-preferences", summary="从消息中解析游客偏好")
-async def parse_visitor_preferences(request: PreferenceItem):
-    """从游客消息中解析兴趣偏好"""
-    if not request.preferences:
-        return make_return_data(True, ResultCode.SUCCESS, "成功", {"preferences": ["comprehensive"]})
-
-    # 如果已经提供了明确的偏好标签，直接返回
-    valid_prefs = [p for p in request.preferences if p in ["history", "nature", "photography", "family", "comprehensive"]]
-    if valid_prefs:
-        return make_return_data(True, ResultCode.SUCCESS, "成功", {"preferences": valid_prefs})
-
-    return make_return_data(True, ResultCode.SUCCESS, "成功", {"preferences": ["comprehensive"]})

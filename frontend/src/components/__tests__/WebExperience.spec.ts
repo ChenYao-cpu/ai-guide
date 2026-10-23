@@ -9,7 +9,7 @@ vi.mock('@/api/tourExperience', () => ({
   getRouteOverview: api.route,
   getContentPreview: api.preview
 }))
-vi.mock('@/api/visitor', () => ({ getVisitorSpotList: api.spots }))
+vi.mock('@/api/scenicSpot', () => ({ getSpotList: api.spots }))
 const overview = (name = '长廊') => ({
   stops: [
     { spot_id: 1, spot_name: name, order: 1, latitude: 39.99, longitude: 116.26, visit_minutes: 20 }

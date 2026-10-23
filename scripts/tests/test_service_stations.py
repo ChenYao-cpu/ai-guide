@@ -251,4 +251,62 @@ class StationServiceTests(unittest.TestCase):
         with Session(self.engine) as db: self.assertEqual(db.exec(select(TourSessionInfo)).all(),[])
 
 
+    def test_explicit_new_spot_overrides_previous_context_in_both_languages(self):
+        previous = next(s for s in SPOTS if s['spot_name'] == '十七孔桥')
+        corridor = next(s for s in SPOTS if s['spot_name'] == '长廊')
+        with patch('server.base.routers.tour_chat._llm_is_configured', return_value=False):
+            for question, language in [('长廊有什么值得看？', 'zh'), ('Tell me about the Long Corridor', 'en')]:
+                response = self.client.post(self.prefix+'/chat', json={'question': question, 'language': language, 'spot_id':previous['spot_id']}, headers=self.headers)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()['spot_id'], corridor['spot_id'])
+                self.assertEqual(response.json()['visuals']['spot_name'], '长廊')
+            follow = self.client.post(self.prefix+'/chat', json={'question':'它有什么历史？', 'spot_id':corridor['spot_id']},headers=self.headers)
+            self.assertEqual(follow.json()['spot_id'],corridor['spot_id'])
+
+    def test_negated_edits_never_modify_a_saved_route_but_positive_clause_still_works(self):
+        from server.base.modules.station_service import revise_plan_request
+        plan = self.plans(budget=240)[0]
+        with patch('server.base.routers.tour_chat._llm_is_configured', return_value=False):
+            for question in ['不要把终点改为北宫门', "Don't change the exit to the north gate", '别把这条路线缩短', '不要改为北宫门，也不要少走', '不改为北宫门', '不希望短一点']:
+                self.assertIsNone(revise_plan_request(question,plan,SPOTS))
+                response=self.client.post(self.prefix+'/chat',json={'question':question,'plan_id':plan['plan_id']},headers=self.headers)
+                self.assertEqual(response.status_code,200,response.text)
+                self.assertNotIn('plans',response.json())
+                self.assertEqual(response.json()['preferences']['end_area'],'east')
+        revised=revise_plan_request('不要改为北宫门，但是最后改为新建宫门',plan,SPOTS)
+        self.assertEqual(revised['end_area'],'south')
+        stop=plan['route']['stops'][0]
+        self.assertNotIn(stop['spot_id'],revise_plan_request('不想去'+stop['spot_name'],plan,SPOTS)['spot_ids'])
+        self.assertIsNone(revise_plan_request('不要移除'+stop['spot_name'],plan,SPOTS))
+
+    def test_english_fallback_survives_changed_chinese_copy(self):
+        from server.base.modules.station_service import english_local_answer, SPOT_ENGLISH
+        for name, data in SPOT_ENGLISH.items():
+            with self.subTest(name=name):
+                answer=english_local_answer({'spot_name':name,'description':'已修改的中文简介'}, '未收录的中文回答')
+                self.assertIn(data['description'],answer)
+                self.assertNotIn('temporarily unavailable',answer)
+                self.assertNotIn('已修改',answer)
+
+    def test_connectivity_failure_and_budget_failure_have_distinct_messages(self):
+        unavailable=self.client.post(self.prefix+'/plans',json={'budget':480,'end_area':'north','avoid_steps':True},headers=self.headers)
+        self.assertEqual(unavailable.status_code,422)
+        self.assertIn('当前路网',unavailable.json()['detail'])
+        self.assertNotIn('增加时间',unavailable.json()['detail'])
+        too_short=self.client.post(self.prefix+'/plans',json={'budget':20,'end_area':'north'},headers=self.headers)
+        self.assertEqual(too_short.status_code,422)
+        self.assertIn('时间不足',too_short.json()['detail'])
+        self.plans(budget=480,end_area='north',avoid_steps=False)
+
+    def test_share_language_is_independent_of_route_validity_and_saved_plan(self):
+        plan=self.plans()[0]
+        response=self.client.post(self.prefix+'/share',json={'plan_id':plan['plan_id'],'language':'en'},headers=self.headers)
+        self.assertEqual(response.status_code,200,response.text)
+        preview=self.client.post('/service-stations/claim/preview',json={'token':response.json()['token'],'receipt':'z'*48}).json()
+        self.assertEqual(preview['snapshot']['preferences']['language'],'en')
+        self.assertEqual(preview['snapshot']['route'],plan['route'])
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(StationPlan,plan['plan_id']).snapshot['preferences']['language'],'zh')
+
+
 if __name__=='__main__': unittest.main()

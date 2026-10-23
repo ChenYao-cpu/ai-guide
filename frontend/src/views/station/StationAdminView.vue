@@ -18,7 +18,7 @@ const data = ref<StationAdminData | null>(null),
   loading = ref(false),
   saving = ref(false),
   locationChecked = ref(false)
-const previewUrl = computed(() => (draft.value ? '/station-preview/' + draft.value.station_id : ''))
+const previewUrl = computed(() => (draft.value ? '/station/' + draft.value.station_id : ''))
 const anchorLabel = computed(
   () => data.value?.anchors.find((a) => a.key === draft.value?.anchor_key)?.label || ''
 )
@@ -137,8 +137,8 @@ onMounted(load)
         <p>
           {{
             S(
-              '配置固定位置、接待员和公开服务资料。服务站咨询与手机游览各自独立。',
-              'Manage fixed locations, receptionists and public information. Terminal consultations and mobile tours have separate sessions.'
+              '配置固定位置、接待员和公开服务资料。',
+              'Manage fixed locations, receptionists and public information.'
             )
           }}
         </p>

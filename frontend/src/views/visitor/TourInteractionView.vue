@@ -296,7 +296,7 @@ import { useGeolocation } from '@/composables/useGeolocation'
 import { formatTourMessage, isKnowledgeSourceUrl } from '@/utils/tourPresentation'
 
 const router = useRouter()
-const planningHome = computed(()=>router.currentRoute.value.path.startsWith('/m/')?'/m/home':'/station/summer-palace-east')
+const planningHome = computed(() => '/station/summer-palace-east')
 const props = defineProps<{ sessionId: string }>()
 
 // ── GPS 位置追踪 ──
