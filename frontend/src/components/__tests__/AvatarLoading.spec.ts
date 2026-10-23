@@ -10,15 +10,26 @@ vi.mock('@/api/xingyunTour', () => ({ avatarHeaders: () => ({}) }))
 let wrapper: VueWrapper | undefined
 let callbacks: Record<string, any>
 let download: Record<string, any>
+let initResolvers: Array<() => void> = []
+
+// 新版 litesdk 用 init() 的 Promise 表示就绪；测试用可控 Promise 模拟。
+async function resolveInit(index = -1) {
+  initResolvers.at(index)?.()
+  await flushPromises()
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
   http.get.mockResolvedValue({ data: { configured: true, provider: 'xingyun' } })
   callbacks = {}
   download = {}
+  initResolvers = []
   vi.stubGlobal('XmovAvatar', class {
     constructor(options: Record<string, any>) { callbacks = options }
-    async init(options: Record<string, any>) { download = options }
+    init(options: Record<string, any>) {
+      download = options
+      return new Promise<void>(resolve => { initResolvers.push(resolve) })
+    }
     destroy() {}
     interactiveidle() {}
     speak() {}
@@ -40,8 +51,7 @@ describe('数字人加载呈现', () => {
     await flushPromises()
     expect(callbacks.headers).toEqual({ 'X-Station-Token': 'private-token' })
     expect(callbacks.gatewayServer).toContain('station_visit_id=station1')
-    callbacks.onInitEvent(4000)
-    await flushPromises()
+    await resolveInit()
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('visibility: visible')
     expect(wrapper.find('.xingyun-controls').exists()).toBe(false)
@@ -49,11 +59,10 @@ describe('数字人加载呈现', () => {
   it('断线后有限重连，旧实例迟到的就绪事件无效',async()=>{
     vi.useFakeTimers({toFake:['setTimeout','clearTimeout']})
     wrapper=mount(XingyunGuide,{props:{guideId:37,tourId:90}});await flushPromises()
-    const old=callbacks
-    callbacks.onInitEvent(4000);await flushPromises()
+    const oldResolve=initResolvers.at(-1)!
     download.onClose();await flushPromises()
     expect(wrapper.text()).toContain('自动重连')
-    old.onInitEvent(4000);await nextTick()
+    oldResolve();await flushPromises()
     expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('hidden')
     await vi.advanceTimersByTimeAsync(2000);await flushPromises()
     callbacks.onMessage({code:5000,message:'offline'});await flushPromises()
@@ -65,7 +74,7 @@ describe('数字人加载呈现', () => {
   it('主动断开后不自动重新连接',async()=>{
     vi.useFakeTimers({toFake:['setTimeout','clearTimeout']})
     wrapper=mount(XingyunGuide,{props:{guideId:37,tourId:90}});await flushPromises()
-    callbacks.onInitEvent(4000);await flushPromises()
+    await resolveInit()
     await wrapper.find('button').trigger('click')
     window.dispatchEvent(new Event('online'))
     await vi.advanceTimersByTimeAsync(10000);await flushPromises()
@@ -81,8 +90,7 @@ describe('数字人加载呈现', () => {
     expect(wrapper.find('[role="status"]').text()).toBe('数字人正在加载中')
     expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('visibility: hidden')
     expect(wrapper.findAll('button')).toHaveLength(0)
-    callbacks.onInitEvent(4000)
-    await nextTick()
+    await resolveInit()
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
     expect(wrapper.find('.xingyun-canvas').attributes('style')).toContain('visibility: visible')
     expect(wrapper.find('button').text()).toBe('断开连接')
@@ -92,7 +100,7 @@ describe('数字人加载呈现', () => {
   it('连接失败显示重试入口，不用头像替代', async () => {
     wrapper = mount(XingyunGuide, { props: { guideId: 37, tourId: 90, posterImage: '/head.png' } })
     await flushPromises()
-    callbacks.onInitEvent(4000)
+    await resolveInit()
     callbacks.onMessage({ code: 5000, message: '连接失败' })
     await flushPromises()
     expect(wrapper.find('img').exists()).toBe(false)

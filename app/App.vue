@@ -48,7 +48,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .msg-bubble.user { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .aurora-page{background:transparent!important;color:var(--ng-text)}
 .aurora-background{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,var(--ng-surface) 0%,var(--ng-surface) 35%,var(--ng-surface) 70%,var(--ng-surface) 100%)}
-.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay):not(.login-reveal){position:relative;z-index:1}
+.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay):not(.login-reveal):not(.voice-render){position:relative;z-index:1}
 .aurora-page .nav{background:transparent!important;border-bottom-color:var(--ng-border)!important;gap:18rpx}
 .aurora-page .nav-title{color:var(--ng-text)}
 .aurora-page .tb-root{position:fixed!important;background:var(--ng-surface)!important;border-top-color:var(--ng-border)!important}

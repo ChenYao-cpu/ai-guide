@@ -2,7 +2,7 @@
 import { computed, ref, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import QRCode from 'qrcode'
-import { serverIP, serverPort } from 'virtual:server-info'
+import { lanOrigin } from '@/utils/lanOrigin'
 import BrandLogo from '@/components/BrandLogo.vue'
 import DigitalAvatarPlayer from '@/components/DigitalAvatarPlayer.vue'
 import ScenicSpotCover from '@/components/ScenicSpotCover.vue'
@@ -709,9 +709,7 @@ async function share() {
       plan.value?.plan_id !== planId
     )
       return
-    const origin = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-      ? `http://${serverIP}:${serverPort}`
-      : location.origin
+    const origin = await lanOrigin()
     const url = origin + '/m/receive#claim=' + encodeURIComponent(data.token)
     const qr = await QRCode.toDataURL(url, {
       width: 320,

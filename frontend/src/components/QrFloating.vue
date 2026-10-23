@@ -26,19 +26,14 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { serverIP, serverPort } from 'virtual:server-info'
+import { lanOrigin } from '@/utils/lanOrigin'
 
 const show = ref(false)
 const editUrl = ref('')
 const autoDetected = ref(true)
 
-onMounted(() => {
-  const origin = window.location.origin
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    editUrl.value = `http://${serverIP}:${serverPort}/m/home`
-  } else {
-    editUrl.value = origin + '/m/home'
-  }
+onMounted(async () => {
+  editUrl.value = (await lanOrigin()) + '/m/home'
 })
 
 const mobileUrl = computed(() => editUrl.value)

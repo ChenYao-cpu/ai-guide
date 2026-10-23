@@ -98,14 +98,16 @@ async function connect() {
     const SDK = await loadSdk()
     if (!active || current !== generation) return
     await nextTick()
-    let resolveReady!: () => void
     let rejectReady!: (error: Error) => void
-    const rendered = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject })
+    const stopSignal = new Promise<never>((_, reject) => { rejectReady = reject })
+    // stopSignal 可能比竞态先结束，先挂空 catch 避免未处理的 Promise 拒绝。
+    void stopSignal.catch(() => {})
     cancelReady=()=>rejectReady(new Error('Connection cancelled'))
     const failed=(text:string)=>{
       if(current!==generation)return
       rejectReady(new Error(text))
-      release();message.value=text;scheduleRetry()
+      // init 已完成后 SDK 仍可能报错或断开，此时竞态已结束，需要在这里直接复位。
+      if(ready.value){release();message.value=text;scheduleRetry()}
     }
     // SDK 的本地签名会被代理忽略；真实应用凭据保留在后端。
     const instance = new SDK({
@@ -117,7 +119,6 @@ async function connect() {
         subtitle_on: () => {},
         subtitle_off: () => {},
       },
-      onInitEvent: (code: number) => { if (current === generation && code === 4000) { ready.value = true; emit('connected', true); message.value = '数字人已连接'; resolveReady() } },
       onMessage: (error: { code?: number; message?: string }) => {
         if (current === generation && error.code && error.code !== 4000) {
           failed(t("数字人服务异常，请重试"))
@@ -133,22 +134,32 @@ async function connect() {
         if (state === 'idle' || state === 'interactive_idle') {
           ready.value = true
           emit('connected', true)
-          message.value = '数字人已连接'
-          resolveReady()
+          if (message.value !== '数字人正在讲解') message.value = '数字人已连接'
         }
       },
     })
     avatar = instance
     let initTimer: ReturnType<typeof setTimeout> | undefined
-    try { await Promise.race([Promise.all([rendered, instance.init({
-      onDownloadProgress: (progress: number) => {
-        if (current === generation) message.value = t("正在加载数字人资源：") + Math.round(progress) + '%'
-      },
-      onClose: () => {
-        if (current !== generation) return
-        failed(t("数字人连接已关闭，可重新连接"))
-      },
-    })]), new Promise<never>((_, reject) => { initTimer = setTimeout(() => reject(new Error(t("数字人初始化超时，请重新连接"))), 90000) })])
+    try {
+      // 新版 litesdk 以 init() 返回的 Promise 表示就绪；旧的 onInitEvent(4000) 已被移除，
+      // 继续等待旧事件会导致页面一直停在“正在加载数字人”并在 90 秒后超时。
+      await Promise.race([
+        instance.init({
+          onDownloadProgress: (progress: number) => {
+            if (current === generation) message.value = t("正在加载数字人资源：") + Math.round(progress) + '%'
+          },
+          onClose: () => {
+            if (current !== generation) return
+            failed(t("数字人连接已关闭，可重新连接"))
+          },
+        }),
+        stopSignal,
+        new Promise<never>((_, reject) => { initTimer = setTimeout(() => reject(new Error(t("数字人初始化超时，请重新连接"))), 90000) }),
+      ])
+      if (!active || current !== generation) return
+      ready.value = true
+      emit('connected', true)
+      message.value = '数字人已连接'
     } finally { if (initTimer) clearTimeout(initTimer) }
   } catch (error) {
     if (current === generation) { release(); message.value = error instanceof Error ? error.message : t("数字人连接失败");scheduleRetry() }

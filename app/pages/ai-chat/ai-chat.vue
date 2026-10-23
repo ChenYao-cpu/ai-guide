@@ -124,7 +124,7 @@
     <view v-if="voiceError && !transcribing" class="voice-status">{{ $t(voiceError) }}</view>
     <view v-if="showPhotoChoices" class="photo-popover-mask" :class="{closing:photoClosing}" @tap="closePhotoChoices"></view>
     <!-- 底部固定区：输入框 + Tab，flex竖向排列 -->
-    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}">
+    <view class="bottom-fixed" :class="{'keyboard-open':keyboardVisible, 'photo-open':showPhotoChoices}" :style="keyboardHeight>0?{transform:'translateY(-'+keyboardHeight+'px)'}:{}">
       <!-- 录音波形以输入栏为定位基准，显示在输入栏上方的空白处。 -->
       <view class="recording-hint" v-if="recording" aria-hidden="true">
         <view class="rh-wave">
@@ -148,7 +148,7 @@
       <view class="voice-btn" :class="{ active: voiceMode }" @tap="toggleVoiceMode">
         <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
       </view>
-      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :disabled="loading"/>
+      <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="$t(chatMode==='guide'?'用中文或英文提问...':'描述你的游览需求...')" :maxlength="2000" confirm-type="send" @focus="onInputFocus" @blur="onInputBlur" @keyboardheightchange="onInputKeyboardHeight" @confirm="sendText" :adjust-position="false" :cursor-spacing="0" :disabled="loading"/>
       <view v-else class="voice-hold-btn" :class="{ pressing: voicePressing }" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
         <text>{{ $t(transcribing ? $t("正在识别…") : voicePressing ? $t("正在录音，松开发送") : $t("按住说话")) }}</text>
       </view>
@@ -158,6 +158,9 @@
     </view>
 
     </view>
+    <!-- 星云数字人语音：容器在屏幕外，不显示人物，只用应用音色 -->
+    <ChatVoice :payload="voicePayload" @state="onDigitalVoiceState" />
+
     <NocturneSelect v-if="showQASpots" ref="spotPicker" :title="$t('选择问答景点')" :options="qaOptions" :selected-index="qaSpots.findIndex(spot=>spot.spot_id===qaSpotId)" :anchor="spotAnchor" @change="selectQuestionSpot" @close="closeSpotPicker" />
 
     <!-- 问答历史记录 -->
@@ -187,6 +190,7 @@
 import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import NocturneSelect from '../../components/NocturneSelect.vue'
+import ChatVoice from '../../components/chat-voice.vue'
 import { planningMessage, recommendationText, questionLanguage, findQuestionSpot, photoIdentificationText } from '../../common/planning-language.js'
 import { translateTour, LANGUAGE_STORAGE_KEY } from '../../common/tour-language.js'
 
@@ -216,20 +220,21 @@ function request(options) {
 }
 
 export default {
-  components:{NocturneSelect},
+  components:{NocturneSelect,ChatVoice},
   data: function () {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,catalogError:'',showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
       voicePayload:{},keyboardVisible:false,keyboardHeight:0,recognizing:false,pendingPhoto:'',recognitionError:'',showPhotoChoices:false,photoClosing:false,scrollAnim:false,
       showHistory:false, historyTranslating:false, historyTranslationFailed:false, text: '', msgs: [], historyMsgs: [], loading: false, chatScrollTop:0, followBottom:true, chatViewH:0, tabLeaving:false, lastSpotIds: [], recommendSpots: [], recommendLoading: false,recommendedPlan:null,
       voiceError:'',transcribing:false,voiceMode: false, recording: false, voicePressing: false, speaking: false, speakingIndex:-1,ttsLoading:false,ttsPaused:false,
+      voiceConnected:false,voiceConnecting:false,voiceFailed:false,_voiceGateway:'',_voiceLang:'',_voiceGuideId:0,_voicePendingText:'',_voicePendingIndex:-1,
       recordingText: '正在聆听...', _voiceManager: null, _voiceTimer: null, _ws: null, statusH:20,
     }
   },
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
   onReady:function(){this._welcomeReady=true;if(this.historyOwner!==this.storageOwner())this.loadHistory();this.warmHistory();if(this.chatMode==='guide')this.loadWelcomeCatalog()},
   watch:{
-    tourLanguage:function(){this.stopTTS();this.stopReveal();this.msgs.forEach(m=>{if(m.segments){m.segments=undefined;m.cursor=false}});this.localizeHistory()},
+    tourLanguage:function(){this.stopTTS();this.closeVoice();this.stopReveal();this.msgs.forEach(m=>{if(m.segments){m.segments=undefined;m.cursor=false}});this.localizeHistory()},
     'msgs.length':function(){this.localizeHistory();this.warmHistory()},
     pendingPhoto:function(){this.scrollChat()},
     recognitionError:function(){this.scrollChat()},
@@ -244,6 +249,7 @@ export default {
     if(uni.offKeyboardHeightChange&&this._keyboardListener)uni.offKeyboardHeightChange(this._keyboardListener)
     this.cancelRecord()
     this.stopTTS()
+    this.closeVoice()
     this.stopReveal()
   },
   computed: {
@@ -476,7 +482,11 @@ export default {
       if(!result.data?.success||!result.data?.data?.message)throw new Error(result.data?.message||'问答服务暂不可用，请稍后重试')
       return result.data.data.message
     },
-    updateKeyboardHeight:function(height){this.keyboardHeight=Math.max(0,Number(height)||0);this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()},
+    updateKeyboardHeight:function(height){
+      this.keyboardHeight=Math.max(0,Number(height)||0);this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()
+      // 只抬输入栏，页面内容保持原位
+      if(this.keyboardHeight>0&&uni.pageScrollTo)try{uni.pageScrollTo({scrollTop:0,duration:0})}catch(_){}
+    },
     onInputFocus:function(){this.keyboardVisible=this.keyboardHeight>0;this.scrollChat()},
     onInputBlur:function(){if(!this.keyboardHeight)this.keyboardVisible=false},
     onInputKeyboardHeight:function(event){this.updateKeyboardHeight(event.detail.height)},
@@ -674,45 +684,98 @@ export default {
     },
     blockTouch:function(){},
     toggleVoiceMode: function () { if(this.recording||this.transcribing)return;this.voiceMode = !this.voiceMode;if(this.voiceMode)uni.hideKeyboard() },
-    stopTTS:function(){this._ttsRequestId=(this._ttsRequestId||0)+1;this.voicePayload={id:this._ttsRequestId};if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}this.speaking=false;this.ttsLoading=false;this.ttsPaused=false;this.speakingIndex=-1},
-    onDigitalVoiceState:function(event){if(event.id!==this._ttsRequestId)return;if(event.state==='playing'){this.speaking=true;this.ttsLoading=false}else{this.stopTTS();if(event.state==='error')uiToast({title:event.message||'数字人语音连接失败',icon:'none'})}},
+    // 星云数字人语音：不显示人物，只用应用音色；英文/中文各用对应星云应用。
+    ensureVoiceSession:function(){
+      var self=this,lang=this.tourLanguage==='en'?'en':'zh'
+      if(this.voiceConnected||this.voiceConnecting)return
+      if(this._voiceGateway&&this._voiceLang===lang)return
+      this.voiceConnecting=true
+      request({url:'/xingyun/chat-voice'}).then(function(res){
+        var data=res.data||{}
+        if(!data.guide_id)throw new Error('默认星云数字人未启用')
+        self._voiceGuideId=data.guide_id
+        self._voiceLang=lang
+        self._voiceGateway=BASE_URL+'/xingyun/session/'+data.guide_id+'?chat_speech=true&language='+lang
+        self.voicePayload={id:Date.now(),command:'connect',text:'',gateway:self._voiceGateway,token:uni.getStorageSync('token')}
+      }).catch(function(){
+        self.voiceConnecting=false;self.voiceConnected=false;self.voiceFailed=true
+        var text=self._voicePendingText,index=self._voicePendingIndex
+        self._voicePendingText='';self._voicePendingIndex=-1
+        if(text)self.playEdgeTTS(text,index)
+      })
+    },
+    closeVoice:function(){
+      this.voiceConnected=false;this.voiceConnecting=false;this._voiceGateway='';this._voicePendingText='';this._voicePendingIndex=-1
+      var gateway=this.voicePayload&&this.voicePayload.gateway
+      this.voicePayload={id:Date.now(),command:'close',gateway:gateway||''}
+    },
+    sendVoiceSpeak:function(text,index){
+      this.speakingIndex=index;this.ttsLoading=true;this.speaking=false;this.ttsPaused=false
+      this.voicePayload={id:Date.now(),command:'speak',text:text,gateway:this._voiceGateway}
+    },
+    onDigitalVoiceState:function(event){
+      if(event.state==='connected'){
+        this.voiceConnected=true;this.voiceConnecting=false;this.voiceFailed=false
+        var text=this._voicePendingText,index=this._voicePendingIndex
+        this._voicePendingText='';this._voicePendingIndex=-1
+        if(text)this.sendVoiceSpeak(text,index)
+        return
+      }
+      if(event.state==='playing'){this.speaking=true;this.ttsLoading=false;this.ttsPaused=false;return}
+      if(event.state==='ended'){
+        if(!this.speaking)return
+        this.speaking=false;this.ttsLoading=false;this.ttsPaused=false;this.speakingIndex=-1;return
+      }
+      if(event.state==='error'||event.state==='closed'){
+        var pending=this._voicePendingText,pendingIndex=this._voicePendingIndex
+        this._voicePendingText='';this._voicePendingIndex=-1
+        this.voiceConnected=false;this.voiceConnecting=false;this.voiceFailed=true;this._voiceGateway=''
+        if(pending)this.playEdgeTTS(pending,pendingIndex)
+        else if(this.ttsLoading){this.ttsLoading=false;this.speaking=false;uiToast({title:'星云语音不可用，已切换本地语音',icon:'none'})}
+      }
+    },
+    stopTTS:function(){
+      this._ttsRequestId=(this._ttsRequestId||0)+1
+      this._voicePendingText='';this._voicePendingIndex=-1
+      if(this.voiceConnected&&this._voiceGateway)this.voicePayload={id:this._ttsRequestId,command:'stop',text:'',gateway:this._voiceGateway}
+      if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}
+      this.speaking=false;this.ttsLoading=false;this.ttsPaused=false;this.speakingIndex=-1
+    },
     replayTTS: function (text,index) {
       if(this.speakingIndex===index){
         if(this.ttsLoading){this.stopTTS();return}
-        if(this.ttsPaused){this.ttsPaused=false;try{this._ttsAudio&&this._ttsAudio.play();this.speaking=true}catch(e){};return}
-        this.ttsPaused=true;this.speaking=false;try{this._ttsAudio&&this._ttsAudio.pause()}catch(e){};return
+        if(this.ttsPaused){this.playTTS(text,index);return}
+        this.ttsPaused=true;this.speaking=false
+        if(this.voiceConnected&&this._voiceGateway)this.voicePayload={id:Date.now(),command:'stop',text:'',gateway:this._voiceGateway}
+        else try{this._ttsAudio&&this._ttsAudio.pause()}catch(e){}
+        return
       }
       this.playTTS(text,index)
     },
-    prefetchTTS:function(text,index){
-      var self=this
-      var clean=this.cleanTTS(text)
-      var promise=new Promise(function(resolve,reject){
-        request({url:'/tts/edge?text='+encodeURIComponent(clean)}).then(function(res){
-          if(res.data&&res.data.success&&res.data.data)resolve(res.data.data);else reject(new Error('语音服务未返回音频'))
-        }).catch(reject)
-      })
-      this._ttsPrefetch={text:text,index:index,promise:promise}
-      promise.catch(function(){})
-      return promise
-    },
+    prefetchTTS:function(){return Promise.resolve('')},
     cleanTTS:function(text){return (text||'').replace(/\*\*/g,'').replace(/[\[\]]/g,'').replace(/[（）\(\)]/g,'，').replace(/\n+/g,'，').substring(0,2000)},
     playTTS: function (text,index) {
       if (!text) return
-      var self=this
-      var prefetched=this._ttsPrefetch&&this._ttsPrefetch.index===index&&this._ttsPrefetch.text===text?this._ttsPrefetch.promise:null
       this.stopTTS()
-      var requestId=this._ttsRequestId
+      var clean=this.cleanTTS(text)
+      if(!this.voiceFailed){
+        if(this.voiceConnected){this.sendVoiceSpeak(clean,index);return}
+        this.speakingIndex=index;this.ttsLoading=true
+        this._voicePendingText=clean;this._voicePendingIndex=index
+        this.ensureVoiceSession()
+        return
+      }
+      this.playEdgeTTS(clean,index)
+    },
+    playEdgeTTS: function (clean,index) {
+      if (!clean) return
+      var self=this
       this.speakingIndex=index;this.ttsLoading=true
-      var load=prefetched||new Promise(function(resolve,reject){
-        request({url:'/tts/edge?text='+encodeURIComponent(self.cleanTTS(text))}).then(function(res){
-          if(res.data&&res.data.success&&res.data.data)resolve(res.data.data);else reject(new Error('语音服务未返回音频'))
-        }).catch(reject)
-      })
-      load.then(function (raw) {
+      var requestId=this._ttsRequestId
+      request({url:'/tts/edge?text='+encodeURIComponent(clean)}).then(function(res){
+        if(!res.data||!res.data.success||!res.data.data)throw new Error('语音服务未返回音频')
         if(requestId!==self._ttsRequestId)return
-        self._ttsPrefetch=null
-        var url = raw
+        var url=res.data.data
         if (url.indexOf('http') !== 0) url = BASE_URL + url
         else url = assetUrl(url)
         var audio = uni.createInnerAudioContext()
@@ -769,8 +832,8 @@ export default {
     cancelRecord:function(){this._recordCancelled=true;this.voicePressing=false;this.recording=false;if(this._voiceManager&&(this._recordStartedAt||this._recordRequestedAt))this._voiceManager.stop()},
   },
   onBackPress:function(){if(this.showQASpots){this.showQASpots=false;return true}if(this.showPhotoChoices){this.showPhotoChoices=false;return true}},
-  onHide:function(){this.cancelRecord();this.stopTTS();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
-  onShow:function(){this._translationDisposed=false;if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
+  onHide:function(){this.cancelRecord();this.stopTTS();this.closeVoice();this.keyboardVisible=false;this.keyboardHeight=0;this.showPhotoChoices=false;this.showQASpots=false},
+  onShow:function(){this._translationDisposed=false;if(this.voiceFailed){this.voiceFailed=false;this.voiceConnected=false}if(this.historyOwner!==this.storageOwner())this.loadHistory();if(this.chatMode==='guide'&&this._welcomeReady)this.loadWelcomeCatalog();else if(this.chatMode==='guide'&&this.qaSpotId&&!this.qaSpots.length)this.loadWelcomeCatalog();this.scrollChat()},
 }
 </script>
 
@@ -797,7 +860,7 @@ export default {
 @keyframes photoPopIn{0%{opacity:0;transform:translateY(26rpx) scale(.82)}55%{opacity:1;transform:translateY(-6rpx) scale(1.04)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes photoMaskIn{from{opacity:0}to{opacity:1}}
 .photo-add{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:84rpx;height:84rpx;margin:0;padding:0;line-height:1;font-family:Arial,sans-serif;font-size:52rpx;font-weight:400;color:#6840c2;background:#f1eaff;border-radius:50%}.photo-add::after{border:0}.photo-add[disabled]{opacity:.45}
-.bottom-fixed.keyboard-open{padding-bottom:0}.keyboard-open .input-bar{padding-bottom:10rpx}
+.bottom-fixed.keyboard-open{padding-bottom:env(safe-area-inset-bottom,0px)}
 .input-bar .msg-input{min-width:0}.input-bar .voice-btn{flex-shrink:0}
 .photo-caption,.photo-error{display:block;font-size:23rpx;line-height:1.7;margin-top:10rpx;color:#817994}.photo-error{color:#9f3450}
 .recognition-photo{display:block;width:100%;height:240rpx;margin-top:16rpx;border-radius:18rpx}
@@ -970,7 +1033,7 @@ export default {
 .chat-ref-page .input-bar{gap:12rpx;padding:16rpx 18rpx 20rpx;border-top:0;border-radius:32rpx 32rpx 0 0;background:#fff}.photo-add,.voice-btn{width:82rpx;height:82rpx;flex-shrink:0;background:#f2edfd;color:#402176}.photo-add{font-size:47rpx}.voice-btn .iconfont{color:#402176}
 .input-bar .msg-input{height:82rpx;padding:0 20rpx;font-family:inherit;font-size:26rpx;border:0;border-radius:22rpx;background:#f8f8fb}.chat-ref-page .input-bar .send-btn{height:82rpx;line-height:82rpx;padding:0 26rpx;font-size:27rpx;border-radius:24rpx;color:#fff;background:linear-gradient(135deg,#b99bf5,#a781ed);box-shadow:0 5rpx 12rpx rgba(153,118,214,.12)}.send-btn.disabled{opacity:.7}.input-bar .voice-hold-btn{height:82rpx;border-radius:22rpx}
 .app-english .welcome-title{font-size:40rpx;letter-spacing:0}.app-english .topic-title{font-size:24rpx}
-.chat-keyboard .guide-welcome{justify-content:flex-start;padding:20rpx 8rpx}.chat-keyboard .welcome-art,.chat-keyboard .welcome-description{display:none}.chat-keyboard .welcome-title{font-size:32rpx}.chat-keyboard .welcome-topics{margin-top:24rpx}
+/* 键盘弹起时欢迎区完全保持原位：不贴顶、不隐藏气球和说明、不缩放标题、不改快捷提问间距，避免整块跳动或被导航裁切。 */
 @keyframes welcomeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7rpx)}}
 @keyframes welcomeTwinkle{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.06)}}
 @media (prefers-reduced-motion:reduce){.welcome-balloon,.welcome-sparkle{animation:none}}

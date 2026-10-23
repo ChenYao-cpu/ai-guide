@@ -34,11 +34,12 @@ const virtualNames = ['VMware', 'VirtualBox', 'WSL', 'vEthernet', 'Docker', 'Loo
 }
 
 // Vite插件：把局域网IP注入到前端
+// 注意：IP 只在服务启动时检测会过期（切 Wi-Fi/热点后二维码仍指向旧地址）。
+// 因此额外提供 /__lan-info，在每次生成二维码时取当前真实 IP 和实际监听端口。
 function serverInfoPlugin(): Plugin {
   const virtualModuleId = 'virtual:server-info'
   const resolvedVirtualModuleId = '\0' + virtualModuleId
-  const ip = getLocalIP()
-  console.log(`\n🔗 检测到局域网IP: ${ip}  → 前端二维码将使用此地址\n`)
+  console.log(`\n🔗 检测到局域网IP: ${getLocalIP()}  → 前端二维码将使用此地址\n`)
   return {
     name: 'server-info-plugin',
     resolveId(id) {
@@ -46,8 +47,17 @@ function serverInfoPlugin(): Plugin {
     },
     load(id) {
       if (id === resolvedVirtualModuleId) {
-        return `export const serverIP = "${ip}"; export const serverPort = 5173;`
+        return `export const serverIP = ${JSON.stringify(getLocalIP())}; export const serverPort = 5173;`
       }
+    },
+    configureServer(server) {
+      server.middlewares.use('/__lan-info', (_req, res) => {
+        const address = server.httpServer?.address()
+        const port = address && typeof address === 'object' ? address.port : 5173
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
+        res.end(JSON.stringify({ ip: getLocalIP(), port }))
+      })
     },
   }
 }
