@@ -2,8 +2,8 @@
   "name": "智游知境",
   "appid": "__UNI__57BB466",
   "description": "AI数字人景区导览小程序",
-  "versionName": "1.4.7",
-  "versionCode": "147",
+  "versionName": "1.5.5",
+  "versionCode": "155",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true,

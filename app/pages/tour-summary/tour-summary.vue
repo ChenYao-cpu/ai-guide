@@ -26,28 +26,6 @@
         <text class="rating-description">{{ ratingScore ? t(ratingLabels[ratingScore-1]) : t('请选择1至5星') }}</text>
         <button class="rating-save" :disabled="!ratingScore||ratingScore===savedRating" @tap="saveRating">{{ t(savedRating ? (ratingScore===savedRating ? '评分已保存' : '更新评分') : '保存评分') }}</button>
       </view>
-      <!-- 游记封面 -->
-      <view class="hero" :style="heroImg ? 'background-image:url('+heroImg+')' : ''">
-        <view class="hero-shade"></view>
-        <view class="hero-content">
-          <text class="hero-title">{{ t(sessionData.name) || t('我的景区导览') }}</text>
-          <view class="hero-meta">
-            <view class="hm-item">
-              <text class="iconfont icon-daolan hm-icon"></text>
-              <text class="hm-text">{{ guideDisplayName }}</text>
-            </view>
-            <view class="hm-item">
-              <text class="iconfont icon-shijian hm-icon"></text>
-              <text class="hm-text">{{ tourDate }}</text>
-            </view>
-          </view>
-          <view class="hero-badge" v-if="totalDuration > 0">
-            <text class="hb-num">{{ totalDuration }}</text>
-            <text class="hb-unit">{{ t("分钟游览") }}</text>
-          </view>
-        </view>
-      </view>
-
       <!-- 数据统计 -->
       <view class="stats-row">
         <view class="stat-card">
@@ -66,7 +44,7 @@
 
       <!-- 游览时间轴 -->
       <view class="section">
-        <view class="section-head"><view class="sh-dot"></view><text>{{ t("游览路线") }}</text></view>
+        <view class="section-head route-heading"><text>{{ t("游览路线") }}</text></view>
         <view class="timeline">
           <view v-for="(s, i) in spotTimeline" :key="i" class="tl-item" :class="{last: i === spotTimeline.length - 1}">
             <view class="tl-marker">
@@ -120,45 +98,6 @@
         </view>
       </view>
 
-      <!-- 知识问答打卡 -->
-      <view class="section" v-if="quizQuestions.length > 0">
-        <view class="section-head"><view class="sh-dot"></view><text>{{ t("知识问答打卡") }}</text></view>
-        <view class="quiz-wrap">
-          <view v-for="(q, qi) in quizQuestions" :key="qi" class="quiz-card">
-            <view class="quiz-q-row">
-              <text class="quiz-q-num">{{ qi + 1 }}</text>
-              <text class="quiz-q-text">{{ q.question }}</text>
-            </view>
-            <view class="quiz-options">
-              <view v-for="(opt, oi) in q.options" :key="oi" class="quiz-opt"
-                :class="{
-                  selected: quizAnswers[qi] === oi,
-                  correct: quizChecked && oi === q.answer,
-                  wrong: quizChecked && quizAnswers[qi] === oi && oi !== q.answer
-                }"
-                @tap="selectQuiz(qi, oi)">
-                <text class="quiz-opt-letter">{{ String.fromCharCode(65 + oi) }}</text>
-                <text class="quiz-opt-text">{{ opt }}</text>
-              </view>
-            </view>
-            <view class="quiz-explain" v-if="quizChecked">
-              <text class="qe-text">{{ q.explanation }}</text>
-            </view>
-          </view>
-          <view class="quiz-result" v-if="quizChecked">
-
-
-
-            <text class="qr-text">{{ t('答对') }} {{ quizScore }}/{{ quizQuestions.length }} {{ t('题') }}</text>
-            <text class="qr-badge" v-if="quizScore === quizQuestions.length">{{ t("景区达人") }}</text>
-            <text class="qr-badge" v-else-if="quizScore > 0">{{ t("继续努力") }}</text>
-          </view>
-          <view class="quiz-submit" v-if="!quizChecked && quizQuestions.length > 0" @tap="checkQuiz">
-            <text>{{ t("提交答案") }}</text>
-          </view>
-        </view>
-      </view>
-
       <view style="height:140rpx"></view>
     </scroll-view>
 
@@ -200,7 +139,6 @@ export default {
       statusH: 20, loading: true, sid: 0,
       sessionData: null, conversation: [], spots: [],
       currentSpotIdx: 0, aiSummary: '',
-      quizQuestions: [], quizAnswers: {}, quizChecked: false, quizScore: 0,
       ratingScore:0,savedRating:0,ratingOwner:'',ratingLabels:['很不满意','不太满意','一般','满意','非常满意'],
     }
   },
@@ -210,30 +148,6 @@ export default {
       // live-info returns live_status at the root; retain older nested responses.
       var state=data.live_status??data.status?.live_status
       return state!=null?Number(state)===2:!!(data.end_time||data.status?.end_time)
-    },
-    guideDisplayName: function() {
-      var g = this.sessionData && this.sessionData.guide_info
-      if (!g) return this.t('AI导游')
-      return (this.tourLanguage === 'en' && g.name_en) ? g.name_en : g.name
-    },
-    heroImg: function() {
-      var s = this.spots && this.spots[0]
-      return s && s.image_path ? this.fixImg(s.image_path) : ''
-    },
-    tourDate: function() {
-      var st = this.sessionData && this.sessionData.status
-      if (!st || !st.start_time) return ''
-      try {
-        var d = new Date(st.start_time)
-        return (d.getMonth()+1) + '月' + d.getDate() + '日'
-      } catch(e) { return '' }
-    },
-    totalDuration: function() {
-      var st = this.sessionData && this.sessionData.status
-      if (!st || !st.start_time) return 0
-      var start = new Date(st.start_time).getTime()
-      var end = st.end_time ? new Date(st.end_time).getTime() : Date.now()
-      return Math.round((end - start) / 60000)
     },
     spotTimeline: function() {
       return this.spots
@@ -289,14 +203,6 @@ export default {
       if(previous&&previous.route==='pages/mine/history'){uni.navigateBack();return}
       this.goHome()
     },
-    shareTour: function() {
-      var spots = this.spots.map(function(s) { return s.spot_name }).join('、')
-      var text = '我刚用AI数字人导览了' + (this.sessionData.name || '景区') + '，游览了' + this.spots.length + '个景点：' + spots + '，总共' + this.totalDuration + '分钟！'
-      uni.setClipboardData({
-        data: text,
-        success: function() { uni.showToast({ title: '游记已复制，去分享吧', icon: 'none' }) },
-      })
-    },
     loadData: function() {
       var self = this
       self.loading = true
@@ -332,24 +238,6 @@ export default {
         var d = res.data && res.data.data
         if (d && d.summary) self.aiSummary = d.summary
       }).catch(function() {})
-      request({ url: '/tour-session/quiz/' + self.sid, method: 'POST', timeout: 30000 }).then(function(res) {
-        var d = res.data && res.data.data
-        if (d && d.questions && d.questions.length) self.quizQuestions = d.questions
-      }).catch(function() {})
-    },
-    selectQuiz: function(qi, oi) {
-      if (this.quizChecked) return
-      var ans = JSON.parse(JSON.stringify(this.quizAnswers))
-      ans[qi] = oi
-      this.quizAnswers = ans
-    },
-    checkQuiz: function() {
-      var score = 0
-      for (var i = 0; i < this.quizQuestions.length; i++) {
-        if (this.quizAnswers[i] === this.quizQuestions[i].answer) score++
-      }
-      this.quizScore = score
-      this.quizChecked = true
     },
   },
   onLoad: function(opts) {
@@ -387,19 +275,6 @@ export default {
 
 .main{position:relative;z-index:1;flex:1;min-height:0}
 
-/* 游记封面 */
-.hero{position:relative;height:360rpx;background-size:cover;background-position:center;margin:8rpx 16rpx;border-radius:20rpx;overflow:hidden;display:flex;align-items:flex-end}
-.hero-shade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.6) 100%)}
-.hero-content{position:relative;z-index:1;padding:24rpx}
-.hero-title{font-size:40rpx;font-weight:700;color:#fff;display:block;text-shadow:0 2rpx 8rpx rgba(0,0,0,.4)}
-.hero-meta{display:flex;gap:24rpx;margin-top:12rpx}
-.hm-item{display:flex;align-items:center;gap:6rpx}
-.hm-icon{font-size:26rpx;color:#1f2937}
-.hm-text{font-size:24rpx;color:#1f2937}
-.hero-badge{display:inline-flex;align-items:baseline;gap:4rpx;margin-top:16rpx;padding:8rpx 20rpx;border-radius:20rpx;background:rgba(99,102,241,0.25);backdrop-filter: none}
-.hb-num{font-size:36rpx;font-weight:700;color:#fff}
-.hb-unit{font-size:22rpx;color:#4b5563}
-
 /* 统计 */
 .stats-row{display:flex;gap:12rpx;padding:8rpx 16rpx}
 .stat-card{flex:1;display:flex;flex-direction:column;align-items:center;padding:16rpx 0;background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:14rpx}
@@ -409,6 +284,7 @@ export default {
 /* 通用 section */
 .section{padding:16rpx 16rpx 0}
 .section-head{display:flex;align-items:center;gap:10rpx;margin-bottom:12rpx}
+.route-heading{justify-content:center;text-align:center}
 .sh-dot{width:8rpx;height:8rpx;border-radius:50%;background:rgba(99,102,241,0.25)}
 .section-head text{font-size:30rpx;font-weight:600;color:var(--ng-text)}
 
@@ -422,7 +298,7 @@ export default {
 .tl-num{font-size:20rpx;color:var(--ng-secondary)}
 .tl-line{width:2rpx;flex:1;background:var(--ng-border);margin-top:4rpx;min-height:40rpx}
 .tl-body{flex:1;padding-bottom:16rpx}
-.tl-card{display:flex;gap:12rpx;padding:12rpx;background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:14rpx}
+.tl-card{display:flex;align-items:center;gap:12rpx;padding:12rpx;background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:14rpx}
 .tl-img{width:88rpx;height:88rpx;border-radius:10rpx;flex-shrink:0}
 .tl-img-df{width:88rpx;height:88rpx;border-radius:10rpx;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.08);font-size:40rpx;flex-shrink:0}
 .tl-info{flex:1;min-width:0}
@@ -448,29 +324,6 @@ export default {
 .as-icon{font-size:32rpx;flex-shrink:0}
 .as-text{font-size:26rpx;color:var(--ng-text);line-height:1.7;flex:1}
 
-
-/* 知识问答 */
-.quiz-wrap{display:flex;flex-direction:column;gap:16rpx}
-.quiz-card{padding:16rpx;background:var(--ng-surface);border:1rpx solid var(--ng-border);border-radius:14rpx}
-.quiz-q-row{display:flex;align-items:flex-start;gap:10rpx;margin-bottom:12rpx}
-.quiz-q-num{width:32rpx;height:32rpx;border-radius:8rpx;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;font-size:20rpx;color:var(--ng-text);flex-shrink:0;font-weight:700}
-.quiz-q-text{font-size:26rpx;color:var(--ng-text);line-height:1.5;flex:1}
-.quiz-options{display:flex;flex-direction:column;gap:8rpx}
-.quiz-opt{display:flex;align-items:center;gap:10rpx;padding:12rpx 14rpx;border-radius:10rpx;border:1rpx solid var(--ng-border);background:var(--ng-surface)}
-.quiz-opt.selected{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.06)}
-.quiz-opt.correct{border-color:rgba(76,175,80,.5);background:rgba(76,175,80,.08)}
-.quiz-opt.wrong{border-color:rgba(244,67,54,.4);background:rgba(244,67,54,.06)}
-.quiz-opt-letter{width:28rpx;height:28rpx;border-radius:50%;background:rgba(99,102,241,0.08);display:flex;align-items:center;justify-content:center;font-size:18rpx;color:var(--ng-secondary);flex-shrink:0}
-.quiz-opt.correct .quiz-opt-letter{background:rgba(76,175,80,.2);color:#4CAF50}
-.quiz-opt.wrong .quiz-opt-letter{background:rgba(244,67,54,.2);color:#F44336}
-.quiz-opt-text{font-size:24rpx;color:var(--ng-text);flex:1}
-.quiz-explain{margin-top:10rpx;padding:10rpx 12rpx;border-radius:8rpx;background:rgba(59,91,255,.06)}
-.qe-text{font-size:22rpx;color:var(--ng-secondary);line-height:1.5}
-.quiz-result{display:flex;align-items:center;justify-content:center;gap:12rpx;padding:20rpx;flex-direction:column}
-.qr-emoji{font-size:48rpx}
-.qr-text{font-size:28rpx;color:var(--ng-text);font-weight:600}
-.qr-badge{padding:6rpx 24rpx;border-radius:20rpx;background:rgba(99,102,241,0.15);font-size:24rpx;color:var(--ng-text);font-weight:600}
-.quiz-submit{height:80rpx;line-height:80rpx;text-align:center;border-radius:40rpx;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(99,102,241,0.15));color:var(--ng-text);font-size:28rpx;font-weight:600;margin-top:8rpx}
 
 /* 加载 */
 .loading-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}

@@ -3,9 +3,6 @@
     <!-- #ifdef APP-PLUS -->
     <view class="app-status-bar-shield" aria-hidden="true"></view>
     <!-- #endif -->
-    <!-- #ifdef APP-PLUS || H5 -->
-    <chat-voice :payload="voicePayload" @state="onDigitalVoiceState" style="position:fixed;left:-2000px;top:0;width:240px;height:320px;pointer-events:none" aria-hidden="true" />
-    <!-- #endif -->
     <view class="aurora-background chat-scenery" aria-hidden="true"><view class="chat-wave chat-wave-blue"></view><view class="chat-wave chat-wave-lilac"></view></view>
 
     <!-- 水墨背景 -->
@@ -62,6 +59,7 @@
       <view v-else-if="msgs.length===0&&!loading" class="chat-empty">
         <text class="ce-title">{{ $t('想去哪里？') }}</text>
       </view>
+      <view v-if="historyTranslating||historyTranslationFailed" class="chat-translation" role="status" @tap="!historyTranslating&&localizeHistory()">{{ historyTranslating ? (tourLanguage==='en'?'Translating…':'正在翻译…') : (tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试') }}</view>
       <view v-for="(m, i) in msgs" :key="i" :id="'m-'+i" class="msg-row" :class="m.role==='ai'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <image v-if="m.image" :src="m.image" class="chat-photo" mode="widthFix" @load="scrollChat" @tap="previewChatPhoto(m.image)" />
@@ -187,8 +185,8 @@
 </template>
 
 <script>
+import { localizeChatMessages } from '../../common/chat-language.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
-import ChatVoice from '../../components/chat-voice.vue'
 import NocturneSelect from '../../components/NocturneSelect.vue'
 import { planningMessage, recommendationText, questionLanguage, findQuestionSpot, photoIdentificationText } from '../../common/planning-language.js'
 import { translateTour, LANGUAGE_STORAGE_KEY } from '../../common/tour-language.js'
@@ -219,7 +217,7 @@ function request(options) {
 }
 
 export default {
-  components:{ChatVoice,NocturneSelect},
+  components:{NocturneSelect},
   data: function () {
     return {
       chatMode:'guide',qaSpots:[],qaGuides:[],qaSpotId:null,spotAnchor:null,qaSession:null,qaCatalogLoading:false,catalogError:'',showQASpots:false,requestEpoch:0,historyOwner:null,applyingRoute:false,
@@ -232,6 +230,8 @@ export default {
   mounted:function(){this.statusH=(uni.getSystemInfoSync().statusBarHeight||20)+6;this.$nextTick(()=>{uni.createSelectorQuery().in(this).select('.chat-area').boundingClientRect(rect=>{if(rect&&rect.height)this.chatViewH=rect.height}).exec()});setTimeout(()=>{this.tabLeaving=true},160)},
   onReady:function(){this._welcomeReady=true;if(this.chatMode==='guide')this.loadWelcomeCatalog()},
   watch:{
+    tourLanguage:function(){this.stopTTS();this.stopReveal();this.msgs.forEach(m=>{if(m.segments){m.segments=undefined;m.cursor=false}});this.localizeHistory()},
+    'msgs.length':function(){this.localizeHistory()},
     pendingPhoto:function(){this.scrollChat()},
     recognitionError:function(){this.scrollChat()},
     loading:function(){this.scrollChat()},
@@ -241,7 +241,7 @@ export default {
     if(uni.onKeyboardHeightChange)uni.onKeyboardHeightChange(this._keyboardListener)
   },
   onUnload:function(){
-    this.requestEpoch++
+    this.requestEpoch++;this._translationVersion=(this._translationVersion||0)+1
     if(uni.offKeyboardHeightChange&&this._keyboardListener)uni.offKeyboardHeightChange(this._keyboardListener)
     this.cancelRecord()
     this.stopTTS()
@@ -375,50 +375,18 @@ export default {
       return latin>0?'en':''
     },
     localizeHistory:async function(){
-      if(this.historyTranslating)return
-      this.historyTranslationFailed=false
-      const owner=this.storageOwner()
-      const target=this.tourLanguage==='en'?'en':'zh'
-      const list=this.historyMsgs
-      const self=this
-      const pending=[]
-      list.forEach(function(m,index){
-        if(!m||typeof m.content!=='string'||!m.content.trim())return
-        const body=String(m.content||'')
-        const lang=m.lang||self.guessHistoryLanguage(body)
-        if(lang)m.lang=lang
-        const mixedForEnglish=target==='en'&&/[\u4e00-\u9fff]/.test(body)
-        const englishForChinese=target==='zh'&&!/[\u4e00-\u9fff]/.test(body)&&/[A-Za-z]/.test(body)
-        if(lang===target&&!mixedForEnglish&&!englishForChinese)return
-        if(m.translations&&typeof m.translations[target]==='string'&&m.translations[target].trim()){
-          m.content=m.translations[target];m.lang=target;return
-        }
-        pending.push({index:index,text:body,from:lang})
-      })
-      if(!pending.length){this.saveHistory();return}
-      this.historyTranslating=true
+      const version=this._translationVersion=(this._translationVersion||0)+1
+      const owner=this.storageOwner(),target=this.tourLanguage==='en'?'en':'zh'
+      const active=this.msgs,history=this.historyMsgs
+      const current=()=>this._translationVersion===version&&this.storageOwner()===owner&&this.tourLanguage===target&&this.msgs===active&&this.historyMsgs===history
+      this.historyTranslating=true;this.historyTranslationFailed=false
+      if(!this._messageTranslations||this._translationOwner!==owner){this._messageTranslations=new Map();this._translationOwner=owner}
       try{
-        for(let offset=0;offset<pending.length;offset+=4){
-          const batch=pending.slice(offset,offset+4)
-          // Quote source questions so the model translates them instead of answering them.
-          const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts:batch.map(p=>JSON.stringify(p.text)),target}})
-          if(this.storageOwner()!==owner||this.historyMsgs!==list)return
-          const translations=res.data&&res.data.data&&res.data.data.translations
-          if(!Array.isArray(translations))throw new Error('Invalid translation response')
-          batch.forEach(function(p,k){
-            const m=list[p.index],translated=translations[k]
-            if(!m||typeof translated!=='string'||!translated.trim()||(target==='en'&&/[\u3400-\u9fff]/.test(translated))){self.historyTranslationFailed=true;return}
-            if(!m.translations)m.translations={}
-            m.translations[p.from||m.lang||'zh']=p.text
-            m.translations[target]=translated.trim()
-            m.content=translated.trim()
-            m.lang=target
-          })
-          this.saveHistory()
-        }
-      }catch(e){this.historyTranslationFailed=true}
-      finally{this.historyTranslating=false}
-
+        await localizeChatMessages({lists:[active,history],field:'content',target,cache:this._messageTranslations,isCurrent:current,
+          translate:async texts=>{const res=await request({url:'/tour-session/translate-texts',method:'POST',timeout:45000,data:{texts,target}});return res.data?.data?.translations}})
+        if(current())this.saveHistory()
+      }catch(_){if(current())this.historyTranslationFailed=true}
+      finally{if(this._translationVersion===version)this.historyTranslating=false}
     },
     isCurrentRequest:function(epoch,owner){return this.requestEpoch===epoch&&this.storageOwner()===owner},
     loadQACatalog:async function(){
@@ -707,13 +675,6 @@ export default {
       var requestId=this._ttsRequestId
       this.speakingIndex=index;this.ttsLoading=true
       var clean = text.replace(/\*\*/g,'').replace(/[\[\]]/g,'').replace(/[（）\(\)]/g,'，').replace(/\n+/g,'，').substring(0,2000)
-      // #ifdef APP-PLUS || H5
-      request({url:'/xingyun/chat-voice'}).then(function(res){
-        if(requestId!==self._ttsRequestId)return
-        self.voicePayload={id:requestId,text:clean,sdkUrl:res.data.sdk_url,gateway:BASE_URL+'/xingyun/session/'+res.data.guide_id+'?chat_speech=true',token:uni.getStorageSync('token')}
-      }).catch(function(error){if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:error.message||'默认数字人未连接',icon:'none'})})
-      return
-      // #endif
       request({ url: '/tts/edge?text=' + encodeURIComponent(clean) }).then(function (res) {
         if(requestId!==self._ttsRequestId)return
         if (res.data && res.data.success && res.data.data) {
@@ -722,9 +683,9 @@ export default {
           else url = assetUrl(url)
           var audio = uni.createInnerAudioContext()
           self._ttsAudio=audio
-          audio.onPlay(function(){self.ttsLoading=false;self.speaking=true})
-          audio.onEnded(function(){self.stopTTS()})
-          audio.onError(function(){self.stopTTS();uiToast({title:'语音播放失败，请检查网络后重试',icon:'none'})})
+          audio.onPlay(function(){if(requestId!==self._ttsRequestId)return;self.ttsLoading=false;self.speaking=true})
+          audio.onEnded(function(){if(requestId===self._ttsRequestId)self.stopTTS()})
+          audio.onError(function(){if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:'语音播放失败，请检查网络后重试',icon:'none'})})
           audio.src = url; audio.play()
         }else throw new Error('语音服务未返回音频')
       }).catch(function (error) {if(requestId!==self._ttsRequestId)return;self.stopTTS();uiToast({title:error.message||'语音播报失败，请稍后重试',icon:'none'})})
@@ -781,6 +742,7 @@ export default {
 </script>
 
 <style scoped>
+.chat-translation{padding:16rpx;text-align:center;font-size:24rpx;color:var(--ng-secondary)}
 .photo-evidence-toggle{margin:12rpx 0 0;padding:8rpx 0;background:transparent;color:#625a75;font-size:22rpx;line-height:1.5;text-align:left}.photo-evidence-toggle::after{border:0}.photo-evidence{display:block;margin-top:8rpx;font-size:23rpx;line-height:1.7;color:#625a75}
 .photo-draft{display:flex;align-items:center;gap:20rpx;padding:16rpx 24rpx;flex-wrap:wrap;border-top:1rpx solid var(--ng-border)}
 .draft-thumbnail{position:relative;width:112rpx;height:112rpx}.draft-thumbnail image{width:100%;height:100%;border-radius:12rpx}

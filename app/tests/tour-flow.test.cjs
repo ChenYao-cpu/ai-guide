@@ -5,15 +5,38 @@ function component(file){
  const c={getCurrentPages:()=>[{route:"pages/mine/history"},{route:"pages/tour-summary/tour-summary"}],console,Date,Promise,setTimeout,clearTimeout,setInterval,clearInterval,BASE_URL:'http://local/api/v1',LANGUAGE_STORAGE_KEY:'language',assetUrl:x=>x,isBeijingCity:()=>true,selectedOrder:(order,ids)=>order.filter(id=>ids[id]),previewOptions:ids=>({spot_ids:ids}),roadMap:()=>null,FloatingTourButton:{},RouteTiming:{},ScenicSheet:{},TabBarNav:{},NocturneConfirm:{},TourXingyun:{},TourXfyun:{},RouteOverview:{},TourRouteRepair:{},uni:{getStorageSync:k=>storage[k],setStorageSync:(k,v)=>{storage[k]=v},showToast:o=>toasts.push(o),getSystemInfoSync:()=>({}),request:o=>{calls.push(o)},reLaunch:o=>navigation.push(o),navigateTo:o=>navigation.push(o),navigateBack:()=>navigation.push({back:true})}}
  c.AuthPage={}
  vm.createContext(c)
+ vm.runInContext(fs.readFileSync(path.join(root,'common/chat-language.js'),'utf8').replace(/export /g,''),c)
  const source=fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
  vm.runInContext(source.replace(/^import .*$/gm,'').replace('export default','globalThis.options='),c)
  const o=c.options,s={t:x=>x,$nextTick:fn=>fn?.()};Object.assign(s,o.data.call(s));for(const [k,f] of Object.entries(o.methods))s[k]=f.bind(s);for(const [k,f] of Object.entries(o.computed||{}))Object.defineProperty(s,k,{get:()=>f.call(s)})
  return{s,o,storage,toasts,calls,navigation,uni:c.uni}
 }
 
+test('summary analyzes the tour without requesting or exposing an end-of-tour quiz',()=>{
+ const {s,calls}=component('pages/tour-summary/tour-summary.vue');s.sid=77;s.conversation=[{role:'user',message:'问题'},{role:'guide',message:'回答'}];s.tryAISummary()
+ assert.equal(calls.length,1);assert.match(calls[0].url,/\/analyze\/77$/)
+ const source=fs.readFileSync(path.join(root,'pages/tour-summary/tour-summary.vue'),'utf8');assert.doesNotMatch(source,/quiz|class="hero"/);assert.match(source,/route-heading/)
+})
+test('tour chat translates both roles and restores original messages without changing server data',async()=>{
+ const {s,calls}=component('pages/tour/tour.vue');s.tourLanguage='en';s.msgs=[{role:'user',message:'请介绍景点'},{role:'guide',message:'这是仁寿殿。'}]
+ const pending=s.localizeChat();assert.equal(calls.length,1);calls[0].success({statusCode:200,data:{data:{translations:['Introduce this attraction.','This is the Hall of Benevolence and Longevity.']}}});await pending
+ assert.equal(s.msgs[0].message,'Introduce this attraction.');assert.equal(s.msgs[1].message,'This is the Hall of Benevolence and Longevity.')
+ s.tourLanguage='zh';await s.localizeChat();assert.equal(s.msgs[1].message,'这是仁寿殿。');assert.equal(calls.length,1)
+})
+test('language settings ignore old account responses and never overwrite a newer chat history',()=>{
+ for(const change of ['account','history','language']){
+  const {s,storage,calls}=component('pages/mine/mine.vue'),key='ai_chat_state:id%3A17';s.tourLanguage='en';storage[key]=JSON.stringify({messages:[{role:'user',content:'原文'}]});s.translateAiChatHistory('en')
+  if(change==='account')storage.user_id=18
+  if(change==='history')storage[key]=JSON.stringify({messages:[{role:'user',content:'新问题'}]})
+  if(change==='language')s.tourLanguage='zh'
+  const before=storage[key];calls[0].success({statusCode:200,data:{data:{translations:['Original.']}}});assert.equal(storage[key],before)
+ }
+})
+
 test('language settings quote history as translation data and preserve the source for switching back',()=>{
  for(const [target,source,translated] of [['en','请介绍颐和园的历史。','Please introduce the history of the Summer Palace.'],['zh','Please tell me about the history of the Summer Palace.','请告诉我颐和园的历史。']]){
   const {s,storage,calls}=component('pages/mine/mine.vue'),key='ai_chat_state:'+encodeURIComponent('id:17')
+  s.tourLanguage=target
   storage[key]=JSON.stringify({messages:[{role:'user',content:source}]})
   s.translateAiChatHistory(target);const call=calls.find(c=>/translate-texts$/.test(c.url))
   assert.equal(call.data.target,target);assert.equal(JSON.parse(call.data.texts[0]),source)

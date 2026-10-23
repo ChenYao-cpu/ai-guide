@@ -8,6 +8,7 @@ export default {
 }
 </script>
 <script module="voice" lang="renderjs">
+import {loadXingyunSdk} from '../common/xingyun-sdk.js'
 let avatar=null,generation=0,timer=null
 function release(){generation++;clearTimeout(timer);try{if(avatar)avatar.destroy()}catch(e){}avatar=null}
 export default {
@@ -20,17 +21,14 @@ export default {
       const fail=message=>{report('error',message);release()}
       timer=setTimeout(()=>fail('默认数字人连接超时，请稍后重试'),90000)
       try{
-        if(!window.XmovAvatar)await new Promise((resolve,reject)=>{
-          const script=document.createElement('script');script.src=value.sdkUrl
-          script.onload=resolve;script.onerror=()=>reject(new Error('数字人语音资源加载失败'))
-          document.head.appendChild(script)
-        })
+        await loadXingyunSdk()
         if(current!==generation)return
         let started=false
         const speak=()=>{if(current!==generation||started)return;started=true;clearTimeout(timer);avatar.speak(value.text,true,true)}
         avatar=new window.XmovAvatar({
           containerId:'#ai-chat-voice-avatar',appId:'server-proxy',appSecret:'server-proxy',
           gatewayServer:value.gateway,headers:{Authorization:'Bearer '+value.token},
+          hardwareAcceleration:'prefer-hardware',
           proxyWidget:{subtitle_on:()=>{},subtitle_off:()=>{}},
           onInitEvent:code=>{if(code===4000)speak()},
           onStateChange:state=>{if(state==='idle'||state==='interactive_idle')speak()},

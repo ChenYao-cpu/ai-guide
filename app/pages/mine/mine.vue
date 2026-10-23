@@ -108,6 +108,7 @@ export default {
     },
     // 切换语言时，把本地保存的 AI 小导游问答一起转换成新语言。
     translateAiChatHistory: function (target) {
+      var self=this,version=this._historyTranslationVersion=(this._historyTranslationVersion||0)+1
       var ownerId = uni.getStorageSync('user_id')
       var ownerName = uni.getStorageSync('username')
       var owner = ownerId ? 'id:' + ownerId : ownerName ? 'name:' + ownerName : 'guest'
@@ -121,6 +122,12 @@ export default {
       var list = legacyList ? state : (state && Array.isArray(state.messages) ? state.messages : null)
       if (!list || !list.length) return
       var saveHistory = function () {
+        var currentId=uni.getStorageSync('user_id'),currentName=uni.getStorageSync('username')
+        var currentOwner=currentId?'id:'+currentId:currentName?'name:'+currentName:'guest'
+        if(version!==self._historyTranslationVersion||currentOwner!==owner||self.tourLanguage!==target)return
+        // A chat may have appended new messages while translation was pending.
+        var currentRaw=uni.getStorageSync(legacyList?'ai_chat_msgs':storageKey)
+        if(currentRaw!==raw)return
         try {
           if (legacyList) uni.setStorageSync('ai_chat_msgs', JSON.stringify(list))
           else { state.messages = list; uni.setStorageSync(storageKey, JSON.stringify(state)) }
