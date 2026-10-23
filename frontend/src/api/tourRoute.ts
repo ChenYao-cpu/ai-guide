@@ -18,7 +18,10 @@ interface TourRouteItem {
   theme: string
   estimated_time_minutes: number
   description: string
-  spot_ids: number[]
+  spot_ids?: number[]
+  spot_count?: number
+  spot_names?: string[]
+  walking_distance_meters?: number
   spots?: ScenicSpotItem[]
   create_time: string
   update_time: string

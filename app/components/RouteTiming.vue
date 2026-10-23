@@ -133,9 +133,9 @@ export default {
 .itinerary-totals{padding:4px 0 8px;align-items:center;gap:12px}.itinerary-totals .total-stations{flex:0 0 auto;min-width:48px}.itinerary-totals .total-stations .metric-value{margin:0;font-size:30rpx}.itinerary-totals .metric-value{font-size:31rpx;margin-top:2rpx}.itinerary-totals text{font-size:23rpx}
 .itinerary-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;align-items:center;text-align:center}.itinerary-totals>view,.itinerary-totals .total-stations{min-width:0;width:100%}
 
-/* 数字跟在文字右侧 */
-.itinerary-totals{display:grid;grid-template-columns:auto 1fr 1fr;gap:10rpx;align-items:center;text-align:center;padding:14rpx 0 8rpx}
-.itinerary-totals>view,.itinerary-totals .total-stations{min-width:0;width:auto;display:flex;flex-direction:row;align-items:baseline;justify-content:center;gap:6rpx;white-space:nowrap}
+/* 三个部分等宽居中，视觉均衡 */
+.itinerary-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6rpx;align-items:center;text-align:center;padding:14rpx 0 8rpx}
+.itinerary-totals>view,.itinerary-totals .total-stations{min-width:0;width:100%;display:flex;flex-direction:row;align-items:baseline;justify-content:center;gap:6rpx;white-space:nowrap}
 .itinerary-totals text,.itinerary-totals .metric-value{display:inline;font-size:22rpx;margin:0;color:var(--ng-secondary)}
 .itinerary-totals .metric-value{font-size:29rpx;font-weight:600;line-height:1.2;color:var(--ng-text);font-variant-numeric:tabular-nums}
 </style>

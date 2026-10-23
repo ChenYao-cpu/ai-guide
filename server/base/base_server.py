@@ -209,6 +209,20 @@ async def system_status():
         else "local_fallback"
     )
 
+    # ASR：优先报告旧的本地 FunASR 微服务，其次报告云端百炼识别配置。
+    # 游客端的 /tour-session/asr-upload 实际调用 qwen3-asr-flash，只要密钥存在即为已配置。
+    asr_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+    asr_cloud_configured = bool(asr_key) and asr_key not in {
+        "replace-with-your-provider-key",
+        "local-demo-disabled",
+    }
+    if SERVER_PLUGINS_INFO.asr_server_enabled:
+        asr_status, asr_engine = "available", "FunASR Paraformer"
+    elif asr_cloud_configured:
+        asr_status, asr_engine = "configured", "qwen3-asr-flash（阿里云百炼）"
+    else:
+        asr_status, asr_engine = "unavailable", ""
+
     return {
         "database": {"status": "connected" if db_ok else "error", "error": db_error},
         "llm": {
@@ -218,7 +232,11 @@ async def system_status():
             "key_configured": llm_key_configured,
         },
         "tts": {"status": "available" if SERVER_PLUGINS_INFO.tts_server_enabled else "unavailable"},
-        "asr": {"status": "available" if SERVER_PLUGINS_INFO.asr_server_enabled else "unavailable"},
+        "asr": {
+            "status": asr_status,
+            "engine": asr_engine,
+            "key_configured": asr_cloud_configured,
+        },
         "rag": {"status": "available" if SERVER_PLUGINS_INFO.rag_enabled else "unavailable"},
         "digital_human": {"status": "available" if SERVER_PLUGINS_INFO.digital_human_server_enabled else "unavailable"},
         "python_version": os.sys.version.split()[0],

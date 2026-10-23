@@ -44,7 +44,7 @@
         </view>
       </view>
       <template v-if="tourVisible && !leavingTour && !(appXingyun && guideProvider==='xingyun' && (xingyunConnected || xingyunActive))">
-      <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
+      <video v-if="videoUrl" key="speech-video" id="guide-speech-video" :muted="false" :loop="false" :src="videoUrl" class="avatar-video" object-fit="contain" :controls="true" :autoplay="true" @play="speaking=true;speechPaused=false;revealAnswer()" @pause="speaking=false" @ended="speaking=false" @error="videoError"></video>
       <view v-else class="guide-img-df"><text class="guide-df-name">{{ guideName || t('数字导游') }}</text><text v-if="guideProvider!=='xingyun'" class="avatar-notice">{{ t('形象未配置') }}</text></view>
       </template>
       <view v-if="avatarConnecting" class="stage-status" :class="{on:speaking}">
@@ -65,7 +65,7 @@
     <!-- 景点切换卡片 -->
     <view class="spot-switch" v-if="spotCards.length">
       <view class="ss-arrow" @tap="prevSpot"><text>‹</text></view>
-      <view class="ss-card" @tap="switchSpotDetail">
+      <view class="ss-card">
         <image v-if="currentSpot.image_path||currentSpot.route_cover_image" :src="fixImg(currentSpot.image_path||currentSpot.route_cover_image)" class="ss-img" mode="aspectFill"></image>
         <view v-else class="ss-img-df"></view>
         <view class="ss-info">
@@ -80,20 +80,22 @@
     </view>
 
     <!-- 对话区 -->
-    <scroll-view scroll-y class="chat-area" :scroll-into-view="lastMsgId">
+    <scroll-view :scroll-y="!voicePressing" class="chat-area" :scroll-into-view="lastMsgId">
       <view v-if="!msgs.length && !loading" class="chat-empty"></view>
       <view v-if="chatTranslationFailed" class="chat-translation" @tap="localizeChat()">{{ tourLanguage==='en'?'Translation unavailable. Tap to retry.':'翻译失败，点击重试' }}</view>
       <view v-for="(m,i) in msgs" :key="i" :id="'msg-'+i" class="msg-row" :class="m.role==='guide'?'msg-l':'msg-r'">
         <view class="msg-bubble" :class="m.role">
           <text class="msg-text">{{ m.message }}</text>
-          <view v-if="m.role==='guide'" class="msg-voice-btn" :class="{muted:voiceMuted}" :aria-label="t(voiceMuted ? '继续播放' : '暂停语音播报')" @tap.stop="toggleVoiceMute(m)">
-            <view v-if="voiceMuted" class="vm-play"></view>
+          <view v-if="m.role==='guide'" class="msg-voice-btn" :class="{muted:voiceMuted||speechPaused}" :aria-label="t(voiceMuted||speechPaused ? '继续播放' : '暂停语音播报')" @tap.stop="toggleVoiceMute(m)">
+            <view v-if="voiceMuted||speechPaused" class="vm-play"></view>
             <view v-else class="vm-pause"><text class="vm-bar"></text><text class="vm-bar"></text></view>
           </view>
           <text class="msg-time">{{ fmtTime(m.send_time) }}</text>
         </view>
       </view>
-      <view v-if="loading" class="loading-tip"><text>{{ t('AI导游思考中...') }}</text></view>
+      <view v-if="loading" class="loading-tip" role="status" :aria-label="t('AI导游思考中...')">
+        <view v-for="dot in 3" :key="dot" class="avatar-loading-dot" aria-hidden="true"></view>
+      </view>
       <view id="bottom" style="height:20rpx;"></view>
     </scroll-view>
 
@@ -104,7 +106,7 @@
           <text class="iconfont" :class="voiceMode ? 'icon-liaotian' : 'icon-yuyin'"></text>
         </view>
         <input v-if="!voiceMode" v-model="text" class="msg-input" :placeholder="t('输入你想了解的问题...')" :adjust-position="false" @keyboardheightchange="onKeyboardHeight" @blur="keyboardHeight=0" confirm-type="send" @confirm="onConfirm" :disabled="loading||transcribing" />
-        <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart="startRecord" @touchend="stopRecord" @touchcancel="cancelRecord">
+        <view v-else class="voice-hold-btn" :class="{pressing:voicePressing}" @touchstart.stop.prevent="startRecord" @touchmove.stop.prevent="blockTouch" @touchend.stop.prevent="stopRecord" @touchcancel.stop="cancelRecord" @contextmenu.prevent="">
           <text>{{ t(transcribing ? '正在识别…' : loading ? '正在回答…' : voicePressing ? '松开发送' : '按住说话') }}</text>
         </view>
         <view v-if="!voiceMode" class="send-btn" @tap="onSend" :class="{disabled:!text||loading||transcribing}">{{ t('发送') }}</view>
@@ -170,7 +172,7 @@ export default {
       sid: 0, msgs: [], spotCards: [], spotIdx: 0, progressActive: -1, progressScrollLeft: 0, fadeLeft: false, fadeRight: false, progressTrackW: 0, progressContentW: 0, progressNodeW: 100,
       guideName: '', guideNameEn: '', guideSourceVideo:'', guideProvider:'', statusH: 20,
       speaking: false, loading: false, text: '', recording: false, voicePressing: false, transcribing: false, voiceMode: false,
-      voiceMuted: false,
+      voiceMuted: false, speechPaused: false,
       avatarMode:'audio',avatarMessage:'语音导览',videoUrl:'',avatarCapability:null,guideId:0,
       lastMsgId: 'bottom', _voiceManager: null,
       quick: ['这里有什么历史故事？','最佳拍照点在哪里？','附近有哪些服务设施？','请介绍景点特色','下一站推荐去哪里？'],
@@ -291,23 +293,37 @@ export default {
         this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage='';this.xingyunActive=true
         var pending=this._xingyunPending;if(pending&&this._xingyunGateway){this._xingyunPending='';this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:pending})}
       }
-      else if(event.state==='playing'){this.speaking=true;this.avatarMessage='星云数字人正在讲解'}
+      else if(event.state==='playing'){this.speaking=true;this.speechPaused=false;this.avatarMessage='星云数字人正在讲解';this.revealAnswer()}
       else if(event.state==='ended'){this.speaking=false;this.avatarMessage=''}
       else if(event.state==='error'){this.speaking=false;this.xingyunConnected=false;this.xingyunActive=false;this.xingyunFailed=true;this.avatarMessage=event.message||'星云连接失败，请重试'}
       else if(event.message)this.avatarMessage=event.message
     },
     toggleVoiceMute:function(m){
-      if(this.voiceMuted){
-        this.voiceMuted=false;uni.removeStorageSync('tour_voice_muted')
-        var text=(m&&m.message)||this._lastSpoken||''
-        if(text){this.speakXingyun(text);uni.showToast({title:this.t('已恢复语音播报'),icon:'none'})}
-        else uni.showToast({title:this.t('已经播报完毕'),icon:'none'})
-        return
-      }
-      this.voiceMuted=true;uni.removeStorageSync('tour_voice_muted')
-      if(m&&m.message)this._lastSpoken=m.message
-      this.stopPlayback()
-      uni.showToast({title:this.t('已暂停语音播报'),icon:'none'})
+      var text=(m&&m.message)||this._lastSpoken||''
+      if(this.voiceMuted||this.speechPaused){this.resumeSpeech(text);return}
+      if(this.speaking){this.pauseSpeech(text);return}
+      if(text)this.speakAnswer(text)
+    },
+    pauseSpeech:function(text){
+      if(text)this._lastSpoken=text
+      this.voiceMuted=true;this.speechPaused=true;this.speaking=false
+      if(this._audio){try{if(this._audio.pause)this._audio.pause()}catch(e){}}
+      else if(this.videoUrl){try{uni.createVideoContext('guide-speech-video',this).pause()}catch(e){}}
+      else if(this.xingyunActive){this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()})}
+    },
+    resumeSpeech:function(text){
+      var pending=text||this._lastSpoken||''
+      this.voiceMuted=false;this.speechPaused=false
+      if(this._audio){try{this._audio.play();this.speaking=true;return}catch(e){}}
+      if(this.videoUrl){try{uni.createVideoContext('guide-speech-video',this).play();this.speaking=true;return}catch(e){}}
+      if(pending)this.speakAnswer(pending)
+    },
+    revealAnswer:function(){
+      if(!this._answerPending)return
+      this._answerPending=false
+      if(this._revealTimer){clearTimeout(this._revealTimer);this._revealTimer=null}
+      this.loading=false;this.lastMsgId='bottom'
+      this.refresh()
     },
     speakAnswer:function(text){if(!text)return;this._lastSpoken=text;if(this.guideProvider==='xingyun'){this.speakXingyun(text);return}if(this.$refs.xfyun&&this.$refs.xfyun.sessionId){this.$refs.xfyun.speak(text);return}this.speakXingyun(text)},
     speakXingyun:function(text){if(this.voiceMuted)return;if(!text)return;this._lastSpoken=text;if(!this._xingyunGateway||!this.xingyunActive){this._xingyunPending=text;if(this._xingyunGateway)this.connectXingyun();return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
@@ -322,14 +338,13 @@ export default {
       return this._xingyunClosePromise
     },
     openXingyun: function() { uni.navigateTo({url:'/pages/xingyun/xingyun?sessionId='+this.sid}) },
-    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.videoUrl=''},
+    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.speechPaused=false;this.videoUrl=''},
     updateAvatarMessage:function(){if(this.avatarMode==='audio'){this.avatarMessage='语音导览';return}var capability=this.avatarCapability&&this.avatarCapability[this.avatarMode];this.avatarMessage=capability?capability.message:'正在查询数字人服务状态'},
-    videoError:function(){this.speaking=false;this.videoUrl='';this.avatarMessage='视频播放失败，请检查视频地址与网络'},
-    playAudio:function(value){this._audio=uni.createInnerAudioContext();var self=this,a=this._audio;a.src=assetUrl(value);a.onPlay(function(){self.speaking=true});function finish(){if(self._audio!==a){a.destroy();return}self.speaking=false;a.destroy();if(self._audio===a)self._audio=null}a.onEnded(finish);a.onError(function(){finish();uni.showToast({title:'语音播放失败',icon:'none'})});a.play()},
+    videoError:function(){this.speaking=false;this.videoUrl='';this.avatarMessage='视频播放失败，请检查视频地址与网络';this.revealAnswer()},
+    playAudio:function(value){this._audio=uni.createInnerAudioContext();var self=this,a=this._audio;a.src=assetUrl(value);a.onPlay(function(){self.speaking=true;self.speechPaused=false;self.revealAnswer()});function finish(){if(self._audio!==a){a.destroy();return}self.speaking=false;a.destroy();if(self._audio===a)self._audio=null}a.onEnded(finish);a.onError(function(){finish();self.revealAnswer();uni.showToast({title:'语音播放失败',icon:'none'})});a.play()},
     startSpeechVideo:function(value){var self=this;if(self._audio){self._audio.destroy();self._audio=null}self.videoUrl=assetUrl(value);self.$nextTick(function(){if(self.videoUrl)uni.createVideoContext('guide-speech-video',self).play()})},
-    pollAvatar:function(job,version){var self=this;if(version!==self._playbackVersion)return;request({url:'/avatar/jobs/'+job.job_id+'?token='+encodeURIComponent(job.access_token)}).then(function(r){if(version!==self._playbackVersion)return;var d=r.data&&r.data.data;if(!d)throw new Error('任务状态缺失');if(d.status==='completed'){self.startSpeechVideo(d.video_url);self.avatarMessage='讲解视频已生成，若未自动播放请点播放';return}if(d.status==='failed'){self.avatarMessage=d.message||'视频生成失败';return}self.avatarMessage=d.status==='processing'?'正在生成口型视频…':'视频生成排队中';self._avatarTimer=setTimeout(function(){self.pollAvatar(job,version)},1500)}).catch(function(){if(version===self._playbackVersion)self.avatarMessage='获取视频状态失败，请重新提问'})},
+    pollAvatar:function(job,version){var self=this;if(version!==self._playbackVersion)return;request({url:'/avatar/jobs/'+job.job_id+'?token='+encodeURIComponent(job.access_token)}).then(function(r){if(version!==self._playbackVersion)return;var d=r.data&&r.data.data;if(!d)throw new Error('任务状态缺失');if(d.status==='completed'){self.startSpeechVideo(d.video_url);self.avatarMessage='讲解视频已生成，若未自动播放请点播放';return}if(d.status==='failed'){self.avatarMessage=d.message||'视频生成失败';self.revealAnswer();return}self.avatarMessage=d.status==='processing'?'正在生成口型视频…':'视频生成排队中';self._avatarTimer=setTimeout(function(){self.pollAvatar(job,version)},1500)}).catch(function(){if(version===self._playbackVersion)self.avatarMessage='获取视频状态失败，请重新提问'})},
     fixImg:function(u){if(!u)return'';return assetUrl(u)},
-    switchSpotDetail:function(){this.send('请介绍「'+this.spotName+'」')},
     fmtTime: function(t) {
       if (!t) return ''
       try { return new Date(t).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) } catch(e) { return '' }
@@ -370,6 +385,7 @@ export default {
       if(!this.progressContentW||!this.progressTrackW)this.measureProgress()
       this.updateProgressFade()
     },
+    blockTouch:function(){},
     onProgressRelease:function(){
       this._progressReleaseTimer&&clearTimeout(this._progressReleaseTimer)
       this._progressReleaseTimer=setTimeout(this.snapToActive,220)
@@ -388,6 +404,7 @@ export default {
       if(isRouteChange(t)){self.text='';self.openRepair(t);return}
       if(!self.guideId){uni.showToast({title:'导游信息加载中，请稍后再试',icon:'none'});return}
       self.stopPlayback();self.text = ''; self.loading = true
+      self._answerPending=false;if(self._revealTimer){clearTimeout(self._revealTimer);self._revealTimer=null}
       var playbackVersion=self._playbackVersion,turn=self._turnVersion=(self._turnVersion||0)+1
       var currentSpot = self.spotCards[self.spotIdx]
       var nextSpot = self.spotCards[self.spotIdx+1]
@@ -407,10 +424,14 @@ export default {
         var d = res.data
         if (d && d.success) {
           appendTourChatMessage('ai', d.data && d.data.message)
+          // 先出声音、再出文字：文字在语音真正开始播放时一起出现，避免“先看到字、等语音”
+          self._answerPending=true
+          if(self._revealTimer)clearTimeout(self._revealTimer)
+          self._revealTimer=setTimeout(function(){self.revealAnswer()},3500)
           // TTS自动播报
           if(playbackVersion===self._playbackVersion){
             // #ifdef MP-WEIXIN
-            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){if(!self.voiceMuted)self.$refs.xfyun.speak(d.data&&d.data.message);self.refresh();return}
+            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){if(!self.voiceMuted)self.$refs.xfyun.speak(d.data&&d.data.message);self.revealAnswer();return}
             // #endif
             // #ifdef APP-PLUS
             if(self.guideProvider==='xingyun')self.speakAnswer(d.data&&d.data.message)
@@ -418,15 +439,15 @@ export default {
             var job=d.data&&d.data.avatarJob
             if(job&&job.job_id){self.pollAvatar(job,playbackVersion)}
             else{if(job)self.avatarMessage=job.message;if(d.data&&d.data.ttsAudioUrl)self.playAudio(d.data.ttsAudioUrl)}
-          }
-
-          self.refresh()
+            if(self.voiceMuted||self.speechPaused)setTimeout(function(){self.revealAnswer()},300)
+            else if(!job&&!(d.data&&d.data.ttsAudioUrl)&&self.guideProvider!=='xingyun')setTimeout(function(){self.revealAnswer()},1500)
+          } else self.revealAnswer()
         } else { uni.showToast({title:(d&&d.message)||'回复失败',icon:'none'}) }
       }).catch(function(e) {
         if(turn!==self._turnVersion)return
         uni.showToast({title:e.message || (/timeout/i.test(e.errMsg||'')?'回答等待超时，请重试':'无法连接服务器，请检查网络'),icon:'none'})
       })
-        .finally(function() { if(turn===self._turnVersion){self.loading = false; self.lastMsgId = 'bottom'} })
+        .finally(function() { if(turn===self._turnVersion){if(!self._answerPending)self.loading = false; self.lastMsgId = 'bottom'} })
     },
     onConfirm: function(e) { this.send(e.detail ? e.detail.value : '') },
     onSend: function() { this.send(this.text) },
@@ -741,7 +762,8 @@ export default {
 .msg-time{font-size:20rpx;text-align:right;display:block;margin-top:6rpx}
 .msg-l .msg-time{color:var(--ng-secondary)}
 .msg-r .msg-time{color:var(--ng-text)}
-.loading-tip{text-align:center;padding:16rpx;color:var(--ng-secondary);font-size:24rpx}
+.loading-tip{display:flex;align-items:center;justify-content:center;gap:8rpx;min-height:34rpx;padding:16rpx}
+.loading-tip .avatar-loading-dot{width:12rpx;height:12rpx;background:var(--ng-secondary)}
 
 /* 底部输入 */
 .bottom-bar{position:relative;z-index:1;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:env(safe-area-inset-bottom,0px)}

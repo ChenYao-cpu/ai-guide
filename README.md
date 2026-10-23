@@ -155,6 +155,25 @@ python scripts/import_resource_pack.py resources/local-resources
 
 应用素材后保存到 `digital_guide_info.base_mp4_path/base_video_metadata`，客户端待命循环播放，讲解时通过 MuseTalk 在该动作视频上合成本轮口型。更换海报或基础素材后，旧生成任务不能覆盖新配置。
 
+## 语音输入（ASR）
+
+游客网页、手机网页和 App 的麦克风输入都上传到 `POST /api/v1/tour-session/asr-upload`，后端调用阿里云百炼 `qwen3-asr-flash` 返回识别文字，不是前端模拟。录音上限 60 秒、10MB；页面需通过 `localhost` 或 HTTPS 打开才能使用麦克风。
+
+在后端 `.env` 配置两项并重启后端：
+
+1. `DASHSCOPE_API_KEY`：与海报生成共用同一个百炼密钥，接口为 `https://dashscope.aliyuncs.com/api/v1`。
+2. `FFMPEG_PATH`：ffmpeg 可执行文件路径。不填时后端依次查找 `weights/digital_human_weights/drivers/ffmpeg.exe` 和系统 PATH；缺少时会返回“语音识别缺少 FFMPEG 音频转换工具”。
+
+缺少密钥时接口返回“语音识别服务尚未配置，请联系管理员”，不会伪造识别结果。配置后管理后台「系统概览」的 ASR 显示“已配置”（引擎 `qwen3-asr-flash`）；旧的本地 FunASR 微服务同时可用时显示“正常”。旧本地服务由 `ENABLE_ASR` 单独控制，与游客语音识别无关。
+
+验证（需先准备一段录音 wav）：
+
+```powershell
+curl.exe -F "file=@recording.wav" http://127.0.0.1:18000/api/v1/tour-session/asr-upload
+```
+
+返回 `{"success":true,...,"data":"识别出的文字"}` 即表示真实识别链路可用。
+
 ## 魔珐星云数字人
 
 桌面和手机网页端已增加星云 SDK 接入。管理员可为每位导游独立绑定星云应用、上架或下架，游客按所选人物连接。详细步骤见 [接入说明](docs/xingyun-integration.md)。缺少应用凭据时不会显示为已连接。

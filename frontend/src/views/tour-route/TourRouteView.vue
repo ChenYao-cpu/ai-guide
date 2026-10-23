@@ -159,8 +159,8 @@ const openEditDialog = async (routeId: number) => {
       form.theme = item.theme
       form.estimated_time_minutes = item.estimated_time_minutes
       form.description = item.description
-      form.spot_ids = [...item.spot_ids]
-      selectedSpots.value = item.spot_ids
+      form.spot_ids = [...(item.spot_ids ?? [])]
+      selectedSpots.value = (item.spot_ids ?? [])
         .map((id) => spotOptions.value.find((s) => s.spot_id === id))
         .filter((s): s is ScenicSpotItem => s !== undefined)
       dialogVisible.value = true
@@ -291,7 +291,7 @@ onMounted(async () => {
               <!-- 信息条 -->
               <div class="card-meta">
                 <span class="meta-item">
-                  <strong>{{ $t(item.spot_ids?.length || 0) }}</strong>{{ $t("个景点") }}</span>
+                  <strong>{{ $t(item.spot_count ?? item.spot_ids?.length ?? 0) }}</strong>{{ $t("个景点") }}</span>
                 <span class="meta-divider">|</span>
                 <span class="meta-item">{{ $t("预计") }}<strong>{{ $t(item.estimated_time_minutes) }}</strong>{{ $t("分钟") }}</span>
               </div>

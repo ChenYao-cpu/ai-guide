@@ -18,6 +18,7 @@ project.private.config.json
 *.key
 *.zip
 !/resources/local-resources.zip
+!/resources/scenic-images.zip
 *.7z
 *.tgz
 /work_dirs/
