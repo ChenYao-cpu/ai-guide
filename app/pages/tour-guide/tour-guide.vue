@@ -242,7 +242,8 @@ export default {
     previewModelReady:function(){this.previewModelStatus=''},
     previewImageError:function(){this.previewModelStatus='形象图片加载失败，请关闭预览后重试'},
     previewVideoError:function(){uni.showToast({title:'形象视频播放失败，请检查素材',icon:'none'})},
-    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.previewLoading=false;g.previewMessage=g.voice_label?((this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+g.voice_label):'';return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.previewUrl='';g.previewMessage=c.realistic.message}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
+    guideVoiceMessage:function(g){var label=g&&g.voice_label?String(g.voice_label).trim():'';if(!label)return this.tourLanguage==='en'?'Xingyun digital human':'星云数字人';return (this.tourLanguage==='en'?'Xingyun · ':'星云 · ')+label},
+    loadGuidePreview:function(g){if(g.render_mode==='xingyun'){g.previewLoading=false;g.previewMessage=this.guideVoiceMessage(g);return}var s=this;req({url:'/avatar/capabilities/'+g.guide_id}).then(function(r){if(!r.data.success)throw new Error(r.data.message);var c=r.data.data;g.previewUrl='';g.previewMessage=c.realistic.message}).catch(function(){g.previewMessage='数字人状态查询失败，请重试'}).finally(function(){g.previewLoading=false})},
     goTab:function(p){uni.reLaunch({url:p})},
     isPicked:function(id){return!!this.pickedIds[id]},
     toggleSpot:function(id){if(this.starting||this.recommending)return;var order=this.selectedIds.slice();if(!this.pickedIds[id]&&order.length>=20){uni.showToast({title:this.t('路线最多支持20站，请先精简行程'),icon:'none'});return}var selected=this.spots.filter(x=>this.pickedIds[x.spot_id]);var next=this.spots.find(x=>x.spot_id===id);if(!this.pickedIds[id]){if(!next||!next.city){uni.showToast({title:'景点所属城市待配置',icon:'none'});return}if(selected.some(x=>x.city!==next.city)){uni.showToast({title:'一次导览只能选择同一城市',icon:'none'});return}}this.pickedRouteId=null;if(this.tab==='personal')this.personalPlan=null;var n={};Object.keys(this.pickedIds).forEach(function(k){n[k]=true});if(n[id])delete n[id];else n[id]=true;this.pickedIds=n;this.orderedIds=order.includes(id)?order.filter(x=>x!==id):order.concat(id);var s=this;var spot=s.spots.find(function(x){return x.spot_id===id});if(spot)s.saveHistory(spot)},
@@ -348,8 +349,11 @@ export default {
             return old?Object.assign({},item,{previewUrl:old.previewUrl,previewMessage:old.previewMessage,previewLoading:old.previewLoading}):Object.assign({},item,{previewUrl:'',previewMessage:'正在查询数字人服务状态',previewLoading:true})})
           var previous=s.pickedGuide&&s.pickedGuide.guide_id
           s.pickedGuide=s.guides.find(function(item){return item.guide_id===previous})||null
-          // 只为新增的数字人拉取预览，已有预览保留，避免列表图片重新闪一遍。
-          s.guides.forEach(function(item){if(!known[item.guide_id])s.loadGuidePreview(item)})
+          // 星云数字人的声音标签随语言变化，每次加载都按当前语言重算；其他形象只为新增项拉取预览，避免图片闪烁。
+          s.guides.forEach(function(item){
+            if(item.render_mode==='xingyun'){item.previewLoading=false;item.previewMessage=s.guideVoiceMessage(item)}
+            else if(!known[item.guide_id])s.loadGuidePreview(item)
+          })
         }
         if(sr&&sr.data){var sd=sr.data;s.spots=(sd.data&&sd.data.spot_list)?sd.data.spot_list:(sd.spot_list||[])}
         if(rr&&rr.data){var rd=rr.data;s.routes=(rd.data&&rd.data.route_list)?rd.data.route_list:(rd.route_list||[])}
