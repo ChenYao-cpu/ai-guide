@@ -20,7 +20,7 @@
         <text v-if="overview&&!overview.complete&&!busy" class="itinerary-error">{{ t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</text>
         <button class="itinerary-details" :disabled="dragId!==null" @tap="openDetails">{{ t('路线与用时') }} <text>↗</text></button>
     </view>
-    <view v-if="details" class="route-sheet-mask" @tap="$emit('close')"><view class="route-sheet" :style="{transformOrigin:detailOrigin}" @tap.stop><view class="route-sheet-heading"><text>{{ t('路线与用时') }}</text><button @tap="$emit('close')" :aria-label="t('关闭')">×</button></view><scroll-view :scroll-y="!mapInteracting" :bounces="false" class="route-sheet-body"><text v-if="busy" class="itinerary-note">{{ t('正在计算路线详情…') }}</text><view v-else-if="error" class="itinerary-error"><text>{{ t(error) }}</text><button @tap="refresh">{{ t('重试') }}</button></view><RouteOverview v-else-if="overview" :overview="overview" @map-interacting="mapInteracting=$event" /></scroll-view></view></view>
+    <view v-if="details" class="route-sheet-mask" @tap="$emit('close')"><view class="route-sheet" :style="{transformOrigin:detailOrigin}" @tap.stop><view class="route-sheet-heading"><text>{{ t('路线与用时') }}</text><button @tap="$emit('close')" :aria-label="t('关闭')">×</button></view><scroll-view :scroll-y="!mapInteracting" :bounces="false" class="route-sheet-body"><text v-if="busy" class="itinerary-note">{{ t('正在计算路线详情…') }}</text><view v-else-if="error" class="itinerary-error"><text>{{ t(error) }}</text><button @tap="refresh">{{ t('重试') }}</button></view><RouteOverview v-else-if="overview" :overview="overview" :user-location="userLocation" @map-interacting="mapInteracting=$event" /></scroll-view></view></view>
 
   </view>
 </template>
@@ -28,7 +28,7 @@
 import RouteOverview from './RouteOverview.vue'
 import { previewOptions, routeRequest } from '../common/route-planning.js'
 export default {
-  components:{RouteOverview},props:{ids:{type:Array,default:()=>[]},spots:Array,plan:Object,pace:String,details:Boolean,disabled:Boolean},
+  components:{RouteOverview},props:{ids:{type:Array,default:()=>[]},spots:Array,plan:Object,pace:String,details:Boolean,disabled:Boolean,userLocation:Object},
   data(){return{busy:false,error:'',overview:null,mapInteracting:false,detailOrigin:'50% 85%',dragId:null,dragOrder:[],dragY:0,startY:0,startIndex:0,rowHeight:72,scrollOffset:0,scrollTarget:0,dragScrollStart:0,expanded:false}},
   computed:{
     options(){return previewOptions(this.ids,this.plan,this.pace)},

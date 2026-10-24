@@ -10,13 +10,13 @@
 import { createRouteMap } from '../common/route-map-runtime.js'
 // #endif
 export default {
-  props:{expanded:Boolean,data:Object,original:Boolean,activeLeg:Number,currentMarker:Number,markerLabels:Object},emits:['leg','interacting'],
+  props:{expanded:Boolean,data:Object,original:Boolean,activeLeg:Number,currentMarker:Number,markerLabels:Object,userLocation:Object},emits:['leg','interacting'],
   data(){let assetBase='./static/vendor/leaflet/'
     // #ifdef H5
     assetBase=(import.meta.env.BASE_URL||'/')+'static/vendor/leaflet/'
     // #endif
     return{assetBase,mapId:'route-road-'+Date.now()+'-'+Math.random().toString(36).slice(2,9),fitCounter:0,revision:0,loading:true,error:''}},
-  computed:{payload(){return{mapId:this.mapId,assetBase:this.assetBase,data:this.data,original:this.original,activeLeg:this.activeLeg,currentMarker:this.currentMarker,markerLabels:this.markerLabels||{},fitCounter:this.fitCounter,revision:this.revision,zoomIn:this.t('放大地图'),zoomOut:this.t('缩小地图')}}},
+  computed:{payload(){return{mapId:this.mapId,assetBase:this.assetBase,data:this.data,original:this.original,activeLeg:this.activeLeg,currentMarker:this.currentMarker,markerLabels:this.markerLabels||{},userLocation:this.userLocation||null,userLabel:this.t('我的位置'),fitCounter:this.fitCounter,revision:this.revision,zoomIn:this.t('放大地图'),zoomOut:this.t('缩小地图')}}},
   watch:{payload:{deep:true,handler(value){
     // #ifdef H5
     this._mapController?.update(value)

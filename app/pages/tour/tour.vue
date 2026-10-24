@@ -22,7 +22,7 @@
       <view class="nav-end" @tap="confirmEnd"><text>✕</text></view>
     </view>
 
-    <view v-if="showRouteInfo" class="tour-route-mask" @tap="showRouteInfo=false"><view class="tour-route-sheet" @tap.stop><view class="tour-route-heading"><text>{{ t('剩余游览路线') }}</text><button @tap="showRouteInfo=false" :aria-label="t('关闭')">×</button></view><scroll-view scroll-y class="tour-route-body"><RouteOverview v-if="routeOverview" :overview="routeOverview" :current-id="liveCurrentId" /><text v-else>{{ t('路线详情暂时无法加载') }}</text></scroll-view></view></view>
+    <view v-if="showRouteInfo" class="tour-route-mask" @tap="showRouteInfo=false"><view class="tour-route-sheet" @tap.stop><view class="tour-route-heading"><text>{{ t('剩余游览路线') }}</text><button @tap="showRouteInfo=false" :aria-label="t('关闭')">×</button></view><scroll-view scroll-y class="tour-route-body"><RouteOverview v-if="routeOverview" :overview="routeOverview" :current-id="liveCurrentId" :user-location="userLocation" /><text v-else>{{ t('路线详情暂时无法加载') }}</text></scroll-view></view></view>
     <TourRouteRepair v-if="repairOpen" ref="routeRepair" :sid="sid" :current-name="spotCards.find(s=>s.spot_id===liveCurrentId)?.spot_name||spotName" :remaining-spots="repairRemainingSpots" :initial="repairInitial" :prompt="repairPrompt" @close="repairOpen=false" @applied="routeRepaired" @refresh="refresh(true)" />
     <!-- 数字导游 -->
     <view class="guide-stage" :style="!tourVisible || leavingTour || repairOpen || showRouteInfo ? 'visibility:hidden' : ''">
@@ -123,6 +123,7 @@ import { appendTourChatMessage } from '../../common/tour-chat-log.js'
 import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 import { wgs84ToGcj02, gcj02ToWgs84 } from '../../../shared/coordinates.js'
+import { nearestSpot } from '../../common/user-location.js'
 
 function request(options) {
   var task;var promise=new Promise(function(resolve, reject) {
@@ -168,7 +169,7 @@ export default {
       lastMsgId: 'bottom', _voiceManager: null,
       quick: ['这里有什么历史故事？','最佳拍照点在哪里？','附近有哪些服务设施？','请介绍景点特色','下一站推荐去哪里？'],
       mediaExpanded: false,
-      gpsTracking: false, mapExpanded: false, userLat: 0, userLng: 0,
+      gpsTracking: false, mapExpanded: false, userLat: 0, userLng: 0, userLocation: null,
       distanceStatus: '正在获取当前位置…',
       nearestDistance: 0, nearestSpotName: '', nearestSpotIdx: -1, gpsTimer: null,
       knowCard: { visible: false, text: '', image: '' }, _knowTimer: null,
@@ -592,6 +593,26 @@ export default {
         })
       }, 5000)
     },
+    onUserLocated: function(res) {
+      this.userLat = res.latitude
+      this.userLng = res.longitude
+      this.userLocation = { latitude: res.latitude, longitude: res.longitude }
+      this.autoSelectNearestSpot()
+      this.checkNearby()
+    },
+    // 进入导览时按定位自动切到最近的景点；离得太远（不在本景区）时保持服务端当前站。
+    autoSelectNearestSpot: function() {
+      if (this._autoSpotLocated) return
+      var nearest = nearestSpot(this.spotCards, this.userLocation)
+      if (!nearest) return
+      if (nearest.distance > 5000) return
+      this._autoSpotLocated = true
+      var index = nearest.index
+      if (index >= 0 && index !== this.spotIdx) {
+        this.spotIdx = index
+        this.progressActive = index
+      }
+    },
     stopGps: function() {
       this.gpsTracking = false
       this.mapExpanded = false
@@ -683,9 +704,9 @@ export default {
   },
   onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
   onUnload:function(){this._translationVersion=(this._translationVersion||0)+1;this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps();if(uni.offKeyboardHeightChange&&this._kbListener)uni.offKeyboardHeightChange(this._kbListener)},
-  onHide:function(){this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
+  onHide:function(){this.stopGps();this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
   },
-  onShow:async function(){this.tourVisible=true;if(this._xingyunClosePromise)await this._xingyunClosePromise;if(this.guideProvider==='xingyun')this.connectXingyun()},
+  onShow:async function(){this.tourVisible=true;if(!this.gpsTracking)this.startGps(true);if(this._xingyunClosePromise)await this._xingyunClosePromise;if(this.guideProvider==='xingyun')this.connectXingyun()},
   onLoad: function(opts) {
     // #ifdef APP-PLUS
     this.appXingyun=true

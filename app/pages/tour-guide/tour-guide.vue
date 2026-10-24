@@ -73,7 +73,7 @@
       <view v-show="tab==='personal'">
         <view class="block">
           <view id="itinerary-planning" class="bl-hd"><view class="bl-dot"></view><text>{{ t('行程规划') }}</text></view>
-          <RouteTiming ref="itinerary" v-if="pageReady&&pageVisible&&pickedCount" :ids="selectedIds" :spots="spots" :plan="personalPlan" :pace="personalPlan?.pace||'standard'" :details="showItinerary" :disabled="recommending||starting" @open="showItinerary=true" @close="showItinerary=false" @dragging="itineraryDragging=$event" @reorder="reorderSelectedSpots" @remove="toggleSpot" @state="itineraryState=$event" />
+          <RouteTiming ref="itinerary" v-if="pageReady&&pageVisible&&pickedCount" :ids="selectedIds" :spots="spots" :plan="personalPlan" :pace="personalPlan?.pace||'standard'" :details="showItinerary" :user-location="userLocation" :disabled="recommending||starting" @open="showItinerary=true" @close="showItinerary=false" @dragging="itineraryDragging=$event" @reorder="reorderSelectedSpots" @remove="toggleSpot" @state="itineraryState=$event" />
           <text v-if="!pickedCount" class="planner-note planner-footnote">{{ t('先在游览路线中选择景点，再到这里拖动排序。') }}</text>
         </view>
 
@@ -191,6 +191,7 @@ import { selectedOrder, moveStop, previewOptions, roadMap } from '../../common/r
 import { prioritizeSummerPalace } from '../../common/scenic-order.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
+import { locateUser } from '../../common/user-location.js'
 
 function req(o){return new Promise(function(rs,rj){var u=o.url;if(u.indexOf('http')!==0)u=BASE_URL+u;uni.request({url:u,method:o.method||'GET',data:o.data||{},header:Object.assign({'Content-Type':'application/json'},uni.getStorageSync('token')?{Authorization:'Bearer '+uni.getStorageSync('token')}:{}),success:function(r){if(r.statusCode===200)rs({data:r.data});else rj(new Error('HTTP '+r.statusCode))},fail:rj})})}
 var api={
@@ -210,7 +211,7 @@ export default {
   data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合游览',history:'历史文化',nature:'自然风光',family:'亲子游览',photography:'摄影打卡'},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,dataLoaded:false,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
-    mapCenter:{latitude:0,longitude:0},spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
+    mapCenter:{latitude:0,longitude:0},userLocation:null,spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
   }},
   computed:{
     dockHiddenByOverlay:function(){return !!(this.showItinerary||this.routeDetail||this.detailSpot||this.showMapPreview||this.guidePicker||this.previewingGuide)},
@@ -369,12 +370,13 @@ export default {
         s.loading=false
       }).catch(function(){if(first)s.error='网络连接失败';s.loading=false})},
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
+    refreshUserLocation:function(){var self=this;locateUser().then(function(loc){if(loc&&loc.latitude)self.userLocation=loc})},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },
   onBackPress:function(){if(this.showItinerary){this.showItinerary=false;return true}if(this.showMapPreview){this.showMapPreview=false;return true}if(this.tab==='personal'){this.switchPlanningTab('route');return true}},
   onHide:function(){this.tourButtonDragging=false;this.itineraryDragging=false;this.showItinerary=false;this.pageVisible=false;this.showMapPreview=false},
   onUnload:function(){this.itineraryDragging=false;this.pageVisible=false;this.pageReady=false},
-  onShow:function(){this.pageVisible=true;this.showMapPreview=false;if(this.checkAuth())this.loadData()},
+  onShow:function(){this.pageVisible=true;this.showMapPreview=false;this.refreshUserLocation();if(this.checkAuth())this.loadData()},
 }
 </script>
 
@@ -396,7 +398,7 @@ export default {
 .guide-preview-half{height:600rpx;margin:0 24rpx;overflow:hidden;background:var(--ng-surface)}.guide-preview-photo{display:block;width:100%}
 .guide-preview-panel{overflow-y:auto}.guide-preview-panel .dp-hd{position:relative;justify-content:center;padding:20rpx 80rpx}.guide-preview-panel .dp-title{font-size:46rpx;font-weight:700;line-height:1.4;text-align:center}.guide-preview-panel .guide-description{font-size:34.5rpx;line-height:1.65;padding:16rpx 24rpx;color:var(--ng-secondary)}
 .gc-image{position:absolute;width:100%;height:100%;left:0;top:0}.gc-empty{padding:70rpx 16rpx;text-align:center;font-size:27.6rpx;color:var(--ng-secondary)}.guide-description{display:block;padding:18rpx;color:var(--ng-secondary);font-size:27.6rpx;line-height:1.7}.guide-description text{display:block}.guide-preview-video{width:100%;height:600rpx}
-.gc-preview{position:absolute;right:10rpx;top:10rpx;z-index:3;padding:8rpx 16rpx;border-radius:12rpx;background:rgba(30,41,59,0.28);color:var(--ng-text);font-size:25.3rpx}
+.gc-preview{position:absolute;right:10rpx;top:10rpx;z-index:3;padding:8rpx 16rpx;border-radius:12rpx;background:rgba(30,41,59,0.35);color:#a9cdf3;font-size:25.3rpx}
 .page{min-height:100vh;box-sizing:border-box;background-color:var(--ng-surface);position:relative}
 .ink-bg{position:absolute;inset:0;pointer-events:none;z-index:0}.ink-mountain{position:absolute;left:0;right:0;background:var(--ng-night);border-radius:50% 70% 0 0}.ink-mt-1{bottom:20%;height:200rpx;opacity:.03;transform:scaleX(1.4)}.ink-mt-2{bottom:25%;height:150rpx;opacity:.02;transform:scaleX(1.2) translateX(10%)}
 .page-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}

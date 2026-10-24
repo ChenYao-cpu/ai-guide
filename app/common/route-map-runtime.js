@@ -40,9 +40,19 @@ export function createRouteMap(element, report = () => {}, win = window, doc = d
   element.addEventListener('touchmove', gestureMove, { passive: false, capture: true })
   element.addEventListener('touchend', gestureEnd, true)
   element.addEventListener('touchcancel', gestureEnd, true)
+  const nearbyUser = () => {
+    const user = payload && payload.userLocation
+    if (!user || !Number(user.latitude) || !payload.data.points.length) return null
+    const first = payload.data.points[0]
+    // 只把游客位置纳入视野：离路线太远（例如不在景区内）时地图仍聚焦路线。
+    if (Math.abs(user.latitude - first.latitude) + Math.abs(user.longitude - first.longitude) > 0.15) return null
+    return [Number(user.latitude), Number(user.longitude)]
+  }
   const fitAll = () => {
     if (!map || !payload || disposed || !element.isConnected) return
     const points = payload.data.points.map(p => [p.latitude, p.longitude])
+    const userPoint = nearbyUser()
+    if (userPoint) points.push(userPoint)
     map.stop()
     map.closePopup()
     map.invalidateSize({ pan: false })
@@ -98,7 +108,13 @@ export function createRouteMap(element, report = () => {}, win = window, doc = d
         const label = doc.createElement('span'); label.textContent = next.markerLabels[marker.id] || ''
         L.marker([marker.latitude, marker.longitude], { icon, title: label.textContent }).bindPopup(label).addTo(group)
       })
-      const key = JSON.stringify([next.data.points, next.data.markers.map(m => m.id), next.original])
+      const userPoint = Number(next.userLocation?.latitude) && nearbyUser()
+      if (userPoint) {
+        L.circleMarker(userPoint, { radius: 17, stroke: false, fillColor: '#2f6fed', fillOpacity: 0.16, interactive: false }).addTo(group)
+        L.circleMarker(userPoint, { radius: 7, color: '#ffffff', weight: 3, fillColor: '#2f6fed', fillOpacity: 1 })
+          .bindTooltip(next.userLabel || '', { direction: 'top', offset: [0, -8], opacity: 0.9 }).addTo(group)
+      }
+      const key = JSON.stringify([next.data.points, next.data.markers.map(m => m.id), next.original, !!userPoint])
       if (key !== boundsKey || next.fitCounter !== fitCounter) { boundsKey = key; fitCounter = next.fitCounter; fitAll() }
       report({ state: 'ready' })
     } catch (error) { if (!disposed && own === version) report({ state: 'error', message: error.message }) }

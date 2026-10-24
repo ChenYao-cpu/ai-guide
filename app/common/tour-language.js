@@ -109,6 +109,7 @@ const appEnglish = {
   '无法连接服务电脑，请确认在同一个 Wi-Fi 且后端已启动': 'Cannot reach the service computer. Check the Wi-Fi and that the backend is running.',
   '领取失败，请重试': 'Could not receive the route. Please try again.',
   '只允许连接局域网电脑的18000端口': 'Only a computer on the local network (port 18000) is allowed.',
+  '我的位置': 'My location',
 }
 
 export function translateTour(value, language, params = {}) {

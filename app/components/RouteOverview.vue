@@ -2,7 +2,7 @@
   <view v-if="displayed" class="route-overview">
     <view v-if="compare" class="route-comparison"><button :class="{on:!original}" @tap="original=false">{{ t('调整后') }}</button><button :class="{on:original}" @tap="original=true">{{ t('调整前') }}</button></view>
     <view class="route-metrics"><view><text class="metric-value">{{ (displayed.stops||[]).length }}{{ t('站') }}</text></view><view><text>{{ t('预计步行') }}</text><text class="metric-value">{{ distance(displayed.walking_meters) }}</text></view><view><text>{{ t('预计用时') }}</text><text class="metric-value">{{ displayed.total_minutes ?? '—' }}{{ t('分钟') }}</text></view></view>
-    <RouteRoadMap v-if="showMap&&mapData.points.length" :data="mapData" :original="original" :active-leg="activeLeg" :current-marker="currentMarker" :marker-labels="markerLabels" @interacting="$emit('map-interacting',$event)" @leg="activeLeg=$event" />
+    <RouteRoadMap v-if="showMap&&mapData.points.length" :data="mapData" :original="original" :active-leg="activeLeg" :current-marker="currentMarker" :marker-labels="markerLabels" :user-location="userLocation" @interacting="$emit('map-interacting',$event)" @leg="activeLeg=$event" />
     <scroll-view v-if="showMap&&legs.length>1" scroll-x class="route-leg-picker"><button v-for="(leg,index) in legs" :key="index" :class="{on:activeLeg===index}" @tap="activeLeg=index">{{ t(leg.from_name) }} → {{ t(leg.to_name) }}</button></scroll-view>
     <text v-if="!displayed.complete" class="route-warning">{{ t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</text>
     <view class="route-stops"><view v-for="(stop,index) in displayed.stops" :key="stop.spot_id" class="route-step" :class="{current:stop.spot_id===currentId}"><view class="route-stop-line"><text class="route-number">{{ stop.order||index+1 }}</text><text>{{ t(stop.spot_name) }}</text><text class="route-stay">{{ stop.visit_minutes ? t('停留')+' '+stop.visit_minutes+' '+t('分钟') : t('当前站，离开后计时') }}</text></view><text v-if="displayed.legs?.[index]" class="route-leg">{{ distance(displayed.legs[index].meters) }} · {{ t('步行') }} {{ displayed.legs[index].minutes??'—' }} {{ t('分钟') }}</text></view></view>
@@ -15,7 +15,7 @@
 import { roadMap } from '../common/route-planning.js'
 import RouteRoadMap from './RouteRoadMap.vue'
 export default {
-  components:{RouteRoadMap},props:{overview:Object,compare:Object,currentId:Number,showMap:{type:Boolean,default:true}},data(){return{original:false,activeLeg:0}},
+  components:{RouteRoadMap},props:{overview:Object,compare:Object,currentId:Number,showMap:{type:Boolean,default:true},userLocation:Object},data(){return{original:false,activeLeg:0}},
   computed:{
     displayed(){return this.original&&this.compare?this.compare:this.overview},mapData(){return roadMap(this.displayed)},
     legs(){const o=this.displayed;return o?[o.entry_leg,...(o.legs||[]),o.exit_leg].filter(Boolean):[]},selectedLeg(){return this.legs[this.activeLeg]},
