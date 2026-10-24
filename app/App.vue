@@ -1,11 +1,21 @@
 <script>
 import { LOGIN_PROVIDER } from './common/config.js'
 import { ONBOARDING_STORAGE_KEY, ONBOARDING_ROUTE } from './common/onboarding.js'
+import { CLAIM_ROUTE, clearPendingClaim, saveClaim } from './common/station-claim.js'
 export default {
   onLaunch: function() {
     console.log('App Launch')
+    clearPendingClaim()
   },
   onShow: function() {
+    let incomingClaim = false
+    // #ifdef APP-PLUS
+    const args = typeof plus !== 'undefined' ? plus.runtime.arguments : ''
+    if (args && args !== this._lastClaimArguments) {
+      this._lastClaimArguments = args
+      try { saveClaim(args); incomingClaim = true } catch (_) { /* Ordinary launches have no claim. */ }
+    }
+    // #endif
     var token = uni.getStorageSync('token')
     var pages = getCurrentPages()
     var currentPage = ''
@@ -17,6 +27,11 @@ export default {
       return
     }
     if (currentPage === ONBOARDING_ROUTE) return
+    if (currentPage === CLAIM_ROUTE.slice(1)) return
+    if (incomingClaim && currentPage.indexOf('pages/auth/auth') === -1) {
+      uni.reLaunch({ url: CLAIM_ROUTE })
+      return
+    }
     if ((!token || uni.getStorageSync('login_provider') !== LOGIN_PROVIDER) && currentPage.indexOf('pages/auth/auth') === -1) {
       uni.reLaunch({ url: '/pages/auth/auth' })
     }
@@ -48,7 +63,7 @@ page { background:var(--ng-night); color:var(--ng-text); font-family:var(--app-f
 .page .msg-bubble.user { background:rgba(99,102,241,0.18); color:var(--ng-text); }
 .aurora-page{background:transparent!important;color:var(--ng-text)}
 .aurora-background{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,var(--ng-surface) 0%,var(--ng-surface) 35%,var(--ng-surface) 70%,var(--ng-surface) 100%)}
-.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay):not(.login-reveal):not(.voice-render){position:relative;z-index:1}
+.aurora-page>view:not(.aurora-background):not(.tb-root):not(.bottom-fixed):not(.drawer-overlay):not(.scenic-sheet-overlay):not(.confirm-overlay):not(.spot-drawer):not(.fab-btn):not(.photo-popover-mask):not(.select-overlay):not(.login-reveal):not(.voice-render):not(.about-overlay){position:relative;z-index:1}
 .aurora-page .nav{background:transparent!important;border-bottom-color:var(--ng-border)!important;gap:18rpx}
 .aurora-page .nav-title{color:var(--ng-text)}
 .aurora-page .tb-root{position:fixed!important;background:var(--ng-surface)!important;border-top-color:var(--ng-border)!important}

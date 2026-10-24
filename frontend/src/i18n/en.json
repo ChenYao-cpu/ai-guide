@@ -575,7 +575,7 @@
   "导览已结束，请重新开始": "This tour has ended. Start a new tour.",
   "导览昵称": "Tour Nickname",
   "导览问题": "Tour Question",
-  "封面和头像用于网页、小程序的人物选择与预览展示，可使用对应人物截图。无需上传人物视频。实时导览的背景和音色使用数字人应用配置；网页和小程序导览页均完整显示全身。保存后默认下架，密钥由后端加密保存。": "Cover and avatar are used for character selection and preview on web and mini program; corresponding character screenshots may be used. No character video upload needed. Real-time tour background and voice use digital human app configuration; web and mini program tour pages both display full body. After saving, it is unpublished by default; keys are encrypted and stored by the backend.",
+  "封面和头像用于网页、App的人物选择与预览展示，可使用对应人物截图。无需上传人物视频。实时导览的背景和音色使用数字人应用配置；网页和App导览页均完整显示全身。保存后默认下架，密钥由后端加密保存。": "Cover and avatar are used for character selection and preview on web and App; corresponding character screenshots may be used. No character video upload needed. Real-time tour background and voice use digital human app configuration; web and App tour pages both display full body. After saving, it is unpublished by default; keys are encrypted and stored by the backend.",
   "将文档拖到此处，或": "Drag document here, or",
   "小孩": "Child",
   "小颐": "Xiaoyi",

@@ -99,6 +99,10 @@ const appEnglish = {
   '个人资料加载失败，请检查网络': 'Could not load profile. Please check your network.',
   '确定要退出登录吗？': 'Log out of your account?',
   '景区数字人导览与路线规划。': 'Digital-human scenic guiding and route planning.',
+  '扫码': 'Scan',
+  '请扫描网页上的路线领取码': 'Scan the route pickup code on the web page',
+  '打开领取页失败，请重试': 'Could not open the pickup page. Please try again.',
+  '扫码失败，请检查相机权限': 'Scan failed. Please check camera permission.',
 }
 
 export function translateTour(value, language, params = {}) {

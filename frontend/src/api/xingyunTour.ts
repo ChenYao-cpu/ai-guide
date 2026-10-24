@@ -16,7 +16,7 @@ export function receiveAvatarToken(tourId: number) {
   const token = fragment.get('avatarToken')
   if (token) {
     saveAvatarToken(tourId, token)
-    // 小程序传来的短期导览凭证只在 fragment 中传递，不发送给网页服务器。
+    // App 或领取页传来的短期导览凭证只在 fragment 中传递，不发送给网页服务器。
     history.replaceState(history.state, '', location.pathname + location.search)
   }
 }

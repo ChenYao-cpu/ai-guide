@@ -12,6 +12,11 @@
 
     <!-- 自定义导航栏（毛体标题） -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
+      <!-- 扫码领取：扫描电脑网页上的路线二维码，直接领取网页上选好的路线 -->
+      <view class="nav-scan" hover-class="nav-scan-press" :hover-stay-time="70" role="button" :aria-label="t('扫码')" @tap="scanRoute">
+        <view class="scan-icon" aria-hidden="true"></view>
+        <text class="nav-scan-label">{{ t('扫码') }}</text>
+      </view>
     </view>
 
     <!-- 头像卡片 -->
@@ -59,19 +64,16 @@
       </view>
     </view>
 
-    <!-- 关于我们抽屉 -->
-    <view class="drawer-overlay" v-if="showAbout" @tap="showAbout=false">
-      <view class="drawer-mask"></view>
-      <view class="drawer-panel" @tap.stop="">
-        <view class="dp-handle"></view>
-        <view class="dp-hd"><text class="dp-title">{{ t('关于我们') }}</text><text class="dp-close" @tap="showAbout=false">✕</text></view>
-        <view class="dp-content about-content">
-          <text class="about-intro">{{ t('景区数字人导览与路线规划。') }}</text>
-        </view>
+    <!-- 关于我们：页面居中小弹窗（原先的底部抽屉会被底部标签栏挡住） -->
+    <view class="about-overlay" v-if="showAbout" @touchstart.stop="" @touchmove.stop.prevent="" @touchend.stop="" @touchcancel.stop="" @tap="showAbout=false">
+      <view class="about-dialog" @tap.stop="">
+        <view class="about-close" hover-class="about-close-press" :hover-stay-time="70" @tap="showAbout=false"><text class="about-close-txt">✕</text></view>
+        <text class="about-title">{{ t('关于我们') }}</text>
+        <text class="about-intro">{{ t('景区数字人导览与路线规划。') }}</text>
       </view>
     </view>
 
-    <NocturneConfirm v-if="showLogout" :title="t('退出登录')" :content="t('确定要退出登录吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showLogout=false" @confirm="confirmLogout" />
+    <NocturneConfirm v-if="showLogout" plain :title="t('退出登录')" :content="t('确定要退出登录吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showLogout=false" @confirm="confirmLogout" />
 
     <!-- 退出登录：登录页从「退出登录」这一行弹性展开，再切到真实登录页，避免生硬换页 -->
     <view v-if="loginRevealOpen" class="login-reveal" :style="revealStyle" aria-hidden="true"><AuthPage /></view>
@@ -82,6 +84,7 @@
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
 import AuthPage from '../auth/auth.vue'
 import { BASE_URL, assetUrl } from '../../common/config.js'
+import { CLAIM_ROUTE, saveClaim } from '../../common/station-claim.js'
 import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 export default {
@@ -91,6 +94,7 @@ export default {
       // 与 pages/tour/tour.vue 共用同一个 storage key，切换后全 App 一致。
 
       username: '', userId: '', avatarUrl: '', statusH: 20,
+      scanning: false,
       showAbout: false, showLogout: false, loginRevealOpen: false, revealOriginX: 206, revealOriginY: 640,
     }
   },
@@ -131,6 +135,27 @@ export default {
     },
     goTab:function(p){uni.reLaunch({url:p})},
     goHistory:function(){uni.navigateTo({url:'/pages/mine/history'})},
+    // 「我的」右上角扫码：识别电脑网页上的路线领取码，交给领取页直接接收网页上刚选好的路线。
+    scanRoute: function () {
+      if (this.scanning) return
+      var self = this
+      this.scanning = true
+      uni.scanCode({ onlyFromCamera: false, scanType: ['qrCode'],
+        success: function (result) {
+          var claim
+          try { claim = saveClaim(result && result.result) }
+          catch (e) { uni.showToast({ title: self.t('请扫描网页上的路线领取码'), icon: 'none' }); return }
+          var query = 'claim=' + encodeURIComponent(claim.token || '')
+          if (claim.origin) query += '&server=' + encodeURIComponent(claim.origin)
+          uni.navigateTo({ url: CLAIM_ROUTE + '?' + query, fail: function () { uni.showToast({ title: self.t('打开领取页失败，请重试'), icon: 'none' }) } })
+        },
+        fail: function (err) {
+          // 用户主动取消时保持安静，只有真正失败（如相机权限）才提示。
+          if (String((err && err.errMsg) || '').indexOf('cancel') === -1) uni.showToast({ title: self.t('扫码失败，请检查相机权限'), icon: 'none' })
+        },
+        complete: function () { self.scanning = false },
+      })
+    },
     handleLogout: function () { this.showLogout=true },
     // 退出登录：清完会话后让登录页从「退出登录」这一行弹性展开，动画结束再切真实登录页，避免生硬换页。
     confirmLogout: function () {
@@ -197,8 +222,15 @@ export default {
 .ink-mt-1 { bottom:20%; height:200rpx; opacity:0.03; transform:scaleX(1.4); }
 .ink-mt-2 { bottom:25%; height:150rpx; opacity:0.025; transform:scaleX(1.2) translateX(10%); }
 /* 毛体导航 */
-.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;padding:16rpx 24rpx;background:var(--ng-surface)}
+.nav{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;padding:16rpx 24rpx;background:var(--ng-surface)}
 .nav-title{font-size:44rpx;font-weight:900;color:var(--ng-text);letter-spacing:8rpx;font-family:var(--app-font-family);text-align:center}
+
+/* 右上角扫码领取路线（扫描电脑网页上的路线二维码） */
+.nav-scan{display:flex;align-items:center;gap:8rpx;padding:12rpx 22rpx 12rpx 18rpx;border-radius:999rpx;background:var(--ng-raised);border:1rpx solid var(--ng-border);box-shadow:0 6rpx 18rpx rgba(30,41,59,.06);transition:transform .18s ease,background-color .18s ease}
+.nav-scan-press{transform:scale(.94);background:rgba(99,102,241,.14)}
+.nav-scan-label{font-size:24rpx;font-weight:600;line-height:1;color:var(--ng-text)}
+.scan-icon{width:32rpx;height:32rpx;background:currentColor;color:var(--ng-accent-text);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3Cpath d='M4 12h16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3Cpath d='M4 12h16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat}
+@media (prefers-reduced-motion: reduce){.nav-scan{transition:none}}
 
 /* 头像卡片 */
 .profile-card { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; padding:40rpx 32rpx 32rpx; }
@@ -224,7 +256,7 @@ export default {
 .lang-thumb { position:absolute; top:8rpx; left:8rpx; width:115rpx; height:59rpx; border-radius:20rpx; background:var(--ng-surface); box-shadow:0 4rpx 14rpx rgba(30,41,59,.10); transition:transform 460ms cubic-bezier(.34,1.56,.64,1); will-change:transform; }
 .lang-switch.en .lang-thumb { transform:translateX(115rpx); }
 .lang-btn { position:relative; z-index:1; width:115rpx; height:59rpx; display:flex; align-items:center; justify-content:center; padding:0; border:0; margin:0; background:transparent; color:var(--ng-secondary); font-size:26rpx; line-height:1.2; transition:color .26s ease, transform .24s cubic-bezier(.34,1.56,.64,1); }
-.lang-btn.active { color:var(--ng-accent-text); font-weight:700; }
+.lang-btn.active { color:var(--ng-secondary); font-weight:700; }
 .lang-btn.lang-press { transform:scale(.88); }
 .lang-btn::after { border:0; }
 @media (prefers-reduced-motion: reduce) { .lang-thumb, .lang-btn { transition:none; } }
@@ -244,23 +276,18 @@ export default {
 .tb-hl-ring .tb-icon{font-size:34rpx}.tb-safe{height:env(safe-area-inset-bottom,10rpx);min-height:2rpx}
 @keyframes tabBounce{0%{transform:scale(1)}30%{transform:scale(1.15)}60%{transform:scale(.95)}100%{transform:scale(1)}}
 
-/* 抽屉（复用tour-guide风格） */
-.drawer-overlay{position:fixed;top:0;bottom:0;left:0;right:0;z-index:1000}
-.drawer-mask{position:absolute;inset:0;background:rgba(30,41,59,0.28)}
-.drawer-panel{position:absolute;bottom:0;left:0;right:0;max-height:80vh;background:var(--ng-surface);border-radius:28rpx 28rpx 0 0;overflow:hidden;padding-bottom:env(safe-area-inset-bottom);box-sizing:border-box}
-.dp-handle{width:56rpx;height:5rpx;border-radius:3rpx;background:rgba(99,102,241,0.12);margin:14rpx auto 8rpx}
-.dp-hd{display:flex;justify-content:space-between;padding:8rpx 32rpx 14rpx}
-.dp-title{font-size:30rpx;font-weight:600;color:var(--ng-text)}
-.dp-close{font-size:32rpx;color:var(--ng-secondary)}
-.dp-content{padding:0 32rpx 32rpx;box-sizing:border-box}
-
-/* 关于我们 */
-.about-content{display:flex;flex-direction:column}
-.about-intro{font-size:24rpx;color:var(--ng-text);line-height:1.8;display:block;margin-bottom:20rpx}
-.about-credit{font-size:20rpx;color:var(--ng-secondary);display:block;text-align:right}
-.about-row{display:flex;padding:20rpx 0;border-bottom:1rpx solid var(--ng-border)}
-.about-row text:first-child{font-size:22rpx;color:var(--ng-secondary);width:80rpx;flex-shrink:0}
-.about-row text:last-child{font-size:22rpx;color:var(--ng-text)}
+/* 关于我们：居中弹窗。页面在横向分页轨道里、底部标签栏层级更高，
+   所以不用 fixed 抽屉（会沉到标签栏下面），改成相对页面绝对定位的居中框。 */
+.about-overlay{position:fixed!important;top:0;right:0;bottom:0;left:0;z-index:1200!important;display:flex;align-items:center;justify-content:center;padding:48rpx;box-sizing:border-box;background:rgba(30,41,59,0.32);animation:aboutMaskIn .2s ease both}
+.about-dialog{position:relative;width:100%;max-width:560rpx;padding:44rpx 40rpx 40rpx;box-sizing:border-box;border-radius:36rpx;background:#ffffff;border:1rpx solid #d9d3f0;box-shadow:0 18px 54px rgba(59,43,110,.22),0 3px 12px rgba(59,43,110,.1);animation:aboutDialogIn .26s cubic-bezier(.34,1.56,.64,1) both}
+.about-title{display:block;text-align:center;font-size:32rpx;font-weight:700;color:#1f2937;letter-spacing:2rpx;font-family:var(--app-font-family)}
+.about-intro{display:block;margin-top:20rpx;font-size:26rpx;line-height:1.75;color:#4b5563;text-align:center}
+.about-close{position:absolute;top:16rpx;right:16rpx;width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.06)}
+.about-close-txt{font-size:24rpx;line-height:1;color:#6b7280}
+.about-close-press{background:rgba(99,102,241,0.14)}
+@keyframes aboutMaskIn{from{opacity:0}to{opacity:1}}
+@keyframes aboutDialogIn{from{opacity:0;transform:scale(.9) translateY(12rpx)}to{opacity:1;transform:scale(1) translateY(0)}}
+@media (prefers-reduced-motion:reduce){.about-overlay,.about-dialog{animation:none}}
 
 /* 退出登录：登录页弹性展开（与引导页「开始体验」同一套动效），避免生硬换页 */
 .login-reveal{position:fixed!important;top:0;right:0;bottom:0;left:0;z-index:9999!important;overflow:hidden;background:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%);animation:loginSpring 850ms linear both;will-change:transform,opacity,border-radius}

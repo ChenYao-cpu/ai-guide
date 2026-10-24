@@ -3,7 +3,7 @@
 
     <view class="tour-gradient" aria-hidden="true"></view>
 
-    <NocturneConfirm v-if="showEndConfirm" :title="t('结束导览')" :content="t('确定要结束本次导览吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showEndConfirm=false" @confirm="endTour" />
+    <NocturneConfirm v-if="showEndConfirm" plain :title="t('结束导览')" :content="t('确定要结束本次导览吗？')" :cancel-label="t('取消')" :confirm-label="t('确定')" @cancel="showEndConfirm=false" @confirm="endTour" />
     <!-- 导航栏 -->
     <view class="nav" :style="{paddingTop:statusH+'px'}">
       <view class="nav-back" @tap="goBack"><text>‹</text></view>
@@ -58,9 +58,6 @@
     <!-- #endif -->
     <!-- #ifndef APP-PLUS -->
     <button v-if="guideProvider==='xingyun'" class="xingyun-open" @tap="openXingyun">{{ t('打开数字人导览') }}</button>
-    <!-- #endif -->
-    <!-- #ifdef MP-WEIXIN -->
-    <tour-xfyun ref="xfyun" :tour-id="sid" />
     <!-- #endif -->
     <!-- 景点切换卡片 -->
     <view class="spot-switch" v-if="spotCards.length">
@@ -121,9 +118,6 @@ import RouteOverview from '../../components/RouteOverview.vue'
 import TourRouteRepair from '../../components/TourRouteRepair.vue'
 import { isRouteChange, repairDefaults } from '../../common/route-planning.js'
 import TourXingyun from '../../components/tour-xingyun.vue'
-// #ifdef MP-WEIXIN
-import TourXfyun from '../../components/tour-xfyun.vue'
-// #endif
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { appendTourChatMessage } from '../../common/tour-chat-log.js'
 import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
@@ -160,9 +154,6 @@ var api = {
 
 export default {
   components: {NocturneConfirm,TourXingyun,RouteOverview,TourRouteRepair,
-    // #ifdef MP-WEIXIN
-    TourXfyun,
-    // #endif
   },
   data: function() {
     return {
@@ -341,8 +332,8 @@ export default {
         this.xingyunConnected=true;this.xingyunFailed=false;this.avatarMessage='';this.xingyunActive=true
         var pending=this._xingyunPending;if(pending&&this._xingyunGateway){this._xingyunPending='';this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:pending})}
       }
-      else if(event.state==='playing'){this.speaking=true;this.speechPaused=false;this.avatarMessage='星云数字人正在讲解';this.revealAnswer()}
-      else if(event.state==='ended'){this.speaking=false;this.avatarMessage=''}
+      else if(event.state==='playing'){if(!this._xingyunStartedAt)this._xingyunStartedAt=Date.now();this.speaking=true;this.speechPaused=false;this.avatarMessage='星云数字人正在讲解';this.revealAnswer()}
+      else if(event.state==='ended'){this.speaking=false;this._xingyunStartedAt=0;this.avatarMessage=''}
       else if(event.state==='error'){this.speaking=false;this.xingyunConnected=false;this.xingyunActive=false;this.xingyunFailed=true;this.avatarMessage=event.message||'星云连接失败，请重试'}
       else if(event.message)this.avatarMessage=event.message
     },
@@ -355,6 +346,10 @@ export default {
     pauseSpeech:function(text){
       if(text)this._lastSpoken=text
       this.voiceMuted=true;this.speechPaused=true;this.speaking=false
+      if(this.xingyunActive&&this._xingyunStartedAt){
+        this._xingyunOffset=Math.min((this._xingyunFullText||'').length,this._xingyunOffset+Math.max(0,(Date.now()-this._xingyunStartedAt)/1000*4))
+        this._xingyunStartedAt=0
+      }
       if(this._audio){try{if(this._audio.pause)this._audio.pause()}catch(e){}}
       else if(this.videoUrl){try{uni.createVideoContext('guide-speech-video',this).pause()}catch(e){}}
       else if(this.xingyunActive){this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()})}
@@ -364,6 +359,7 @@ export default {
       this.voiceMuted=false;this.speechPaused=false
       if(this._audio){try{this._audio.play();this.speaking=true;return}catch(e){}}
       if(this.videoUrl){try{uni.createVideoContext('guide-speech-video',this).play();this.speaking=true;return}catch(e){}}
+      if(this.xingyunActive&&this._xingyunFullText&&this._xingyunOffset<(this._xingyunFullText||'').length){this.speakXingyun(this._xingyunFullText.slice(this._xingyunOffset),true);return}
       if(pending)this.speakAnswer(pending)
     },
     revealAnswer:function(){
@@ -373,8 +369,8 @@ export default {
       this.loading=false;this.lastMsgId='bottom'
       this.refresh()
     },
-    speakAnswer:function(text){if(!text)return;this._lastSpoken=text;if(this.guideProvider==='xingyun'){this.speakXingyun(text);return}if(this.$refs.xfyun&&this.$refs.xfyun.sessionId){this.$refs.xfyun.speak(text);return}this.speakXingyun(text)},
-    speakXingyun:function(text){if(this.voiceMuted)return;if(!text)return;this._lastSpoken=text;if(!this._xingyunGateway||!this.xingyunActive){this._xingyunPending=text;if(this._xingyunGateway)this.connectXingyun();return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
+    speakAnswer:function(text){if(!text)return;this._lastSpoken=text;if(this.guideProvider==='xingyun'){this.speakXingyun(text);return}this.speakXingyun(text)},
+    speakXingyun:function(text,resume){if(this.voiceMuted)return;if(!text)return;if(!resume){this._lastSpoken=text;this._xingyunFullText=text;this._xingyunOffset=0}this._xingyunStartedAt=0;if(!this._xingyunGateway||!this.xingyunActive){this._xingyunPending=text;if(this._xingyunGateway)this.connectXingyun();return}this.xingyunPayload=Object.assign({},this.xingyunPayload,{id:Date.now(),gateway:this._xingyunGateway,command:'speak',text:text})},
     closeXingyun:function(){
       this._xingyunVersion=(this._xingyunVersion||0)+1;this._xingyunGateway='';this._xingyunPending=''
       if(this._xingyunClosePromise)return this._xingyunClosePromise
@@ -386,7 +382,7 @@ export default {
       return this._xingyunClosePromise
     },
     openXingyun: function() { uni.navigateTo({url:'/pages/xingyun/xingyun?sessionId='+this.sid}) },
-    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.speechPaused=false;this.videoUrl=''},
+    stopPlayback:function(){if(this.xingyunActive)this.xingyunPayload=Object.assign({},this.xingyunPayload,{command:'stop',text:'',id:Date.now()});this._xingyunPending='';if(this._audio){this._audio.destroy();this._audio=null}if(this._avatarTimer){clearTimeout(this._avatarTimer);this._avatarTimer=null}this._playbackVersion=(this._playbackVersion||0)+1;this.speaking=false;this.speechPaused=false;this.videoUrl='';this._xingyunStartedAt=0;this._xingyunOffset=0;this._xingyunFullText=''},
     updateAvatarMessage:function(){if(this.avatarMode==='audio'){this.avatarMessage='语音导览';return}var capability=this.avatarCapability&&this.avatarCapability[this.avatarMode];this.avatarMessage=capability?capability.message:'正在查询数字人服务状态'},
     videoError:function(){this.speaking=false;this.videoUrl='';this.avatarMessage='视频播放失败，请检查视频地址与网络';this.revealAnswer()},
     playAudio:function(value){this._audio=uni.createInnerAudioContext();var self=this,a=this._audio;a.src=assetUrl(value);a.onPlay(function(){self.speaking=true;self.speechPaused=false;self.revealAnswer()});function finish(){if(self._audio!==a){a.destroy();return}self.speaking=false;a.destroy();if(self._audio===a)self._audio=null}a.onEnded(finish);a.onError(function(){finish();self.revealAnswer();uni.showToast({title:'语音播放失败',icon:'none'})});a.play()},
@@ -395,7 +391,9 @@ export default {
     fixImg:function(u){if(!u)return'';return assetUrl(u)},
     fmtTime: function(t) {
       if (!t) return ''
-      try { return new Date(t).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) } catch(e) { return '' }
+      const date = new Date(typeof t === 'string' ? t.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T') : t)
+      if (isNaN(date.getTime())) return ''
+      return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0')
     },
     prevSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx-1+this.spotCards.length)%this.spotCards.length; this.mediaExpanded=false }},
     nextSpot: function(){ if(this.spotCards.length>1){ this.spotIdx=(this.spotIdx+1)%this.spotCards.length; this.mediaExpanded=false }},
@@ -478,9 +476,6 @@ export default {
           self._revealTimer=setTimeout(function(){self.revealAnswer()},3500)
           // TTS自动播报
           if(playbackVersion===self._playbackVersion){
-            // #ifdef MP-WEIXIN
-            if(self.$refs.xfyun&&self.$refs.xfyun.sessionId){if(!self.voiceMuted)self.$refs.xfyun.speak(d.data&&d.data.message);self.revealAnswer();return}
-            // #endif
             // #ifdef APP-PLUS
             if(self.guideProvider==='xingyun')self.speakAnswer(d.data&&d.data.message)
             // #endif
@@ -689,9 +684,6 @@ export default {
   onBackPress:function(){if(this.repairOpen){if(!this.$refs.routeRepair?.applying)this.repairOpen=false;return true}if(this.showRouteInfo){this.showRouteInfo=false;return true}},
   onUnload:function(){this._translationVersion=(this._translationVersion||0)+1;this._turnVersion=(this._turnVersion||0)+1;this._liveVersion=(this._liveVersion||0)+1;this._chatTask?.abort();this.repairOpen=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();this.stopGps();if(uni.offKeyboardHeightChange&&this._kbListener)uni.offKeyboardHeightChange(this._kbListener)},
   onHide:function(){this.keyboardHeight=0;this._turnVersion=(this._turnVersion||0)+1;this._chatTask?.abort();this.loading=false;this.repairOpen=false;this.showRouteInfo=false;this.tourVisible=false;this.cancelRecord();this.stopPlayback();this.closeXingyun();
-    // #ifdef MP-WEIXIN
-    if(this.$refs.xfyun)this.$refs.xfyun.close()
-    // #endif
   },
   onShow:async function(){this.tourVisible=true;if(this._xingyunClosePromise)await this._xingyunClosePromise;if(this.guideProvider==='xingyun')this.connectXingyun()},
   onLoad: function(opts) {
@@ -737,9 +729,9 @@ export default {
 
 /* 导航 */
 .nav{position:relative;z-index:3;display:flex;align-items:center;padding:4rpx 20rpx;gap:12rpx;align-items:flex-start;flex-shrink:0}
-.nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
+.nav-back{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ng-glass-blue-bg);box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.9);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);font-size:40rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-title{flex:1;font-size:36rpx;font-weight:600;color:var(--ng-text);letter-spacing:4rpx;font-family:var(--app-font-family);text-align:center}
-.nav-end{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.1);font-size:30rpx;color:var(--ng-secondary);flex-shrink:0}
+.nav-end{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ng-glass-blue-bg);box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.9);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);font-size:30rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-gps{width:56rpx;height:56rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.06);font-size:26rpx;color:var(--ng-secondary);flex-shrink:0}
 .nav-gps.on{background:rgba(99,102,241,0.25);box-shadow:0 0 0 4rpx rgba(99,102,241,0.08)}
 
@@ -819,15 +811,15 @@ export default {
 .bottom-bar{position:absolute;left:0;right:0;bottom:0;z-index:2;flex-shrink:0;border-top:1rpx solid var(--ng-border);background:var(--ng-surface);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* 输入区尺寸与 AI 小导游页保持一致（84/88rpx、胶囊圆角） */
 .input-row{display:flex;align-items:flex-end;gap:12rpx;padding:16rpx 18rpx 18rpx}
-.voice-btn{width:84rpx;height:84rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,0.15);flex-shrink:0}
+.voice-btn{width:84rpx;height:84rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ng-glass-blue-bg);box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.9);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);flex-shrink:0}
 .voice-btn .iconfont{font-size:32rpx;color:var(--ng-secondary)}
-.voice-btn.rec{background:rgba(99,102,241,0.18)}
+.voice-btn.rec{background:#e6f0ff}
 .voice-btn.rec .iconfont{color:var(--ng-text)}
-.voice-hold-btn{flex:1;height:88rpx;display:flex;align-items:center;justify-content:center;border:1rpx dashed rgba(99,102,241,0.25);border-radius:44rpx;background:rgba(99,102,241,0.08);font-size:28rpx;color:var(--ng-secondary);font-weight:600;user-select:none}
-.voice-hold-btn.pressing{background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);border-style:solid}
+.voice-hold-btn{flex:1;height:88rpx;display:flex;align-items:center;justify-content:center;border:1rpx dashed rgba(182,207,238,.9);border-radius:44rpx;background:var(--ng-glass-blue-bg);font-size:28rpx;color:var(--ng-soft-blue-text);font-weight:600;user-select:none;box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.9)}
+.voice-hold-btn.pressing{background:rgba(230,240,255,.85);color:var(--ng-soft-blue-text);border-style:solid;border-color:rgba(182,207,238,.9)}
 @keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0.15)}50%{box-shadow:0 0 0 12rpx rgba(99,102,241,0.15)}}
 .msg-input{flex:1;height:88rpx;min-height:88rpx;padding:20rpx 24rpx;border:1rpx solid var(--ng-border);border-radius:28rpx;background:var(--ng-surface);font-size:28rpx;line-height:1.5;color:var(--ng-text);box-sizing:border-box;overflow-y:auto;max-height:360rpx}
-.send-btn{height:88rpx;padding:0 32rpx;line-height:88rpx;border-radius:44rpx;background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(99,102,241,0.18));color:var(--ng-text);font-size:28rpx;font-weight:700;flex-shrink:0}
+.input-row .send-btn{height:88rpx;padding:0 32rpx;line-height:88rpx;border-radius:44rpx;background:var(--ng-glass-blue-bg);color:var(--ng-soft-blue-text);box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.92);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);font-size:28rpx;font-weight:700;flex-shrink:0}
 .send-btn.disabled{opacity:.35}
 .spot-switch{flex-shrink:0}.ss-desc{line-height:1.4}.ss-card{align-items:center}.ss-img{height:80rpx;width:80rpx}
 
@@ -839,7 +831,7 @@ export default {
 .tp-node::after{content:'';position:absolute;top:15rpx;left:calc(50% + 16rpx);right:calc(-50% + 16rpx);width:auto;height:2rpx;background:var(--ng-border)}
 .tp-node:last-child::after{display:none}
 .tp-dot{width:28rpx;height:28rpx;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ng-surface);border:2rpx solid var(--ng-border);z-index:1}
-.tp-node.active .tp-dot{border-color:rgba(99,102,241,0.6);background:rgba(99,102,241,0.38);box-shadow:0 0 0 6rpx rgba(99,102,241,0.12)}
+.tp-node.active .tp-dot{border-color:rgba(190,213,245,.7);background:var(--ng-glass-blue-bg);box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.9)}
 .tp-node.done .tp-dot{border-color:var(--ng-border);background:var(--ng-surface)}
 .tp-check{font-size:18rpx;color:var(--ng-secondary);font-weight:700}
 .tp-now{font-size:14rpx;color:var(--ng-text)}

@@ -49,6 +49,38 @@ class StationServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()['token']
 
+    def test_app_pickup_requires_login_and_preserves_plan_and_owner(self):
+        plan = self.plans()[0]
+        shared = self.client.post(self.prefix + '/share', json={'plan_id': plan['plan_id']}, headers=self.headers).json()
+        self.assertEqual(len(shared['pickup_code']), 12)
+        body = {'token': shared['pickup_code'], 'receipt': 'a' * 48}
+        self.assertEqual(self.client.post('/service-stations/claim/receive-app', json=body).status_code, 401)
+        self.client.app.dependency_overrides[api.get_current_user_info] = lambda: 42
+        result = self.client.post('/service-stations/claim/receive-app', json=body)
+        self.assertEqual(result.status_code, 200, result.text)
+        sid = result.json()['session_id']
+        with Session(self.engine) as db:
+            tour = db.get(TourSessionInfo, sid)
+            self.assertEqual(tour.user_id, 42)
+            prefs = json.loads(tour.visitor_preferences)
+            self.assertEqual(prefs['spot_ids'], [s['spot_id'] for s in plan['route']['stops']])
+            self.assertEqual(tour.guide_id, plan['guide']['guide_id'])
+        again = self.client.post('/service-stations/claim/receive-app', json={**body, 'receipt': 'b' * 48})
+        self.assertEqual(again.json()['session_id'], sid)
+        self.client.app.dependency_overrides[api.get_current_user_info] = lambda: 43
+        self.assertEqual(self.client.post('/service-stations/claim/receive-app', json=body).status_code, 409)
+
+    def test_expired_pickup_code_cannot_create_an_app_tour(self):
+        from server.base.models.station_models import StationClaimCode
+        shared = self.client.post(self.prefix + '/share', json={'plan_id': self.plans()[0]['plan_id']}, headers=self.headers).json()
+        with Session(self.engine) as db:
+            code = db.get(StationClaimCode, api.digest(shared['pickup_code']))
+            code.expires_at = datetime.utcnow() - timedelta(seconds=1)
+            db.add(code); db.commit()
+        self.client.app.dependency_overrides[api.get_current_user_info] = lambda: 42
+        result = self.client.post('/service-stations/claim/receive-app', json={'token': shared['pickup_code'], 'receipt': 'a' * 48})
+        self.assertEqual(result.status_code, 410)
+
     def test_route_chat_edits_saved_plan_and_rejects_foreign_plan(self):
         plan = self.plans(budget=240, spot_ids=[SPOTS[0]['spot_id'], SPOTS[1]['spot_id']])[0]
         remove = plan['route']['stops'][0]

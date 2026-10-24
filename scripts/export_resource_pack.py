@@ -94,6 +94,9 @@ def export_pack(root, engine, output):
     for name, rows in tables.items():
         for row in rows:
             for field in ASSETS.get(name, []):
+                # Legacy scenic entries store Markdown itself instead of a file path.
+                if field == 'instruction' and ('\n' in str(row.get(field, '')) or str(row.get(field, '')).startswith(('#', '**'))):
+                    continue
                 source = local_asset(row.get(field, ''), root)
                 if source is not None:
                     row[field] = add_file(source)

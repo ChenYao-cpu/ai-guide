@@ -11,7 +11,7 @@ withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false })
 <style scoped>
 .app-language{display:inline-flex;gap:3px;padding:4px;border-radius:14px;background:var(--surface-subtle,#f2f5f9);flex:none}
 button{border:0;background:transparent;color:var(--text-secondary,#58677e);font:inherit;font-size:14px;padding:7px 10px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:background .18s,color .18s}
-button[aria-pressed="true"]{background:#eeedff;color:#5042eb}
+button[aria-pressed="true"]{background:#eeedff;color:var(--text-secondary,#58677e)}
 button:focus-visible{outline:2px solid #5042eb;outline-offset:2px}
 button:disabled{opacity:.5;cursor:wait}
 </style>

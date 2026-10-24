@@ -64,3 +64,11 @@ class StationClaim(SQLModel, table=True):
     mobile_session_id: int | None = None
     claimed_at: datetime | None = None
     receipt_hash: str = ''
+
+
+class StationClaimCode(SQLModel, table=True):
+    """Installation fallback: store only a hash of the human-readable pickup code."""
+    __tablename__ = 'station_claim_code'
+    code_hash: str = Field(primary_key=True)
+    claim_hash: str = Field(index=True)
+    expires_at: datetime = Field(index=True)

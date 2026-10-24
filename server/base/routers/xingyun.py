@@ -205,7 +205,7 @@ def webview_url(tour_id: int, x_tour_access: str = Header(default="")):
     origin = os.getenv("XINGYUN_WEB_ORIGIN", "").strip().rstrip("/")
     parsed = urlsplit(origin)
     if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
-        raise HTTPException(503, "待配置：管理员需设置星云网页 HTTPS 地址及微信业务域名")
+        raise HTTPException(503, "待配置：管理员需设置星云导览网页 HTTPS 地址")
     return {"url": f"{origin}/m/tour/{tour_id}?framing=half#avatarToken={quote(x_tour_access, safe='')}"}
 
 

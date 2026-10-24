@@ -10,7 +10,7 @@ describe('景点坐标与底图', () => {
     expect(lng).toBeCloseTo(116.280059, 8)
     expect(lng - spot.longitude).toBeGreaterThan(0.006)
   })
-  it.each(Object.entries(locations.spots))('%s 的小程序定位还原为 GPS 后无坐标系距离偏差', (_name, spot) => {
+  it.each(Object.entries(locations.spots))('%s 的移动端定位还原为 GPS 后无坐标系距离偏差', (_name, spot) => {
     const gcj = wgs84ToGcj02(spot.latitude, spot.longitude)
     const gps = gcj02ToWgs84(...gcj)
     expect(gps[0]).toBeCloseTo(spot.latitude, 8)

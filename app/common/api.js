@@ -1,6 +1,6 @@
 /**
- * 小程序 API 层
- * 使用 module.exports 而非 ES export（兼容小程序webpack）
+ * App API 层
+ * 对接真实后端服务
  */
 import { BASE_URL } from './config.js'
 

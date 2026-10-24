@@ -50,6 +50,18 @@ const router = createRouter({
     //   游客交互端 - 手机版（免登录）
     // ==========================================
     {
+      path: '/m/onboarding',
+      name: 'MobileOnboarding',
+      component: () => import('@/views/onboarding/MobileOnboardingView.vue'),
+      meta: { title: '欢迎使用', requiresAuth: false },
+    },
+    {
+      path: '/m/auth',
+      name: 'MobileAuth',
+      component: () => import('@/views/auth/MobileAuthView.vue'),
+      meta: { title: '登录', requiresAuth: false },
+    },
+    {
       path: '/m/home',
       name: 'MobileHome',
       component: () => import('@/views/visitor/MobileHomeView.vue'),
@@ -318,6 +330,26 @@ router.beforeEach((to, from, next) => {
   if (isMobileDevice() && to.name === 'VisitorTour' && to.query['desktop'] !== '1') {
     next({ name: 'MobileTour', params: to.params })
     return
+  }
+
+  // A scanned station claim is personal material: first-time visitors see the
+  // introduction and sign in before the blueprint is opened.
+  if (to.name === 'StationReceive' && typeof to.hash === 'string' && to.hash.includes('claim=')) {
+    const tokenStore = useTokenStore()
+    let onboarded = false
+    try {
+      onboarded = localStorage.getItem('zhiyou.onboarding.v1.completed') === 'true'
+    } catch {
+      /* Storage may be unavailable in private webviews; sign-in still applies. */
+    }
+    if (!onboarded) {
+      next({ name: 'MobileOnboarding', query: { redirect: to.fullPath } })
+      return
+    }
+    if (!tokenStore.token.access_token) {
+      next({ name: 'MobileAuth', query: { redirect: to.fullPath } })
+      return
+    }
   }
 
   if (to.matched.some((r) => r.meta?.requiresAuth)) {

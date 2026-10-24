@@ -62,7 +62,7 @@ export default {
         { title: 'Every view\nhas a story.', alt: 'A welcoming digital tour guide' },
         { title: 'Stay curious.\nJust ask.', alt: 'An AI companion with a travel journal' },
       ] : [
-        { title: '想去哪里\n就从哪里出发', alt: '园林、石桥与连接景点的游览路线插画' },
+        { title: '想去哪里\n就从这里出发', alt: '园林、石桥与连接景点的游览路线插画' },
         { title: '山水有故事\n一路讲给你听', alt: '向游客招手的数字人导游插画' },
         { title: '旅途有疑问\n随时问小导游', alt: 'AI 小导游与旅行手账插画' },
       ]

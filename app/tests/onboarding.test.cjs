@@ -31,6 +31,7 @@ function harness(file, initial = {}, route = '') {
   vm.createContext(context)
   const helpers = fs.readFileSync(path.join(root, 'common/onboarding.js'), 'utf8').replace(/export /g, '')
   vm.runInContext(helpers, context)
+  vm.runInContext(fs.readFileSync(path.join(root, 'common/station-claim.js'), 'utf8').replace(/export /g, ''), context)
   const script = fs.readFileSync(path.join(root, file), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]
   vm.runInContext(script.replace(/^import .*$/gm, '').replace('export default', 'globalThis.options ='), context)
   const options = context.options
@@ -121,7 +122,7 @@ test('the welcome page switches between Chinese and English copy in place', () =
   const h = harness('pages/onboarding/onboarding.vue')
   h.options.onLoad.call(h.state)
   assert.equal(h.state.english, false)
-  assert.equal(h.state.slides[0].title, '想去哪里\n就从哪里出发')
+  assert.equal(h.state.slides[0].title, '想去哪里\n就从这里出发')
   h.state.setLanguage('en')
   assert.equal(h.state.english, true)
   assert.equal(h.storage.language, 'en')
@@ -137,7 +138,7 @@ test('the welcome page switches between Chinese and English copy in place', () =
   h.state.toggleLanguage()
   assert.equal(h.state.english, false)
   assert.equal(h.storage.language, 'zh')
-  assert.equal(h.state.slides[0].title, '想去哪里\n就从哪里出发')
+  assert.equal(h.state.slides[0].title, '想去哪里\n就从这里出发')
 })
 
 test('skip lifts away and reveals sign-in from the skip button', () => {
@@ -168,7 +169,7 @@ test('skip and subsequent launches preserve signed-in accounts and choose the co
   const reopened = harness('pages/onboarding/onboarding.vue', h.storage)
   reopened.options.onLoad.call(reopened.state)
   assert.equal(reopened.navigation[0].url, '/pages/tabs/tabs?tab=tour')
-  const oldProvider = harness('pages/onboarding/onboarding.vue', { ...account, login_provider: 'weixin' })
+  const oldProvider = harness('pages/onboarding/onboarding.vue', { ...account, login_provider: 'legacy-login' })
   oldProvider.state.finish(false)
   assert.equal(oldProvider.navigation[0].url, '/pages/auth/auth?fromOnboarding=1')
 })

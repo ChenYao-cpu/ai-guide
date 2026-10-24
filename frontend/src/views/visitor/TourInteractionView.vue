@@ -1,5 +1,5 @@
 <template>
-  <main class="tour-interaction-container" :class="{ 'large-reading': largeReading }">
+  <main class="tour-interaction-container" :class="{ 'large-reading': largeReading, 'mobile-tools-open': mobileToolsOpen, 'keyboard-open': keyboardOpen }" :style="mobileViewportStyle">
     <header class="tour-banner">
       <div class="banner-left">
         <h1 class="banner-title"><BrandLogo /></h1>
@@ -38,8 +38,8 @@
       </div>
       <div class="banner-right">
         <el-button plain :disabled="sessionLoading || !!sessionError" @click="routeMapOpen=true">{{ $t('查看路线') }}</el-button>
-        <el-button plain :disabled="sessionLoading || !!sessionError || switchingSpot" @click="openRepair('')">{{ $t('调整行程') }}</el-button>
-        <LanguageSwitch :disabled="disableInput || isRecording || recognizing" />
+        <el-button class="mobile-secondary" plain :disabled="sessionLoading || !!sessionError || switchingSpot" @click="openRepair('')">{{ $t('调整行程') }}</el-button>
+        <LanguageSwitch class="mobile-secondary" :disabled="disableInput || isRecording || recognizing" />
         <el-tooltip
           :content="$t(gpsEnabled ? '定位已开启，接近景点时自动播报' : '开启定位，接近景点时自动播报')"
           placement="bottom"
@@ -58,6 +58,7 @@
             : '距' + closestSpot.spot_name + closestSpot.distance + '米')
         }}</span>
         <el-button type="danger" plain @click="handleEndTour">{{ $t("结束导览") }}</el-button>
+        <button class="mobile-more" type="button" :aria-expanded="mobileToolsOpen" @click="mobileToolsOpen = !mobileToolsOpen">{{ $t(mobileToolsOpen ? '收起' : '更多') }}</button>
       </div>
     </header>
 
@@ -296,6 +297,23 @@ import { useGeolocation } from '@/composables/useGeolocation'
 import { formatTourMessage, isKnowledgeSourceUrl } from '@/utils/tourPresentation'
 
 const router = useRouter()
+const mobileToolsOpen = ref(false)
+const keyboardOpen = ref(false)
+const mobileViewportStyle = ref<Record<string, string>>({})
+function syncMobileViewport() {
+  const viewport = window.visualViewport
+  if (window.innerWidth > 767 || !viewport) {
+    mobileViewportStyle.value = {}
+    keyboardOpen.value = false
+    return
+  }
+  const editing = document.activeElement?.matches('textarea, input, [contenteditable="true"]')
+  keyboardOpen.value = !!editing && window.innerHeight - viewport.height > 120
+  mobileViewportStyle.value = {
+    '--tour-viewport-height': `${viewport.height}px`,
+    '--tour-viewport-top': `${viewport.offsetTop}px`,
+  }
+}
 const planningHome = computed(()=>router.currentRoute.value.path.startsWith('/m/')?'/m/home':'/station/summer-palace-east')
 const props = defineProps<{ sessionId: string }>()
 
@@ -788,11 +806,22 @@ watch(()=>props.sessionId,()=>{
   void refreshSessionInfo()
 })
 onMounted(() => {
+  syncMobileViewport()
+  window.addEventListener('resize', syncMobileViewport)
+  window.visualViewport?.addEventListener('resize', syncMobileViewport)
+  window.visualViewport?.addEventListener('scroll', syncMobileViewport)
+  document.addEventListener('focusin', syncMobileViewport)
+  document.addEventListener('focusout', syncMobileViewport)
   window.addEventListener('online',recoverOnline)
   receiveAvatarToken(Number(props.sessionId))
   refreshSessionInfo()
 })
 onUnmounted(() => {
+  window.removeEventListener('resize', syncMobileViewport)
+  window.visualViewport?.removeEventListener('resize', syncMobileViewport)
+  window.visualViewport?.removeEventListener('scroll', syncMobileViewport)
+  document.removeEventListener('focusin', syncMobileViewport)
+  document.removeEventListener('focusout', syncMobileViewport)
   disposed = true
   sessionVersion++;sessionController?.abort();window.removeEventListener('online',recoverOnline)
   chatController?.abort()
@@ -1564,6 +1593,71 @@ onUnmounted(() => {
   .composer-actions :deep(.el-button){height:32px;padding:0 7px;margin:0;font-size:13px}
 }
 @media (max-width:767px) and (max-height:650px){.tour-main{grid-template-rows:145px minmax(0,1fr)}.reading-tools{max-height:28px}.chat-welcome p{display:none}}
+.mobile-more { display: none; }
+@media (max-width: 767px) {
+  .tour-interaction-container {
+    position: fixed;
+    inset: var(--tour-viewport-top, 0px) 0 auto;
+    height: var(--tour-viewport-height, 100dvh);
+    padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  .tour-banner { padding: 6px 10px; gap: 4px; }
+  .banner-right { justify-content: space-between; gap: 4px; }
+  .banner-right :deep(.el-button), .mobile-more {
+    min-height: 44px; height: auto; margin: 0; padding: 0 10px; font-size: 14px;
+  }
+  .mobile-more {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 12px; background: var(--glass); color: var(--text); font: inherit;
+  }
+  .tour-interaction-container:not(.mobile-tools-open) .banner-right :deep(.mobile-secondary),
+  .tour-interaction-container:not(.mobile-tools-open) .persona-select,
+  .tour-interaction-container:not(.mobile-tools-open) .reading-tools { display: none; }
+  .mobile-tools-open .banner-right { justify-content: flex-start; }
+  .mobile-tools-open .banner-right :deep(.language-switch button) { min-height: 44px; }
+  .flow-node { min-height: 44px; box-sizing: border-box; }
+  .banner-route-flow { min-width: 0; scrollbar-width: none; }
+  .banner-route-flow::-webkit-scrollbar, .quick-questions::-webkit-scrollbar { display: none; }
+  .flow-node strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tour-main { grid-template-rows: clamp(180px, 30dvh, 290px) minmax(0, 1fr); }
+  .quick-questions { scrollbar-width: none; overscroll-behavior-x: contain; gap: 8px; }
+  .quick-questions button { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+  .chat-heading { min-height: 36px; box-sizing: border-box; }
+  .msg-content { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .msg-text { font-size: 16px; overflow-wrap: anywhere; }
+  .chat-area { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+  .input-row { flex-wrap: wrap; gap: 8px; }
+  .input-row :deep(.el-textarea) { flex-basis: 100%; }
+  .input-row :deep(.el-textarea__inner) { font-size: 16px; max-height: 100px; }
+  .composer-actions { width: 100%; max-width: none; flex-wrap: nowrap; gap: 8px; }
+  .composer-actions :deep(.el-button) { min-height: 44px; height: auto; flex: 1; margin: 0; padding: 8px 12px; font-size: 15px; }
+  .keyboard-open .tour-main { grid-template-rows: 90px minmax(0, 1fr); }
+  .keyboard-open .banner-route-flow .later-stop,
+  .keyboard-open .banner-route-flow > .flow-arrow:last-of-type,
+  .keyboard-open .quick-questions,
+  .keyboard-open .reading-tools { display: none; }
+  .keyboard-open .tour-banner { gap: 0; }
+  .keyboard-open .stage-heading { top: 6px; }
+}
+@media (max-width: 767px) and (max-height: 650px) {
+  .tour-main { grid-template-rows: 110px minmax(0, 1fr); }
+  .quick-questions { display: none; }
+}
+@media (max-width: 899px) and (max-height: 500px) and (orientation: landscape) {
+  .tour-interaction-container { padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+  .tour-banner { padding: 4px 10px; margin-bottom: 6px; gap: 8px; }
+  .banner-left { min-width: 0; gap: 8px; }
+  .banner-title :deep(.brand-logo-wordmark), .banner-title :deep(.brand-logo-english),
+  .banner-route-flow .later-stop { display: none; }
+  .banner-route-flow { border: 0; padding: 0; min-width: 0; }
+  .banner-right { position: static; flex-wrap: wrap; gap: 4px; }
+  .banner-right :deep(.el-button) { margin: 0; min-height: 40px; padding: 0 8px; }
+  .tour-main { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
+  .tour-left, .tour-side, .tour-right { min-height: 0; }
+  .quick-questions, .reading-tools { display: none; }
+  .chat-heading { padding: 6px 10px; }
+  .chat-input-area { padding: 6px 10px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   :deep(*) {

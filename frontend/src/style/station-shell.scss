@@ -4,7 +4,13 @@ body:has(.station-app),
 #app:has(.station-app),
 html:has(.station-receive),
 body:has(.station-receive),
-#app:has(.station-receive) {
+#app:has(.station-receive),
+html:has(.m-onboarding),
+body:has(.m-onboarding),
+#app:has(.m-onboarding),
+html:has(.m-auth),
+body:has(.m-auth),
+#app:has(.m-auth) {
   min-width: 0 !important;
   width: 100% !important;
 }
