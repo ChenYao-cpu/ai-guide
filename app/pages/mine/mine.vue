@@ -83,8 +83,8 @@
 <script>
 import NocturneConfirm from '../../components/NocturneConfirm.vue'
 import AuthPage from '../auth/auth.vue'
-import { BASE_URL, assetUrl } from '../../common/config.js'
-import { CLAIM_ROUTE, saveClaim } from '../../common/station-claim.js'
+import { BASE_URL, SERVER_ORIGIN, assetUrl, isLocalStationOrigin } from '../../common/config.js'
+import { CLAIM_ROUTE, clearPendingClaim, saveClaim } from '../../common/station-claim.js'
 import { localizeChatMessages, warmChatTranslations, getChatTranslationCache } from '../../common/chat-language.js'
 import { LANGUAGE_STORAGE_KEY, translateTour } from '../../common/tour-language.js'
 export default {
@@ -135,7 +135,7 @@ export default {
     },
     goTab:function(p){uni.reLaunch({url:p})},
     goHistory:function(){uni.navigateTo({url:'/pages/mine/history'})},
-    // 「我的」右上角扫码：识别电脑网页上的路线领取码，交给领取页直接接收网页上刚选好的路线。
+    // 「我的」右上角扫码：识别电脑网页上的路线领取码，直接领取并进入导览，不再停在领取页。
     scanRoute: function () {
       if (this.scanning) return
       var self = this
@@ -145,15 +145,54 @@ export default {
           var claim
           try { claim = saveClaim(result && result.result) }
           catch (e) { uni.showToast({ title: self.t('请扫描网页上的路线领取码'), icon: 'none' }); return }
-          var query = 'claim=' + encodeURIComponent(claim.token || '')
-          if (claim.origin) query += '&server=' + encodeURIComponent(claim.origin)
-          uni.navigateTo({ url: CLAIM_ROUTE + '?' + query, fail: function () { uni.showToast({ title: self.t('打开领取页失败，请重试'), icon: 'none' }) } })
+          if (claim.origin && !isLocalStationOrigin(claim.origin)) { uni.showToast({ title: self.t('只允许连接局域网电脑的18000端口'), icon: 'none' }); return }
+          uni.showLoading({ title: self.t('正在领取路线…'), mask: true })
+          self.receiveScannedClaim(claim).then(function (data) {
+            var sid = data.session_id
+            if (data.avatar_access_token) uni.setStorageSync('xingyun-tour-' + sid, data.avatar_access_token)
+            clearPendingClaim()
+            uni.hideLoading()
+            uni.showToast({ title: self.t('领取成功，正在进入导览'), icon: 'none', duration: 900 })
+            uni.reLaunch({ url: '/pages/tour/tour?sessionId=' + sid })
+          }).catch(function (err) {
+            uni.hideLoading()
+            if (err.login) { uni.reLaunch({ url: '/pages/auth/auth' }); return }
+            // 只有二维码来自另一台电脑、需要切换地址并重新登录时，才交给领取页处理确认流程。
+            if (claim.origin && claim.origin !== SERVER_ORIGIN) {
+              var query = 'claim=' + encodeURIComponent(claim.token || '') + '&server=' + encodeURIComponent(claim.origin)
+              uni.navigateTo({ url: CLAIM_ROUTE + '?' + query, fail: function () { uni.showToast({ title: self.t('打开领取页失败，请重试'), icon: 'none' }) } })
+              return
+            }
+            uni.showToast({ title: err.message || self.t('领取失败，请重试'), icon: 'none', duration: 2500 })
+          })
         },
         fail: function (err) {
           // 用户主动取消时保持安静，只有真正失败（如相机权限）才提示。
           if (String((err && err.errMsg) || '').indexOf('cancel') === -1) uni.showToast({ title: self.t('扫码失败，请检查相机权限'), icon: 'none' })
         },
         complete: function () { self.scanning = false },
+      })
+    },
+    // 静默领取：同一个服务电脑上直接建行程并返回 session_id，不经过领取页。
+    receiveScannedClaim: function (claim) {
+      var self = this
+      var receipt = uni.getStorageSync('station-app-receipt')
+      if (!receipt) {
+        receipt = Array.from({ length: 48 }, function () { return Math.floor(Math.random() * 16).toString(16) }).join('')
+        uni.setStorageSync('station-app-receipt', receipt)
+      }
+      return new Promise(function (resolve, reject) {
+        uni.request({ url: BASE_URL + '/service-stations/claim/receive-app', method: 'POST', timeout: 20000,
+          header: { Authorization: 'Bearer ' + (uni.getStorageSync('token') || '') },
+          data: { token: claim.token, receipt: receipt },
+          success: function (r) {
+            if (r.statusCode === 200 && r.data && r.data.session_id) { resolve(r.data); return }
+            if (r.statusCode === 401) { reject({ login: true, message: self.t('登录已过期，请重新登录') }); return }
+            var detail = r.data && r.data.detail
+            reject({ status: r.statusCode, message: typeof detail === 'string' ? detail : self.t('领取失败，请重试') })
+          },
+          fail: function () { reject({ message: self.t('无法连接服务电脑，请确认在同一个 Wi-Fi 且后端已启动') }) },
+        })
       })
     },
     handleLogout: function () { this.showLogout=true },

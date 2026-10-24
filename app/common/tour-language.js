@@ -103,6 +103,12 @@ const appEnglish = {
   '请扫描网页上的路线领取码': 'Scan the route pickup code on the web page',
   '打开领取页失败，请重试': 'Could not open the pickup page. Please try again.',
   '扫码失败，请检查相机权限': 'Scan failed. Please check camera permission.',
+  '正在领取路线…': 'Receiving the route…',
+  '领取成功，正在进入导览': 'Route received. Opening the tour…',
+  '登录已过期，请重新登录': 'Your sign-in has expired. Please sign in again.',
+  '无法连接服务电脑，请确认在同一个 Wi-Fi 且后端已启动': 'Cannot reach the service computer. Check the Wi-Fi and that the backend is running.',
+  '领取失败，请重试': 'Could not receive the route. Please try again.',
+  '只允许连接局域网电脑的18000端口': 'Only a computer on the local network (port 18000) is allowed.',
 }
 
 export function translateTour(value, language, params = {}) {
