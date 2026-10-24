@@ -168,7 +168,7 @@ const sharePreviewUrl = computed(() =>
 const remainingSeconds = computed(() =>
   Math.max(0, Math.ceil((shareExpiry.value - clock.value) / 1000))
 )
-// 有效期是 24 小时，按总分钟显示会出现 “1439:51” 这种像小时数的误导值；统一显示 时:分:秒。
+// 有效期 15 分钟：按 分:秒 显示；若以后调长，超过 1 小时会显示 时:分:秒。
 const shareRemainingLabel = computed(() => {
   const total = Math.max(0, remainingSeconds.value)
   const hours = Math.floor(total / 3600)

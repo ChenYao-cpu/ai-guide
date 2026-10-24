@@ -359,7 +359,7 @@ def share_plan(visit_id: str, body: ShareInput, x_station_token: str = Header(de
             raise HTTPException(409, '路线或服务站配置已更新，请重新规划后领取')
         token = secrets.token_urlsafe(32)
         row = StationClaim(claim_hash=digest(token), station_id=station.station_id, plan_id=plan.plan_id,
-            snapshot=plan.snapshot, expires_at=utcnow() + timedelta(hours=24))
+            snapshot=plan.snapshot, expires_at=utcnow() + timedelta(minutes=15))
         alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         while True:
             code = ''.join(secrets.choice(alphabet) for _ in range(12))
