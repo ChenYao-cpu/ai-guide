@@ -198,6 +198,7 @@ export function shareStationPlan(visit: StationVisit, plan_id: string, signal?: 
   return request_handler
     .post<{
       token: string
+      pickup_code: string
       expires_at: string
     }>(
       '/service-stations/visits/' + visit.visit_id + '/share',

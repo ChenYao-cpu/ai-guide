@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 node_modules/
+/.playwright-mcp/
+/outputs/
+/phone-*.png
+/mobile-before.png
+/mobile-after.png
+/receive-after.png
 __pycache__/
 *.py[cod]
 *.log
@@ -19,6 +25,7 @@ project.private.config.json
 *.zip
 !/resources/local-resources.zip
 !/resources/scenic-images.zip
+!/resources/app-lastest-resources.zip
 *.7z
 *.tgz
 /work_dirs/

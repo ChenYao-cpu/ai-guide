@@ -25,7 +25,7 @@ export default {
         complete: function() { self.loading = false },
       })
     },
-    failed: function() { this.src = ''; this.message = '网页加载失败，请确认 HTTPS 地址及微信业务域名已配置' },
+    failed: function() { this.src = ''; this.message = '网页加载失败，请确认导览网页地址已配置' },
     back: function() { uni.navigateBack() },
   },
 }

@@ -5,7 +5,6 @@
   "dependencies": {
     "vue": "^3.4.0",
     "@dcloudio/uni-app": "latest",
-    "@dcloudio/uni-mp-weixin": "latest",
     "@dcloudio/uni-ui": "latest"
   }
 }

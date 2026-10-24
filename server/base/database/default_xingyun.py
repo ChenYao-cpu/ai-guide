@@ -11,7 +11,7 @@ from ..models.xingyun import XingyunBootstrapState, XingyunGuideBinding
 
 
 def apply_env_english_app():
-    """把 .env 里的英文星云应用凭据写入默认导游的绑定（每次启动覆盖为环境变量值）。"""
+    """仅补齐缺失的英文绑定；已有管理员配置优先。"""
     app_id = os.getenv("XINGYUN_APP_ID_EN", "").strip()
     secret = os.getenv("XINGYUN_APP_SECRET_EN", "").strip()
     if not app_id or not secret:
@@ -24,6 +24,8 @@ def apply_env_english_app():
         binding = db.get(XingyunGuideBinding, state.guide_id)
         if binding is None:
             logger.warning("英文星云应用未应用：默认导游没有应用绑定")
+            return
+        if binding.app_id_en and binding.secret_encrypted_en:
             return
         from ..modules.xingyun_access import encrypt_secret
         binding.app_id_en = app_id[:200]

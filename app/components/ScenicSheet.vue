@@ -2,7 +2,7 @@
   <view class="scenic-sheet-overlay" @tap="close">
     <view class="scenic-sheet-shade" @tap.stop="close" :style="{opacity:progress,transition:dragging?'none':undefined}"></view>
     <view class="scenic-sheet-panel" :class="{fit: fitContent}" :style="panelStyle" @tap.stop="" @touchstart="start" @touchmove="move" @touchend="end" @touchcancel="cancel">
-      <view class="scenic-sheet-drag-zone" @touchstart.stop="start($event,true)"><view class="scenic-sheet-grip"></view></view>
+      <view class="scenic-sheet-drag-zone" @touchstart.stop="start($event,true)" @touchmove.stop.prevent="move" @touchend.stop="end" @touchcancel.stop="cancel"><view class="scenic-sheet-grip"></view></view>
       <slot></slot>
     </view>
   </view>

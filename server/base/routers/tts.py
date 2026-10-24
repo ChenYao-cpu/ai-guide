@@ -12,7 +12,7 @@ from .users import get_current_user_info
 router = APIRouter(prefix='/tts', tags=['tts'])
 
 
-@router.get('/edge', summary='小程序语音播放')
+@router.get('/edge', summary='导览语音播放')
 async def mini_program_speech(
     text: str = Query(min_length=1, max_length=2000),
     user_id: int = Depends(get_current_user_info),

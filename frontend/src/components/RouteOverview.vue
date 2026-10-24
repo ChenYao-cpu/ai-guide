@@ -7,8 +7,8 @@ import { roadPoints, routeLegs } from '@/utils/routeGeometry'
 import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
 const props = withDefaults(defineProps<{
   spotIds?: number[]; overview?: RouteOverviewData | null; compare?: RouteOverviewData | null
-  pace?: string; showMap?: boolean; compact?: boolean; currentId?: number; mapOnly?: boolean
-}>(), { showMap:true, pace:'standard' })
+  pace?: string; showMap?: boolean; compact?: boolean; currentId?: number; mapOnly?: boolean; showStatistics?: boolean
+}>(), { showMap:true, pace:'standard', showStatistics:true })
 const data=ref<RouteOverviewData|null>(null), busy=ref(false), error=ref(''), mapError=ref(false)
 const mapEl=ref<HTMLElement|null>(null), showOriginal=ref(false), activeLeg=ref(0)
 const displayed=computed(()=>showOriginal.value && props.compare ? props.compare : data.value)
@@ -85,7 +85,7 @@ onBeforeUnmount(()=>{disposed=true;version++;drawVersion++;controller?.abort();r
     <p v-if="busy" role="status">{{ $t('正在计算路线详情…') }}</p>
     <p v-if="error" class="route-error" role="alert">{{ error }} <button type="button" @click="refresh">{{ $t('重试') }}</button></p>
     <template v-if="displayed?.stops.length">
-      <div v-if="!mapOnly" class="route-statistics"><span><strong>{{ displayed.stops.length }}</strong>{{ $t('站') }}</span><span><strong>{{ meters(displayed.walking_meters) }}</strong>{{ $t('步行') }}</span><span><strong>{{ displayed.total_minutes ?? '—' }}</strong>{{ $t('预计分钟') }}</span></div>
+      <div v-if="!mapOnly && showStatistics" class="route-statistics"><span><strong>{{ displayed.stops.length }}</strong>{{ $t('站') }}</span><span><strong>{{ meters(displayed.walking_meters) }}</strong>{{ $t('步行') }}</span><span><strong>{{ displayed.total_minutes ?? '—' }}</strong>{{ $t('预计分钟') }}</span></div>
       <div v-if="compare && showMap" class="route-map-switch" role="group" :aria-label="$t('路线对比')"><button type="button" :aria-pressed="!showOriginal" @click="showOriginal=false">{{ $t('调整后') }}</button><button type="button" :aria-pressed="showOriginal" @click="showOriginal=true">{{ $t('调整前') }}</button></div>
       <div v-if="showMap" ref="mapEl" class="route-overview-map"></div>
       <p v-if="!displayed.complete" class="route-error" role="alert">{{ $t('部分路段无法确认可步行路径，请调整景点或通行条件。') }}</p>

@@ -6,6 +6,11 @@ page {
   --ng-night:#f8fafc;
   --ng-surface:#ffffff;
   --ng-raised:#eef2ff;
+  --ng-soft-blue:#f2f7ff;
+  --ng-soft-blue-text:#36558f;
+  --ng-glass-blue-bg:linear-gradient(135deg,rgba(255,255,255,.92) 0%,rgba(235,245,255,.8) 48%,rgba(217,234,255,.7) 100%);
+  --ng-glass-blue-border:transparent;
+  --ng-glass-shadow:0 1rpx 2rpx rgba(70,105,170,.07),0 4rpx 10rpx -4rpx rgba(70,105,170,.14),0 10rpx 24rpx -12rpx rgba(70,105,170,.2);
   --ng-border:#e2e8f0;
   --ng-text:#1f2937;
   --ng-secondary:#4b5563;
@@ -374,3 +379,7 @@ page .page .aurora-background,
 page .auth-page .aurora-background,
 page .page .ambient-field,
 page .auth-page .ambient-field{background:linear-gradient(135deg,#e5dcff 0%,#f8f9ff 52%,#dff4fb 100%)!important;}
+/* Selected spots and the itinerary CTA use the same pale blue as the light action buttons. */
+page .page .spot-card.on{background:var(--ng-glass-blue-bg);border:2rpx solid transparent;box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.92);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+page .page .dpa-btn.start{background:var(--ng-glass-blue-bg);color:var(--ng-soft-blue-text);border:0;box-shadow:var(--ng-glass-shadow),inset 0 1rpx 0 rgba(255,255,255,.92);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+page .page .dpa-btn.start:active{background:rgba(230,240,255,.8);color:var(--ng-soft-blue-text);}

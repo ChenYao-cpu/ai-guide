@@ -710,7 +710,9 @@ async function share() {
     )
       return
     const origin = await lanOrigin()
-    const url = origin + '/m/receive#claim=' + encodeURIComponent(data.token)
+    const server = new URL(origin)
+    server.port = '18000'
+    const url = origin + '/m/receive#claim=' + encodeURIComponent(data.token) + '&code=' + encodeURIComponent(data.pickup_code) + '&server=' + encodeURIComponent(server.origin)
     const qr = await QRCode.toDataURL(url, {
       width: 320,
       margin: 2,

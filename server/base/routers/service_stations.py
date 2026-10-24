@@ -12,7 +12,8 @@ from sqlmodel import Session, select
 
 from ..database.init_db import DB_ENGINE
 from ..database.digital_guide_db import _asset_url
-from ..models.station_models import ServiceStation, StationVisit, StationPlan, StationClaim, utcnow
+from ..models.station_models import ServiceStation, StationVisit, StationPlan, StationClaim, StationClaimCode, utcnow
+from .users import get_current_user_info
 from ..models.tour_models import ScenicSpotInfo, DigitalGuideInfo, TourSessionInfo, TourSessionStatus
 from ..modules.station_service import anchors, station_anchor, plan_walk, extract_request, consultation, english_local_answer
 from ..modules.walking_network import access_point, route_between, NETWORK, network_version
@@ -358,9 +359,15 @@ def share_plan(visit_id: str, body: ShareInput, x_station_token: str = Header(de
             raise HTTPException(409, '路线或服务站配置已更新，请重新规划后领取')
         token = secrets.token_urlsafe(32)
         row = StationClaim(claim_hash=digest(token), station_id=station.station_id, plan_id=plan.plan_id,
-            snapshot=plan.snapshot, expires_at=utcnow() + timedelta(minutes=15))
-        db.add(row); db.commit()
-        return dict(token=token, expires_at=row.expires_at.isoformat() + 'Z')
+            snapshot=plan.snapshot, expires_at=utcnow() + timedelta(hours=24))
+        alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        while True:
+            code = ''.join(secrets.choice(alphabet) for _ in range(12))
+            if not db.get(StationClaimCode, digest(code)): break
+        db.add(row)
+        db.add(StationClaimCode(code_hash=digest(code), claim_hash=row.claim_hash, expires_at=row.expires_at))
+        db.commit()
+        return dict(token=token, pickup_code=code, expires_at=row.expires_at.isoformat() + 'Z')
 
 
 class ClaimStatusInput(BaseModel):
@@ -380,15 +387,39 @@ def share_status(visit_id: str, body: ClaimStatusInput, response: Response, x_st
 
 
 class ClaimInput(BaseModel):
-    token: str = Field(min_length=32, max_length=100)
+    token: str = Field(min_length=12, max_length=100)
     receipt: str = Field(min_length=32, max_length=100)
+
+
+def claim_key(db, value):
+    value = value.strip()
+    if len(value) == 12:
+        code = db.get(StationClaimCode, digest(value.upper()))
+        if not code or code.expires_at <= utcnow():
+            raise HTTPException(410, '领取码已过期，请在服务站重新生成')
+        return code.claim_hash
+    return digest(value)
+
+
+@router.get('/app-release')
+def app_release(response: Response):
+    """Only advertise a download when a real APK and its release manifest exist."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3] / 'static' / 'app'
+    response.headers['Cache-Control'] = 'no-store'
+    apk, manifest = root / 'zhiyou-guide.apk', root / 'release.json'
+    if not apk.is_file() or not manifest.is_file():
+        return dict(available=False, message='安装包正在准备，请先保存领取码')
+    metadata = json.loads(manifest.read_text(encoding='utf-8'))
+    return dict(available=True, version=metadata['version'], package=metadata['package'],
+                bytes=apk.stat().st_size, sha256=metadata['sha256'], url='/api/v1/files/app/zhiyou-guide.apk')
 
 
 @router.post('/claim/preview')
 def preview_claim(body: ClaimInput, response: Response):
     response.headers['Cache-Control'] = 'no-store'
     with Session(DB_ENGINE) as db:
-        row = db.get(StationClaim, digest(body.token))
+        row = db.get(StationClaim, claim_key(db, body.token))
         if not row or row.expires_at <= utcnow(): raise HTTPException(410, '领取码已过期，请在服务站重新生成')
         if row.mobile_session_id and row.receipt_hash != digest(body.receipt): raise HTTPException(409, '此方案已被领取，请重新生成领取码')
         return dict(snapshot=row.snapshot, session_id=row.mobile_session_id, expires_at=row.expires_at.isoformat() + 'Z')
@@ -396,14 +427,34 @@ def preview_claim(body: ClaimInput, response: Response):
 
 @router.post('/claim/receive')
 def receive_claim(body: ClaimInput, response: Response):
+    return receive_claim_for_user(body, response)
+
+
+@router.post('/claim/receive-app')
+def receive_app_claim(body: ClaimInput, response: Response, user_id: int = Depends(get_current_user_info)):
+    return receive_claim_for_user(body, response, user_id)
+
+
+def receive_claim_for_user(body: ClaimInput, response: Response, user_id: int | None = None):
     from ..modules.xingyun_access import issue_tour_avatar_token
     response.headers['Cache-Control'] = 'no-store'
     with Session(DB_ENGINE) as db:
-        row = db.exec(select(StationClaim).where(StationClaim.claim_hash == digest(body.token)).with_for_update()).first()
+        row = db.exec(select(StationClaim).where(StationClaim.claim_hash == claim_key(db, body.token)).with_for_update()).first()
         if not row or row.expires_at <= utcnow(): raise HTTPException(410, '领取码已过期，请在服务站重新生成')
         if row.mobile_session_id:
-            if row.receipt_hash != digest(body.receipt): raise HTTPException(409, '此方案已被领取，请重新生成领取码')
             existing = db.get(TourSessionInfo, row.mobile_session_id)
+            same_owner = bool(user_id and existing and existing.user_id == user_id)
+            if not same_owner and row.receipt_hash != digest(body.receipt): raise HTTPException(409, '此方案已被领取，请重新生成领取码')
+            if user_id and existing:
+                if existing.user_id and existing.user_id != user_id: raise HTTPException(409, '此方案已由其他账号领取')
+                existing.user_id = user_id
+                try:
+                    owned = json.loads(existing.visitor_preferences or '{}')
+                except (TypeError, ValueError):
+                    owned = {}
+                owned['owner_user_id'] = user_id
+                existing.visitor_preferences = json.dumps(owned, ensure_ascii=False)
+                db.add(existing); db.commit()
             return dict(session_id=row.mobile_session_id, avatar_access_token=issue_tour_avatar_token(existing) if existing else '')
         snapshot = row.snapshot
         station = station_get(db, row.station_id)
@@ -419,10 +470,12 @@ def receive_claim(body: ClaimInput, response: Response):
             'planning': dict(pace=snapshot['preferences']['pace'], end_area=snapshot['preferences']['end_area'],
                 avoid_steps=snapshot['preferences']['avoid_steps'], time_budget_minutes=snapshot['preferences']['budget']),
             'city': '北京', 'language': snapshot['preferences']['language']}
+        if user_id:
+            prefs['owner_user_id'] = user_id
         status = TourSessionStatus(live_status=1, start_time=datetime.now())
         db.add(status); db.flush()
         tour = TourSessionInfo(name='服务站领取的游览方案', guide_id=guide.guide_id, route_id=None,
-            user_id=None, status_id=status.status_id, visitor_preferences=json.dumps(prefs, ensure_ascii=False))
+            user_id=user_id, status_id=status.status_id, visitor_preferences=json.dumps(prefs, ensure_ascii=False))
         db.add(tour); db.flush()
         row.mobile_session_id = tour.session_id; row.receipt_hash = digest(body.receipt); row.claimed_at = utcnow()
         db.add(row); db.commit()
