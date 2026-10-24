@@ -347,7 +347,7 @@ export default {
       if(text)this._lastSpoken=text
       this.voiceMuted=true;this.speechPaused=true;this.speaking=false
       if(this.xingyunActive&&this._xingyunStartedAt){
-        this._xingyunOffset=Math.min((this._xingyunFullText||'').length,this._xingyunOffset+Math.max(0,(Date.now()-this._xingyunStartedAt)/1000*4))
+        this._xingyunOffset=Math.min((this._xingyunFullText||'').length,(this._xingyunOffset||0)+Math.max(0,(Date.now()-this._xingyunStartedAt)/1000*4))
         this._xingyunStartedAt=0
       }
       if(this._audio){try{if(this._audio.pause)this._audio.pause()}catch(e){}}
@@ -359,7 +359,7 @@ export default {
       this.voiceMuted=false;this.speechPaused=false
       if(this._audio){try{this._audio.play();this.speaking=true;return}catch(e){}}
       if(this.videoUrl){try{uni.createVideoContext('guide-speech-video',this).play();this.speaking=true;return}catch(e){}}
-      if(this.xingyunActive&&this._xingyunFullText&&this._xingyunOffset<(this._xingyunFullText||'').length){this.speakXingyun(this._xingyunFullText.slice(this._xingyunOffset),true);return}
+      if(this.xingyunActive&&this._xingyunFullText&&(this._xingyunOffset||0)<(this._xingyunFullText||'').length){this.speakXingyun(this._xingyunFullText.slice(this._xingyunOffset||0),true);return}
       if(pending)this.speakAnswer(pending)
     },
     revealAnswer:function(){

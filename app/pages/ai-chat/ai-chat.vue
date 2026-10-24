@@ -752,8 +752,10 @@ export default {
       var gateway=this.voicePayload&&this.voicePayload.gateway
       this.voicePayload={id:Date.now(),command:'close',gateway:gateway||''}
     },
-    sendVoiceSpeak:function(text,index){
+    sendVoiceSpeak:function(text,index,resume){
       this.speakingIndex=index;this.ttsLoading=true;this.speaking=false;this.ttsPaused=false
+      if(!resume){this._voiceText=text;this._voiceOffset=0}
+      this._voiceStartedAt=0
       this.voicePayload={id:Date.now(),command:'speak',text:text,gateway:this._voiceGateway}
     },
     onDigitalVoiceState:function(event){
@@ -764,7 +766,7 @@ export default {
         if(text)this.sendVoiceSpeak(text,index)
         return
       }
-      if(event.state==='playing'){this.speaking=true;this.ttsLoading=false;this.ttsPaused=false;return}
+      if(event.state==='playing'){if(!this._voiceStartedAt)this._voiceStartedAt=Date.now();this.speaking=true;this.ttsLoading=false;this.ttsPaused=false;return}
       if(event.state==='ended'){
         if(!this.speaking)return
         this.speaking=false;this.ttsLoading=false;this.ttsPaused=false;this.speakingIndex=-1;return
@@ -779,6 +781,7 @@ export default {
     },
     stopTTS:function(){
       this._ttsRequestId=(this._ttsRequestId||0)+1
+      this._voiceText='';this._voiceOffset=0;this._voiceStartedAt=0
       this._voicePendingText='';this._voicePendingIndex=-1
       if(this.voiceConnected&&this._voiceGateway)this.voicePayload={id:this._ttsRequestId,command:'stop',text:'',gateway:this._voiceGateway}
       if(this._ttsAudio){this._ttsAudio.destroy();this._ttsAudio=null}
@@ -787,10 +790,32 @@ export default {
     replayTTS: function (text,index) {
       if(this.speakingIndex===index){
         if(this.ttsLoading){this.stopTTS();return}
-        if(this.ttsPaused){this.playTTS(text,index);return}
-        this.ttsPaused=true;this.speaking=false
-        if(this.voiceConnected&&this._voiceGateway)this.voicePayload={id:Date.now(),command:'stop',text:'',gateway:this._voiceGateway}
-        else try{this._ttsAudio&&this._ttsAudio.pause()}catch(e){}
+        if(this.ttsPaused){this.resumeTTS(text,index);return}
+        this.pauseTTS(text,index)
+        return
+      }
+      this.playTTS(text,index)
+    },
+    // 暂停：本地音频直接暂停；星云数字人没有暂停接口，按已播时长估算字数后发 stop。
+    pauseTTS: function (text,index) {
+      this.ttsPaused=true;this.speaking=false
+      if(this.voiceConnected&&this._voiceGateway&&this._voiceStartedAt){
+        var elapsed=Math.max(0,Date.now()-this._voiceStartedAt)
+        var full=(this._voiceText||'')
+        this._voiceOffset=Math.min(full.length,(this._voiceOffset||0)+elapsed/1000*4)
+        this._voiceStartedAt=0
+        this.voicePayload={id:Date.now(),command:'stop',text:'',gateway:this._voiceGateway}
+        return
+      }
+      try{this._ttsAudio&&this._ttsAudio.pause()}catch(e){}
+    },
+    // 继续播报：从暂停位置接着播，绝不回退到整段开头。
+    resumeTTS: function (text,index) {
+      this.ttsPaused=false
+      if(this._ttsAudio){try{this.speaking=true;this._ttsAudio.play();return}catch(e){}}
+      var full=this._voiceText||''
+      if(this.voiceConnected&&this._voiceGateway&&full&&(this._voiceOffset||0)<full.length){
+        this.sendVoiceSpeak(full.slice(this._voiceOffset||0),index,true)
         return
       }
       this.playTTS(text,index)
