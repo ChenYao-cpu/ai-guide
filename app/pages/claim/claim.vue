@@ -14,7 +14,13 @@ import { BASE_URL, SERVER_ORIGIN, setStationServerOrigin, isLocalStationOrigin }
 import { pendingClaim, saveClaim, clearPendingClaim } from '../../common/station-claim.js'
 export default {
   data() { return { code:'', origin:'', scanned:false, busy:false, error:'' } },
-  onLoad() { const pending=pendingClaim(); if(pending) { this.code=pending.token; this.origin=pending.origin; this.scanned=!!pending.token } },
+  // 支持两种进入方式：App 扫码后带参数跳转，或系统扫码/剪贴板唤起时读取待领取记录。
+  onLoad(options) {
+    const decode=v=>{try{return decodeURIComponent(String(v||''))}catch(_){return String(v||'')}}
+    const query=options&&options.claim?{token:decode(options.claim),origin:decode(options.server||'')}:null
+    const pending=query||pendingClaim()
+    if(pending) { this.code=pending.token||pending.code||''; this.origin=pending.origin||''; this.scanned=!!this.code }
+  },
   onReady() { if(this.scanned) this.receive() },
   methods: {
     scan() {
@@ -30,15 +36,17 @@ export default {
       if(!/^[A-HJ-NP-Z2-9]{12}$/i.test(token)&&!/^[A-Za-z0-9_-]{32,100}$/.test(token)){this.error='领取码格式不正确';return}
       const origin=this.origin||SERVER_ORIGIN
       if(!isLocalStationOrigin(origin)){this.error='只允许连接局域网电脑的18000端口';return}
-      if(origin!==SERVER_ORIGIN){
+      let receipt=uni.getStorageSync('station-app-receipt')
+      if(!receipt){receipt=Array.from({length:48},()=>Math.floor(Math.random()*16).toString(16)).join('');uni.setStorageSync('station-app-receipt',receipt)}
+      // 同一台电脑可能同时有局域网 IP 和 USB 反向代理地址；先看当前连接的电脑上有没有这张领取码，
+      // 有就直接领取，避免无谓地切换地址并重新登录。
+      if(origin!==SERVER_ORIGIN&&!await this.currentServerHasClaim(token,receipt)){
         const accepted=await new Promise(resolve=>uni.showModal({title:'连接服务电脑',content:'将连接 '+origin+'，需要重新登录。请确认这是你扫码的电脑。',success:r=>resolve(r.confirm),fail:()=>resolve(false)}))
         if(!accepted)return
         setStationServerOrigin(origin)
       }
       saveClaim('zhiyouguide://claim?claim='+encodeURIComponent(token)+'&server='+encodeURIComponent(origin))
       if(!uni.getStorageSync('token')){uni.reLaunch({url:'/pages/auth/auth'});return}
-      let receipt=uni.getStorageSync('station-app-receipt')
-      if(!receipt){receipt=Array.from({length:48},()=>Math.floor(Math.random()*16).toString(16)).join('');uni.setStorageSync('station-app-receipt',receipt)}
       this.busy=true
       uni.request({url:BASE_URL+'/service-stations/claim/receive-app',method:'POST',data:{token,receipt},header:{Authorization:'Bearer '+uni.getStorageSync('token')},timeout:20000,
         success:r=>{
@@ -48,6 +56,13 @@ export default {
           if(r.data.avatar_access_token)uni.setStorageSync('xingyun-tour-'+sid,r.data.avatar_access_token)
           clearPendingClaim();uni.reLaunch({url:'/pages/tour/tour?sessionId='+sid})
         },fail:()=>{this.error='无法连接服务电脑，请确认在同一个 Wi-Fi 且后端已启动'},complete:()=>{this.busy=false}
+      })
+    },
+    // 当前连接的电脑上是否已有这张领取码（409 表示已被领取过，同样是同一份路线数据）。
+    currentServerHasClaim(token,receipt){
+      return new Promise(resolve=>{
+        uni.request({url:BASE_URL+'/service-stations/claim/preview',method:'POST',data:{token,receipt},timeout:8000,
+          success:r=>resolve(r.statusCode===200||r.statusCode===409),fail:()=>resolve(false)})
       })
     },
     leave(){clearPendingClaim();uni.reLaunch({url:'/pages/tabs/tabs?tab=mine'})},
