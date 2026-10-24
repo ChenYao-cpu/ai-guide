@@ -142,7 +142,7 @@ def _migrate_add_missing_columns():
                 ("tour_tips", "TEXT DEFAULT ''"),
             ],
         },
-        # UserInfo: 微信 openid（小程序微信登录持久化标识）
+        # UserInfo: 微信 openid（微信登录持久化标识）
         {
             "table": "user_info",
             "columns": [

@@ -30,7 +30,7 @@ export function wgs84ToGcj02(lat, lng) {
   return [lat + dLat, lng + dLng]
 }
 
-// 使用迭代逆变换，使小程序 GCJ02 定位与后端 WGS84 距离计算保持一致。
+// 使用迭代逆变换，使 GCJ02 定位与后端 WGS84 距离计算保持一致。
 export function gcj02ToWgs84(lat, lng) {
   if (outOfChina(lat, lng)) return [lat, lng]
   let wLat = lat, wLng = lng
