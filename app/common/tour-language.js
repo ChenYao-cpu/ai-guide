@@ -110,6 +110,9 @@ const appEnglish = {
   '领取失败，请重试': 'Could not receive the route. Please try again.',
   '只允许连接局域网电脑的18000端口': 'Only a computer on the local network (port 18000) is allowed.',
   '我的位置': 'My location',
+  '当前您在': 'You are at',
+  '景区外': 'Outside the park',
+  '路线已领取，正在打开行程': 'Route received. Opening your itinerary…',
 }
 
 export function translateTour(value, language, params = {}) {

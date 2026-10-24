@@ -603,12 +603,13 @@ export default {
     // 进入导览时按定位自动切到最近的景点；离得太远（不在本景区）时保持服务端当前站。
     autoSelectNearestSpot: function() {
       if (this._autoSpotLocated) return
-      var nearest = nearestSpot(this.spotCards, this.userLocation)
-      if (!nearest) return
-      if (nearest.distance > 5000) return
       this._autoSpotLocated = true
-      var index = nearest.index
-      if (index >= 0 && index !== this.spotIdx) {
+      var nearest = nearestSpot(this.spotCards, this.userLocation)
+      // 在某个景点附近就选它；不在任何景点范围内时默认第一个景点。
+      var limit = nearest ? Math.max(300, Number(nearest.spot.trigger_radius) || 0) : 0
+      var index = nearest && nearest.distance <= limit ? nearest.index : 0
+      if (index < 0 || index >= this.spotCards.length) index = 0
+      if (index !== this.spotIdx) {
         this.spotIdx = index
         this.progressActive = index
       }

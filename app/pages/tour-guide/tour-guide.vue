@@ -72,7 +72,7 @@
       <!-- ===== 个性化 ===== -->
       <view v-show="tab==='personal'">
         <view class="block">
-          <view id="itinerary-planning" class="bl-hd"><view class="bl-dot"></view><text>{{ t('行程规划') }}</text></view>
+          <view id="itinerary-planning" class="bl-hd"><view class="bl-dot"></view><text>{{ t('行程规划') }}</text><text v-if="locationKnown" class="loc-now">{{ t('当前您在') }} {{ t(locationName || '景区外') }}</text></view>
           <RouteTiming ref="itinerary" v-if="pageReady&&pageVisible&&pickedCount" :ids="selectedIds" :spots="spots" :plan="personalPlan" :pace="personalPlan?.pace||'standard'" :details="showItinerary" :user-location="userLocation" :disabled="recommending||starting" @open="showItinerary=true" @close="showItinerary=false" @dragging="itineraryDragging=$event" @reorder="reorderSelectedSpots" @remove="toggleSpot" @state="itineraryState=$event" />
           <text v-if="!pickedCount" class="planner-note planner-footnote">{{ t('先在游览路线中选择景点，再到这里拖动排序。') }}</text>
         </view>
@@ -191,7 +191,7 @@ import { selectedOrder, moveStop, previewOptions, roadMap } from '../../common/r
 import { prioritizeSummerPalace } from '../../common/scenic-order.js'
 import { BASE_URL, assetUrl, isBeijingCity } from '../../common/config.js'
 import { wgs84ToGcj02 } from '../../../shared/coordinates.js'
-import { locateUser } from '../../common/user-location.js'
+import { locateUser, nearestSpot } from '../../common/user-location.js'
 
 function req(o){return new Promise(function(rs,rj){var u=o.url;if(u.indexOf('http')!==0)u=BASE_URL+u;uni.request({url:u,method:o.method||'GET',data:o.data||{},header:Object.assign({'Content-Type':'application/json'},uni.getStorageSync('token')?{Authorization:'Bearer '+uni.getStorageSync('token')}:{}),success:function(r){if(r.statusCode===200)rs({data:r.data});else rj(new Error('HTTP '+r.statusCode))},fail:rj})})}
 var api={
@@ -211,11 +211,11 @@ export default {
   data:function(){return{failedImages:{},planningScrollTop:0,routeScrollTop:0,detailScrolled:false,statusH:20,viewportH:0,showMapPreview:false,pageReady:false,pageVisible:false,showItinerary:false,itineraryDragging:false,tourButtonDragging:false,orderedIds:[],starting:false,itineraryState:{key:"",busy:false,error:"",data:null},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合游览',history:'历史文化',nature:'自然风光',family:'亲子游览',photography:'摄影打卡'},
     previewWidth:0,previewPixelRatio:1,previewModelStatus:'',previewingGuide:null,tab:'route',routeIndex:0,spots:[],routes:[],guides:[],pickedIds:{},pickedRouteId:null,pickedGuide:null,loading:true,dataLoaded:false,error:'',detailSpot:null,keyword:'',routeDetail:null,themeMap:{comprehensive:'综合',history:'历史',nature:'自然',family:'亲子',photography:'摄影'},
-    mapCenter:{latitude:0,longitude:0},userLocation:null,spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
+    mapCenter:{latitude:0,longitude:0},userLocation:null,locationKnown:false,locationName:'',claimedSessionId:null,claimedIds:'',spotCat:'all',guidePicker:false,planningDrafts:{route:null,personal:null},personalPlan:null,recommending:false,budgetIndex:2,budgetOptions:[60,90,120,180,240,360],paceIndex:0,
   }},
   computed:{
     dockHiddenByOverlay:function(){return !!(this.showItinerary||this.routeDetail||this.detailSpot||this.showMapPreview||this.guidePicker||this.previewingGuide)},
-    canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending&&!this.starting&&this.itineraryState.key===this.itineraryKey&&!this.itineraryState.busy&&!this.itineraryState.error&&!!this.itineraryState.data?.complete},
+    canStart:function(){return this.pickedCount>0&&!!this.pickedGuide&&!this.recommending&&!this.starting&&(!!this.claimedSessionId||(this.itineraryState.key===this.itineraryKey&&!this.itineraryState.busy&&!this.itineraryState.error&&!!this.itineraryState.data?.complete))},
     selectedIds:function(){return selectedOrder(this.orderedIds,this.pickedIds)},
     itineraryOptions:function(){return previewOptions(this.selectedIds,this.personalPlan,this.personalPlan?.pace||'standard')},
     itineraryKey:function(){return JSON.stringify(this.itineraryOptions)},
@@ -370,7 +370,19 @@ export default {
         s.loading=false
       }).catch(function(){if(first)s.error='网络连接失败';s.loading=false})},
     onMarkerTap:function(e){var id=e.detail&&e.detail.markerId;if(id){this.toggleSpot(id);this.$forceUpdate()}},
-    refreshUserLocation:function(){var self=this;locateUser().then(function(loc){if(loc&&loc.latitude)self.userLocation=loc})},
+    refreshUserLocation:function(){var self=this;locateUser().then(function(loc){if(!loc||!loc.latitude)return;self.userLocation=loc;self.locationKnown=true;var nearest=nearestSpot(self.spots,loc);self.locationName=nearest&&nearest.distance<=1000?nearest.spot.spot_name:''})},
+    // 扫码领取的路线：读取网页生成的会话，按网页的景点顺序/条件填回个性化行程。
+    takeClaimedSession:function(){var raw=uni.getStorageSync('pending-claimed-tour');uni.removeStorageSync('pending-claimed-tour');if(!raw)return 0;try{var value=typeof raw==='string'?JSON.parse(raw):raw;return Number(value&&value.sessionId)||0}catch(_){return 0}},
+    applyClaimedSession:function(sid){var self=this;req({url:'/tour-session/live-info/'+sid}).then(function(r){var d=r.data&&r.data.data;if(!d)return
+      var prefs={};try{prefs=JSON.parse(d.visitor_preferences||'{}')}catch(_){}
+      var ids=(prefs.spot_ids||[]).filter(function(id){return self.spots.some(function(spot){return spot.spot_id===id})})
+      if(!ids.length)return
+      self.claimedSessionId=sid;self.claimedIds=JSON.stringify(ids)
+      var picked={};ids.forEach(function(id){picked[id]=true});self.pickedIds=picked;self.orderedIds=ids.slice();self.pickedRouteId=null;self.showItinerary=false
+      self.personalPlan={pace:prefs.pace||'standard',start_area:'auto',end_area:prefs.end_area||'auto',avoid_steps:!!prefs.avoid_steps,requested_time_minutes:Number(prefs.budget)||prefs.budget}
+      if(self.guides.length){var gid=d.guide_info&&d.guide_info.guide_id;var guide=self.guides.find(function(g){return g.guide_id===gid});if(guide)self.pickedGuide=guide}
+      self.switchPlanningTab('personal')
+    }).catch(function(){})},
     checkAuth:function(){var t=uni.getStorageSync('token');if(!t){uni.reLaunch({url:'/pages/auth/auth'});return false}return true},
   },
   onBackPress:function(){if(this.showItinerary){this.showItinerary=false;return true}if(this.showMapPreview){this.showMapPreview=false;return true}if(this.tab==='personal'){this.switchPlanningTab('route');return true}},
@@ -413,7 +425,7 @@ export default {
 
 
 .block{margin:14rpx 0;background:var(--ng-surface);border-radius:16rpx;padding:18rpx;border:1rpx solid var(--ng-border)}
-.bl-hd{display:flex;align-items:center;gap:8rpx;margin-bottom:14rpx}.bl-dot{width:7rpx;height:20rpx;border-radius:3rpx;background:rgba(99,102,241,0.18)}.bl-hd text{font-size:32.2rpx;font-weight:600;color:var(--ng-text)}.sub{font-weight:400;color:var(--ng-secondary);font-size:25.3rpx;margin-left:8rpx}
+.bl-hd{display:flex;align-items:center;gap:8rpx;margin-bottom:14rpx}.loc-now{margin-left:auto;max-width:56%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:24rpx;font-weight:400;color:var(--ng-soft-blue-text,#36558f)}.bl-dot{width:7rpx;height:20rpx;border-radius:3rpx;background:rgba(99,102,241,0.18)}.bl-hd text{font-size:32.2rpx;font-weight:600;color:var(--ng-text)}.sub{font-weight:400;color:var(--ng-secondary);font-size:25.3rpx;margin-left:8rpx}
 .map-wrap{position:relative;width:100%;height:180rpx;border-radius:14rpx;overflow:hidden}.mini-map{display:block;position:relative;width:100%;height:180rpx}.map-empty{height:180rpx;display:flex;align-items:center;justify-content:center;background:var(--ng-surface);color:var(--ng-secondary)}
 .route-carousel-wrap{position:relative;border-radius:20rpx;overflow:hidden}.route-carousel{height:440rpx;width:100%}.route-slide{height:100%}.route-card{position:relative;width:100%;height:100%;overflow:hidden;background:var(--ng-night);box-sizing:border-box}.route-card.on{box-shadow:inset 0 0 0 4rpx rgba(99,102,241,0.15)}.route-carousel .route-cover-photo{position:absolute;inset:0;width:100%;height:100%;border-radius:0;margin:0}.route-cover-empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--ng-text)}.rc-top{position:absolute;top:22rpx;left:24rpx;right:24rpx;display:flex;justify-content:space-between;align-items:center}.rc-tag{font-size:25.3rpx;color:var(--ng-text);background:rgba(0,0,0,.3);padding:6rpx 14rpx;border-radius:24rpx}.rc-time{font-size:25.3rpx;color:var(--ng-text);text-shadow:0 2rpx 6rpx rgba(0,0,0,.9),0 0 3rpx rgba(0,0,0,.85)}.rc-bottom{position:absolute;left:26rpx;right:26rpx;bottom:48rpx}.route-carousel .route-cover-note{display:block;font-size:20.7rpx;color:var(--ng-text);margin-bottom:6rpx}.rc-name{font-size:34.5rpx;line-height:1.4;font-weight:600;color:var(--ng-text);display:block;text-shadow:0 2rpx 10rpx rgba(0,0,0,.92),0 0 4rpx rgba(0,0,0,.9)}.rc-meta{display:block;font-size:25.3rpx;color:var(--ng-text);margin-top:8rpx;text-shadow:0 2rpx 8rpx rgba(0,0,0,.9),0 0 3rpx rgba(0,0,0,.85)}.route-arrow{position:absolute;top:50%;transform:translateY(-50%);width:64rpx;height:84rpx;display:flex;align-items:center;justify-content:center;font-size:42rpx;color:var(--ng-text);background:rgba(0,0,0,.32);border-radius:12rpx;z-index:2}.route-arrow .iconfont{font-size:36rpx;color:var(--ng-text)}.route-arrow-left{left:12rpx}.route-arrow-right{right:12rpx}
 .search-row{margin-bottom:14rpx;width:100%;box-sizing:border-box}.search-input{width:100%;height:68rpx;padding:0 20rpx;border:1rpx solid var(--ng-border);border-radius:34rpx;background:var(--ng-surface);font-size:27.6rpx;color:var(--ng-text);box-sizing:border-box}

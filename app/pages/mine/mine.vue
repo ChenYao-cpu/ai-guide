@@ -152,8 +152,10 @@ export default {
             if (data.avatar_access_token) uni.setStorageSync('xingyun-tour-' + sid, data.avatar_access_token)
             clearPendingClaim()
             uni.hideLoading()
-            uni.showToast({ title: self.t('领取成功，正在进入导览'), icon: 'none', duration: 900 })
-            uni.reLaunch({ url: '/pages/tour/tour?sessionId=' + sid })
+            uni.showToast({ title: self.t('路线已领取，正在打开行程'), icon: 'none', duration: 900 })
+            // 领取后先回到「智能导览 → 个性化行程」核对网页上的路线，再由底部定位球进入导览。
+            uni.setStorageSync('pending-claimed-tour', { sessionId: sid, at: Date.now() })
+            uni.reLaunch({ url: '/pages/tabs/tabs?tab=tour' })
           }).catch(function (err) {
             uni.hideLoading()
             if (err.login) { uni.reLaunch({ url: '/pages/auth/auth' }); return }
