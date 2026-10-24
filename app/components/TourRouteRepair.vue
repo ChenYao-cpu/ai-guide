@@ -13,8 +13,8 @@
         <view v-if="scenario!=='exit'" v-for="spot in remainingSpots" :key="spot.spot_id" class="repair-choice"><text>{{ t(spot.spot_name) }}</text><picker :range="choiceLabels" :value="choiceValues.indexOf(choices[spot.spot_id]||'auto')" :disabled="applying" @change="setChoice(spot.spot_id,choiceValues[Number($event.detail.value)])"><view class="repair-picker">{{ choiceLabels[choiceValues.indexOf(choices[spot.spot_id]||'auto')] }} ⌄</view></picker></view>
         <picker :range="[t('正常游览'),t('轻松慢走')]" :value="pace==='relaxed'?1:0" :disabled="applying" @change="pace=Number($event.detail.value)?'relaxed':'standard'"><view class="repair-field"><text>{{ t('行走节奏') }}</text><text>{{ t(pace==='relaxed'?'轻松慢走':'正常游览') }} ⌄</text></view></picker>
         <view class="repair-field"><text>{{ t('额外预留（分钟）') }}</text><input v-model="reserve" type="number" :disabled="applying" maxlength="3" /></view>
-        <view class="repair-toggle"><text>{{ t('避开已标注台阶') }}</text><switch :checked="avoidSteps" :disabled="applying" color="#6551af" @change="avoidSteps=$event.detail.value" /></view>
-        <view class="repair-toggle"><text>{{ t('允许优化未游览景点顺序') }}</text><switch :checked="reorder" :disabled="applying" color="#6551af" @change="reorder=$event.detail.value" /></view>
+        <view class="repair-toggle"><text>{{ t('避开已标注台阶') }}</text><switch :checked="avoidSteps" :disabled="applying" color="#4f46e5" @change="avoidSteps=$event.detail.value" /></view>
+        <view class="repair-toggle"><text>{{ t('允许优化未游览景点顺序') }}</text><switch :checked="reorder" :disabled="applying" color="#4f46e5" @change="reorder=$event.detail.value" /></view>
         <view class="repair-field"><text>{{ t('补充要求（选填）') }}</text><textarea v-model="message" :disabled="applying" maxlength="2000" :placeholder="t('例如：还剩40分钟，想少走路，从东宫门离园')" auto-height /></view>
       </view>
       <button class="repair-generate" :disabled="busy||applying" @tap="preview">{{ t(busy?'正在沿步道计算…':'生成调整方案') }}</button>
