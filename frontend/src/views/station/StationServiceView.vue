@@ -168,6 +168,15 @@ const sharePreviewUrl = computed(() =>
 const remainingSeconds = computed(() =>
   Math.max(0, Math.ceil((shareExpiry.value - clock.value) / 1000))
 )
+// 有效期 15 分钟：按 分:秒 显示；若以后调长，超过 1 小时会显示 时:分:秒。
+const shareRemainingLabel = computed(() => {
+  const total = Math.max(0, remainingSeconds.value)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return hours > 0 ? hours + ':' + pad(minutes) + ':' + pad(seconds) : minutes + ':' + pad(seconds)
+})
 const stationName = computed(() =>
   locale.value === 'en' ? station.value?.name_en : station.value?.name
 )
@@ -1698,9 +1707,7 @@ function backToAttractions() {
           }}
         </div>
         <p class="station-share-clock" v-if="remainingSeconds > 0 && !shareReceived">
-          {{ Math.floor(remainingSeconds / 60) }}:{{
-            String(remainingSeconds % 60).padStart(2, '0')
-          }}
+          {{ shareRemainingLabel }}
           {{ S('内有效 · 仅限领取一次', 'remaining · one recipient') }}
         </p>
         <p v-if="shareError" role="alert">{{ t(shareError) }}</p>

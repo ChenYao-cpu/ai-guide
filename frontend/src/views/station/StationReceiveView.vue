@@ -149,7 +149,7 @@ async function receive() {
         <button @click="openApp">在 App 中领取路线 ↗</button>
         <a v-if="release.available && release.url" class="apk-download" :href="release.url" download>下载 Android App {{ release.version }}</a>
         <p v-else class="receive-note">{{ release.message || '安装包正在准备，请先保存领取码' }}</p>
-        <p v-if="pickupCode" class="pickup-label">安装后再次扫码，或在 App 输入领取码（24小时内有效）</p>
+        <p v-if="pickupCode" class="pickup-label">安装后再次扫码，或在 App 输入领取码（15分钟内有效）</p>
         <button v-if="pickupCode" class="pickup-code" @click="copyCode">{{ pickupCode }}</button>
         <button v-if="pickupCode" class="code-entry" @click="enterCodeInApp">在 App 中输入领取码</button>
         <p class="receive-note">连接电脑：{{ serverOrigin }}。手机和电脑需在同一个 Wi-Fi，电脑服务需保持运行。</p>
